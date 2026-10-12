@@ -50,8 +50,9 @@ contract CostMapping {
         -- one. cost is not negative: worker_contract's ValidReading rejects
         -- a negative cost before map sees one.
     @invariant Absent
-        -- An absent annotation means 0 and is the neutral value. A pod whose
-        -- tier is 0 and that is not draining maps to 0, and 0 is spelled by
+        -- An absent annotation means 0 and is the neutral value. map never
+        -- returns a positive value below the first threshold: a reading
+        -- that lands below it and is not draining maps to 0, and 0 is spelled by
         -- removing the annotation: render returns null for it and the
         -- string "0" is never written. For pod-deletion-cost, removal, the
         -- neutral fallback (reconcile, ticket 21) and cleanup (lifecycle,
@@ -87,7 +88,13 @@ contract CostMapping {
         -- reading maps to the cost if the cost's own tier is at least 1 and
         -- to 0 if it is not; the new value's own tier then stands, so a
         -- drop from 950 to 250 with thresholds 300 and 900 and margin 60
-        -- maps to 0. Every other reading maps to applied unchanged.
+        -- maps to 0. Every other reading maps to applied unchanged, with
+        -- one exception: an applied value above 0 whose own tier is 0,
+        -- which only a threshold override that raised the first threshold
+        -- above it can leave behind, counts as 0 here, so the reading maps
+        -- to the cost when the cost's tier is at least 1, to -1 when
+        -- draining, and to 0 otherwise. No positive value below the first
+        -- threshold survives a reading.
         -- Drained takes precedence for a draining reading below the first
         -- threshold, and a reading at -1 that is no longer draining and
         -- still below the first threshold maps to 0. A write is due exactly

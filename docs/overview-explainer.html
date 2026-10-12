@@ -169,7 +169,7 @@
 
   <!-- 2. Cost line -->
   <h2 id="cost">2. From worker cost to annotation value</h2>
-  <p>Knarr writes the worker's cost itself, clamped to int32, and only when the cost crosses a configured threshold (§4, §6). Below the first threshold the pod is idle and carries no annotation; a draining pod below the first threshold is <code>-1</code>. Between crossings the applied value stands. A margin below each threshold damps the way down. Settled in <code>docs/specs/cost_mapping.allium</code> (§9.5).</p>
+  <p>Knarr writes the worker's cost itself, clamped to int32, when the cost crosses a configured threshold (§4, §6). Below the first threshold the pod is idle and carries no annotation; a draining pod below the first threshold is <code>-1</code>, entered and left on the reading that says so, with no margin. Between crossings the applied value stands. A margin below each threshold damps the way down. Settled in <code>docs/specs/cost_mapping.allium</code> (§9.5).</p>
 
   <figure>
     <div class="scroll"><svg class="wide" viewBox="0 0 720 170" role="img" aria-label="A cost axis with a drained region at minus one, an absent region below the first threshold, and the cost itself above it, with four thresholds marked and a shaded margin zone just below each.">
