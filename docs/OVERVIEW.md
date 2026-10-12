@@ -10,7 +10,7 @@ requires: []
 
 > **Status:** Draft, scoped to the MVP. This document sets a high-level direction for later work and for drafting tickets. It is not a specification. Anything marked **OPEN** has not been decided and will be settled in a ticket. **Recommended** means a proposed default, not a decision. Post-MVP options, alternatives and research notes live in [DEFERRED.md](DEFERRED.md).
 >
-> **Diagrams** only restate what the text says. A thick blue border marks what Knarr controls, a dashed orange border marks OPEN or unverified items, and a red border marks a risk or trap. A visual explainer for the densest parts (victim ranking, cost bands and sign convention, kill paths) is in [overview-explainer.html](overview-explainer.html). GitHub shows that file as source, so open it locally in a browser.
+> **Diagrams** only restate what the text says. A thick blue border marks what Knarr controls, a dashed orange border marks OPEN or unverified items, and a red border marks a risk or trap. A visual explainer for the densest parts (victim ranking, the cost value and sign convention, kill paths) is in [overview-explainer.html](overview-explainer.html). GitHub shows that file as source, so open it locally in a browser.
 
 ## 1. Summary
 
@@ -115,7 +115,7 @@ Knarr's primary mechanism covers **Path A**. In the MVP, `safe-to-evict` is the 
 
 - Bias Deployment scale-down toward idle or cheap pods by setting `pod-deletion-cost` on live Pod objects.
 - Define a small, generic, pull-based **worker contract** (an HTTP status endpoint).
-- Keep API-server load low: patch only on meaningful change, quantize costs, and rate-limit writes.
+- Keep API-server load low: patch only on a meaningful change in cost, and rate-limit writes.
 - Work alongside existing autoscalers (KEDA, HPA), which own the replica count (option (a), §7).
 - **Opt-in per workload:** manage `cluster-autoscaler.kubernetes.io/safe-to-evict`, which only matters where Cluster Autoscaler is used, including its cleanup, expiry and staleness handling (§6, §9.9, §9.12).
 - Document the limits plainly, along with the graceful-drain practices workers still need.
@@ -142,7 +142,7 @@ Knarr's primary mechanism covers **Path A**. In the MVP, `safe-to-evict` is the 
 flowchart LR
     subgraph Knarr
       D[Discover target pods<br/>periodic LIST] --> P[Poll each pod's<br/>status endpoint]
-      P -- ok --> M[Clamp + map → desired annotations<br/>cost band, opt-in safe-to-evict, marker]
+      P -- ok --> M[Clamp + map → desired annotations<br/>cost value, opt-in safe-to-evict, marker]
       P -- unreachable / invalid --> F[Fallback policy §5]
       F --> M
       M --> R{Desired ≠ last applied?<br/>within write budget?}
@@ -158,8 +158,8 @@ flowchart LR
 
 1. **Discover.** Find the worker pods of Deployments opted in through labels and annotations, in Knarr's one namespace (§9.1, §9.18). Use a periodic LIST scoped by namespace and selector, on its own cadence and slower than polling. Watch deferred ([DEFERRED.md §6](DEFERRED.md#6-watch-based-discovery)).
 2. **Poll.** Send an HTTP GET to each pod's status endpoint (§5). Keep the per-poll timeout shorter than the interval, jitter the schedule, never overlap two polls of the same pod, and bound concurrency.
-3. **Map.** Treat the worker-supplied cost as untrusted input. Clamp it, combine it with the accepting state, and quantize it into a small number of cost bands. From these, derive the pod's full **desired annotation state**: the cost band, the opt-in `safe-to-evict` value, and Knarr's ownership marker.
-4. **Patch only on meaningful change.** Compare the desired state with the last successfully applied state. That covers band changes, first annotation, startup repair, cleanup and `safe-to-evict` flips. Every annotation write goes through one rate-limited patcher, with a per-pod minimum interval and a global QPS budget. Changes that are throttled stay pending and are not dropped.
+3. **Map.** Treat the worker-supplied cost as untrusted input. Clamp it and combine it with the accepting state. The annotation carries that value itself, with no bands: the cost is written when it crosses a configured threshold and is absent below the first, and a draining pod below the first threshold carries `-1`, entered and left on the reading that says so; [cost_mapping.allium](specs/cost_mapping.allium) settles this. From it, derive the pod's full **desired annotation state**: the cost value, the opt-in `safe-to-evict` value, and Knarr's ownership marker.
+4. **Patch only on meaningful change.** Compare the desired state with the last successfully applied state. That covers threshold crossings, a drain-state change, first annotation, startup repair, cleanup and `safe-to-evict` flips. Every annotation write goes through one rate-limited patcher, with a per-pod minimum interval and a global QPS budget. Changes that are throttled stay pending and are not dropped.
 5. **Skip terminating pods.** Once a pod has `deletionTimestamp` set, the ReplicaSet no longer counts it, so Knarr stops patching it. Knarr may keep polling it for observability.
 
 Knarr annotates **live Pod objects**, never the Deployment's pod template. Changing the template would trigger a rollout. Changing annotations on a running pod does not restart it.
@@ -180,7 +180,7 @@ sequenceDiagram
     loop Independently, every poll interval
         K->>W: GET status
         W-->>K: cost, accepting
-        K->>API: PATCH annotations (band change, within budget)
+        K->>API: PATCH annotations (threshold crossing, within budget)
     end
     Note over K,API: No "annotate before scale-down". Knarr cannot see one coming (§7)
     S->>API: lower Deployment replicas
@@ -202,7 +202,7 @@ sequenceDiagram
 
 - **Pull.** Knarr polls an HTTP endpoint exposed by each worker pod. Workers do not push.
 - The v1 payload carries **only** two things:
-  1. **`cost`**: the worker's own estimate of the "cost to kill" it right now. Higher means more expensive to kill. The worker computes it; Knarr relays, clamps and maps it. Type, range and units are OPEN (§9.5). The wire type is settled in [worker_contract.allium](specs/worker_contract.allium): a non-negative JSON integer with no unit; the Knarr-owned range is §9.5's.
+  1. **`cost`**: the worker's own estimate of the "cost to kill" it right now. Higher means more expensive to kill. The worker computes it; Knarr relays, clamps and maps it. The wire type is settled in [worker_contract.allium](specs/worker_contract.allium): a non-negative JSON integer with no unit. It is intended as the elapsed seconds of the worker's longest-running active task; [cost_mapping.allium](specs/cost_mapping.allium) writes it as is, clamped to int32, when it crosses a threshold.
   2. **`accepting`**: whether the worker is accepting new work. `false` means it is draining.
 - More fields may come later. They are out of scope for v1.
 - **Reachability:** Knarr must reach pod IPs on the status port. It polls over plain HTTP: no mTLS, and no service-mesh support in the MVP ([DEFERRED.md §8](DEFERRED.md#8-other-future-targets)). NetworkPolicies may need configuration; the `NetworkPolicy` clause of [worker_contract.allium](specs/worker_contract.allium) says what.
@@ -232,21 +232,21 @@ Readiness also controls Service routing, so the right guidance depends on the ki
 
 `accepting: false` matters to Knarr only when the **worker starts the drain itself**, for example before a self-restart or when an operator asks it to drain through the worker's own API. Once Kubernetes terminates a pod (SIGTERM, `deletionTimestamp` set), the annotation no longer affects ReplicaSet scale-down and Knarr stops patching.
 
-| `accepting` | `cost` | Terminating | Meaning | Candidate handling (OPEN, §9.5) |
+| `accepting` | `cost` | Terminating | Meaning | Handling (settled in [cost_mapping.allium](specs/cost_mapping.allium)) |
 | --- | --- | --- | --- | --- |
-| true | low | no | Idle or running quick tasks only | Low band; preferred victim |
-| true | high | no | Busy with expensive work | High band; biased against removal |
-| false | high | no | Not accepting; expensive work remains | Biased against removal. One option: keep the reported cost, or apply a floor. Still best-effort. Kubernetes does not bound a drain the worker starts itself; the grace period applies only once termination begins |
-| false | low | no | Not accepting; low remaining interruption cost (possibly fully drained) | Low band; preferred victim |
+| true | low | no | Idle or running quick tasks only | Below the first threshold the annotation is absent. Preferred victim |
+| true | high | no | Busy with expensive work | The cost is written as is when it crosses a threshold. Biased against removal |
+| false | high | no | Not accepting; expensive work remains | The cost is written as is when it crosses a threshold, with no floor. Biased against removal, still best-effort. Kubernetes does not bound a drain the worker starts itself; the grace period applies only once termination begins |
+| false | low | no | Not accepting; low remaining interruption cost (possibly fully drained) | `-1` while the cost is below the first threshold, ranked below every idle and unannotated pod. Preferred victim |
 | any | any | yes | Being terminated | No patches; the worker's graceful shutdown applies |
 
-By default Knarr does not override the worker's cost. A floor for draining pods is only a candidate rule for §9.5.
+Knarr never overrides a positive cost. A floor for draining pods was a candidate for §9.5 and was rejected.
 
 ### Unreachable, invalid or absent endpoints
 
 The intent is to keep any fallback bounded and **never treat missing data as "busy"**. If "no data" counts as busy, protection can pin pods or nodes indefinitely. A possible default, with thresholds set in §9.6:
 
-- **Transient failure** (timeout, 5xx, payload that fails to parse): keep the last-known value for a bounded number of polls *and* a bounded time, then fall back to a neutral value. What "neutral" means depends on the sign convention (§9.5).
+- **Transient failure** (timeout, 5xx, payload that fails to parse): keep the last-known value for a bounded number of polls *and* a bounded time, then fall back to the neutral value, which is the removed annotation (§9.5).
 - **Contract absent** (404 or connection refused for M polls in a row since the pod started): treat the pod as unmanaged. Remove any annotations Knarr owns rather than simply stop writing, and emit a per-Deployment Event and metric.
 - **Just started:** such pods are usually Pending or NotReady, so they are ranked first whatever their cost. Leave them at the implicit default until a valid poll.
 - **Stale state outlives failures.** Stopping writes does not undo earlier ones. A high cost or `safe-to-evict: "false"` stays on the pod until Knarr removes it, so each Knarr-owned annotation needs an expiry and a cleanup attempt (§9.6, §9.12). If the API rejects the cleanup, the stale state persists. Raise an Event and a metric.
@@ -257,12 +257,12 @@ stateDiagram-v2
     [*] --> Live
     state Live {
         [*] --> Unannotated
-        Unannotated --> Banded : valid poll
+        Unannotated --> Mapped : valid poll
         Unannotated --> ContractAbsent : 404 or refused, M polls in a row
-        Banded --> TransientFailure : timeout, 5xx, bad payload
-        TransientFailure --> Banded : valid poll
+        Mapped --> TransientFailure : timeout, 5xx, bad payload
+        TransientFailure --> Mapped : valid poll
         TransientFailure --> Neutral : bounded polls and time exceeded
-        Neutral --> Banded : valid poll
+        Neutral --> Mapped : valid poll
         ContractAbsent --> Cleanup : Event + metric
         Cleanup --> Unmanaged : Knarr-owned annotations removed
         Cleanup --> StaleState : patch rejected
@@ -271,8 +271,8 @@ stateDiagram-v2
             Thresholds OPEN §9.6
         end note
         note right of Neutral
-            Neutral value depends on
-            the sign convention, OPEN §9.5
+            Neutral is the removed
+            annotation (§9.5)
         end note
         note right of StaleState
             Old annotations stay on the pod.
@@ -360,8 +360,8 @@ The KEP recommends updating the cost "only before scale down" and keeping update
 
 **How Knarr limits update frequency:**
 
-- **Quantize** the worker cost into a few bands (for example zero / low / high). A worker can fold job duration into the cost it reports. A separate field is needed only if Knarr must receive duration directly.
-- **Patch only when the desired annotation state changes** (§4), with **hysteresis** on band edges so values near a boundary do not oscillate.
+- **Write the cost itself, at threshold crossings.** The annotation carries the worker's clamped cost, written when the cost crosses one of the configured thresholds (300, 900, 1800 and 3600 by default, in the seconds the worker is expected to report, overridable per workload) and absent below the first; `-1` marks a draining pod below the first threshold. Between crossings the applied value stands. Settled in [cost_mapping.allium](specs/cost_mapping.allium).
+- **Patch only when the desired annotation state changes** (§4), with a **margin below each threshold on the way down** in place of hysteresis: a downward crossing counts only once the cost is below the threshold minus the margin (60 by default), so a cost that wobbles at an edge does not write.
 - Enforce a **minimum interval per pod** between patches, plus a **global patch QPS budget** and a documented expected write rate.
 - Patch only `metadata.annotations`. An unconditional merge patch is idempotent, but it can overwrite a value another writer set after Knarr read the pod. Lost-update detection needs a conditional write, either a `resourceVersion` precondition or a JSON Patch `test` op. The choice is OPEN (§9.10).
 - Every pod patch is an etcd write and a MODIFIED watch event for every watcher of that pod. Those watchers are the cluster-wide pod informers (controller-manager, scheduler, CA, KEDA and others) plus the kubelet on the pod's node. Cluster operators can throttle Knarr with API Priority and Fairness.
@@ -370,26 +370,18 @@ The KEP recommends updating the cost "only before scale down" and keeping update
 flowchart LR
     C["Worker cost<br/>untrusted"] --> CL["Clamp, combine<br/>with accepting"]
     ACC[accepting] --> CL
-    CL --> B["Quantize to band<br/>e.g. zero / low / high"]
-    B --> H["Hysteresis<br/>at band edges"]
-    H --> DS["Desired state<br/>band, safe-to-evict, marker"]
+    CL --> B["Cost itself at a crossing,<br/>absent below the first threshold,<br/>-1 drained"]
+    B --> H["Margin below each<br/>threshold going down"]
+    H --> DS["Desired state<br/>cost value, safe-to-evict, marker"]
     DS --> Q{"Desired ≠<br/>last applied?"}
     Q -- "no" --> NW[No write]
     Q -- "yes" --> RL{"Per-pod interval<br/>and global QPS OK?"}
     RL -- "yes" --> P[PATCH pod annotations]:::knarr
     RL -- "no" --> PEND["Pending, retried<br/>next interval"]
-    SC["Sign convention, band edges,<br/>how accepting combines<br/>OPEN §9.5"]:::open -.-> B
     classDef knarr stroke:#2f80ed,stroke-width:3px
-    classDef open stroke:#d97706,stroke-width:2px,stroke-dasharray:5 5
 ```
 
-**Sign convention (OPEN, §9.5).** Unannotated pods count as `0`. Cost is compared whenever the earlier ranking steps tie, for example between two Ready pods or between two NotReady pods. The convention therefore decides how Knarr's bands compare with the implicit `0`. It is tied to the neutral fallback value (§9.6) and to what removing an annotation means (§9.12). Ready pods that Knarr has not annotated yet are the main example:
-
-- If idle = `0`, those pods tie with idle pods.
-- If idle < `0`, they rank after idle pods.
-- If busy > `0`, busy pods are protected over them.
-
-Choose deliberately, and reserve bands for Knarr's own states (for example unknown).
+**Sign convention (settled in [cost_mapping.allium](specs/cost_mapping.allium)).** Unannotated pods count as `0`. Cost is compared whenever the earlier ranking steps tie, for example between two Ready pods or between two NotReady pods. Knarr's convention: idle is a cost below the first threshold and is `0`, spelled by removing the annotation, so Ready pods that Knarr has not annotated yet tie with idle pods; busy is the worker's cost at or above the first threshold, so busy pods are protected over them; a draining pod below the first threshold is `-1`, deleted before both. The neutral fallback (§9.6) and cleanup (§9.12) are that same removal. No values are reserved for Knarr's own states.
 
 ### `cluster-autoscaler.kubernetes.io/safe-to-evict` (opt-in, MVP)
 
@@ -422,7 +414,7 @@ flowchart TD
 
 HPA or KEDA (ScaledObject) sets the replica count; Knarr only writes annotations. The primary mechanism works under any scaler, because HPA, KEDA and `kubectl scale` all end up at the ReplicaSet's victim ranking. Consequences:
 
-- **No "annotate before scale-down".** Knarr cannot know when a scale-down is coming, so costs must stay fresh all the time. Banding and debounce (§6) are essential.
+- **No "annotate before scale-down".** Knarr cannot know when a scale-down is coming, so costs must stay fresh all the time. Threshold crossings and the write budget (§6) are essential.
 - **Scale-from-zero:** at zero replicas Knarr has no pods to poll, so wake-up needs an external demand signal: a KEDA trigger.
 - **Tuning:** users tune scale-down through `ScaledObject.spec.advanced.horizontalPodAutoscalerConfig.behavior`, for example the stabilization window or a limit of one pod per period. KEDA's `cooldownPeriod` only applies to scaling to zero.
 
@@ -440,7 +432,7 @@ knarr_sup (one_for_one)
 ├── k8s_client      : in-cluster auth, list/get/patch; pure Gleam + Erlang FFI (§9.2)
 ├── pod_discovery   : periodic LIST of target pods (watch deferred)
 ├── poller_pool     : bounded-concurrency HTTP polling of pod status endpoints
-├── reconciler      : clamp → band → hysteresis → decide patch
+├── reconciler      : clamp → map at thresholds → decide patch
 ├── patcher         : rate-limited merge-patch writer (per-pod interval + global QPS)
 └── health_metrics  : liveness/readiness for Knarr itself; metrics export
 ```
@@ -473,7 +465,7 @@ flowchart TB
 - **In-cluster TLS** is the hard part of option (A). The cluster CA is not in the OS trust store, so a small Erlang FFI step is likely needed. Do not rely on `httpc` defaults. `gleam_httpc` passes no ssl options when verification is on, so it inherits `httpc`'s defaults, and those only became verifying in OTP 26 (Inets 9.0). Pass explicit ssl options instead: `verify_peer`, the service-account `ca.crt` as `cacertfile`, and a hostname check. Require OTP 26 or later. Spike S1 verified that the hostname check passes against the IP literal in `KUBERNETES_SERVICE_HOST` ([Decision 0013](decisions/0013-in-cluster-client.md)).
 - **Tokens:** projected service-account tokens rotate on disk. Re-read the token periodically and never cache it for the life of the process.
 - **Single replica, `Recreate` strategy:** no leader election. `Recreate` avoids two replicas writing at once, but leaves a short gap with no updates during upgrades. HA notes are in [DEFERRED.md §4](DEFERRED.md#4-ha-and-leader-election).
-- **Restart safety and staleness:** derive state from the current poll, the current annotations, and a Knarr marker annotation (for example `knarr.io/...` holding the last-written value and a timestamp). Do not rely on in-memory counters. On startup, reconcile every pod that carries the marker. **Open tension:** writes are sparse, so after a restart a last-written timestamp cannot tell "the same band reported for hours" from "hours of failed polls". Freshness semantics and conservative restart behavior go in §9.12. Document uninstall and manual recovery, for example `kubectl annotate pod <p> cluster-autoscaler.kubernetes.io/safe-to-evict-`.
+- **Restart safety and staleness:** derive state from the current poll, the current annotations, and a Knarr marker annotation (for example `knarr.io/...` holding the last-written value and a timestamp). Do not rely on in-memory counters. On startup, reconcile every pod that carries the marker. **Open tension:** writes are sparse, so after a restart a last-written timestamp cannot tell "the same cost reported for hours" from "hours of failed polls". Freshness semantics and conservative restart behavior go in §9.12. Document uninstall and manual recovery, for example `kubectl annotate pod <p> cluster-autoscaler.kubernetes.io/safe-to-evict-`.
 - **Minimum RBAC (one namespaced Role; inferred from the standard RBAC model, to be confirmed):**
   - core `pods`: get, list, patch (watch later, if watch-based discovery is adopted)
   - `apps` `deployments`, `replicasets`: get, list (watch later)
@@ -506,7 +498,7 @@ flowchart TB
 flowchart LR
     S1[Spike S1]:::open -- "validates" --> D2["9.2 k8s client<br/>decided"]
     S2[Spike S2]:::open -- "decides" --> D9["9.9 safe-to-evict policy"]:::open
-    D5["9.5 cost mapping"]:::open -- "before" --> D6["9.6 unknown/unreachable policy"]:::open
+    D5["9.5 cost mapping<br/>decided"] -- "before" --> D6["9.6 unknown/unreachable policy"]:::open
     D10["9.10 ownership, conflicts"]:::open -- "before" --> D12["9.12 cleanup, staleness"]:::open
     D5 -. "sign convention: what<br/>removing an annotation means" .- D12
     D16["9.16 testing strategy"]:::open -- "sets thresholds" --> SC["§3 success criteria"]
@@ -524,8 +516,8 @@ flowchart LR
 4. **Worker contract details**, split in two and settled in [worker_contract.allium](specs/worker_contract.allium), except the per-poll timeout, which is §9.8's:
    - **4a. Endpoint shape:** path, port, schema, field types, versioning, timeouts.
    - **4b. Discovery, auth and network:** how Knarr finds the endpoint on a pod, auth (if any), and compatibility with NetworkPolicies.
-5. **Cost mapping:** sign convention, Knarr-owned range, number of bands and their edges, hysteresis, reserved bands, and how `cost` and `accepting` combine (see the §5 drain states).
-6. **Unknown/unreachable policy:** how long to keep the last value (in polls and in time), the neutral value, and how to detect an absent contract. Depends on 5.
+5. **Cost mapping:** sign convention, clamp, the drained value, the canonical string, the thresholds and the margin, and how `cost` and `accepting` combine (see the §5 drain states). Settled in [cost_mapping.allium](specs/cost_mapping.allium): no bands and no hysteresis.
+6. **Unknown/unreachable policy:** how long to keep the last value (in polls and in time) before the removal §9.5 fixes as neutral, and how to detect an absent contract. Depends on 5.
 7. **Readiness interaction:** how to document it, and whether Knarr warns on "high cost while NotReady". Settled in [worker_contract.allium](specs/worker_contract.allium).
 8. **Poll interval, concurrency and write budget:** numeric defaults and a v1 scale target (pods, Deployments, interval), LIST cadence, limits per Deployment and per cluster, and the expected API write rate.
 9. **`safe-to-evict` policy:** the threshold; removing the annotation vs writing `"true"` (matters for local-storage pods); how to avoid pinning nodes. Depends on S2.
@@ -533,9 +525,9 @@ flowchart LR
 11. **Feature-gate prerequisite.** Options: (i) document only; (ii) a startup self-test; (iii) a periodic check.
 12. **Cleanup, staleness and freshness.** Options: (i) never clean up; (ii) clean up when a pod or workload leaves scope; (iii) also clean up on graceful shutdown. Also covers: separate expiry for deletion cost and for `safe-to-evict`; what the marker timestamp means; conservative behavior on restart when freshness is unknown; startup reconciliation of marked pods; annotations left after a crash; and an uninstall procedure.
 13. **Rollouts:** guidance on `maxUnavailable` / `maxSurge` plus graceful drain. Cost biases victims within an old ReplicaSet but cannot stop that ReplicaSet from scaling to zero.
-14. **Observability:** metrics (poll results, band distribution, patch rate, errors), Events and logs.
+14. **Observability:** metrics (poll results, cost distribution, patch rate, errors), Events and logs.
 15. **Decided:** kustomize only. A release overlay over the kind base pins the published image by digest, and the namespaced Role stays in the base (see [Decision 0012](decisions/0012-release-and-packaging.md), [DEFERRED.md §8](DEFERRED.md#8-other-future-targets)).
-16. **Testing strategy:** unit tests for mapping and banding, end-to-end tests on kind with a fake worker image, and an envtest equivalent or substitute. Also sets the thresholds for the §3 success criteria.
+16. **Testing strategy:** unit tests for the cost mapping, end-to-end tests on kind with a fake worker image, and an envtest equivalent or substitute. Also sets the thresholds for the §3 success criteria.
 17. **Future targets:** see [DEFERRED.md](DEFERRED.md) (§7 Karpenter, §8 other future targets).
 18. **Decided:** one install per namespace, with a Role (see §8, [DEFERRED.md §5](DEFERRED.md#5-install-scope-and-configuration-alternatives)).
 19. **Decided:** a single replica, no leader election (see §8, [DEFERRED.md §4](DEFERRED.md#4-ha-and-leader-election)).
@@ -545,7 +537,8 @@ flowchart LR
 ### Glossary
 
 - **Cost:** a number the worker supplies; higher means it would be more expensive to kill the pod now.
-- **Band:** a quantized cost level. A band change is one of the triggers for a patch (§4).
+- **Mapped value:** the int32 the annotation carries: the worker's cost as of its last threshold crossing, `-1` for a draining pod below the first threshold, or absent below the first threshold. A crossing is one of the triggers for a patch (§4).
+- **Threshold:** a configured cost at which a crossing writes the cost; a margin below it damps the way down (§6).
 - **Accepting / draining:** the worker's statement that it is or is not taking new work.
 - **Path A / B / C:** ReplicaSet scale-down; node removal through the Eviction API; other ways a pod can be killed (§2).
 

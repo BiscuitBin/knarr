@@ -15,7 +15,7 @@
 
 open question "§9.1 Schema: the label and annotation key prefix knarr owns, and which keys are labels and which are annotations."
 open question "§9.1 Opt-in: how a Deployment opts in, and what the discovery LIST selects on (§4)."
-open question "§9.1 Overrides: which tuning values a Deployment may override (endpoint, bands, hysteresis, unreachable windows, staleness, poll and write limits) and the valid range of each, taken from the owning ticket."
+open question "§9.1 Overrides: which tuning values a Deployment may override (endpoint, the thresholds and margin, unreachable windows, staleness, poll and write limits) and the valid range of each, taken from the owning ticket."
 open question "§9.1 Opt-in for safe-to-evict: how a workload enables the per-workload safe-to-evict policy, which is off by default (§6)."
 open question "§9.1 Invalid values: what knarr does with an unparsable or out-of-range value (ignore the key, ignore the workload, Event)."
 open question "§9.1 Unsupported kinds: whether knarr refuses or warns when pointed at a StatefulSet, Job or DaemonSet, and how (§3 non-goals)."

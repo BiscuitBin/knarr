@@ -13,7 +13,7 @@
 -- Open Questions
 ------------------------------------------------------------
 
-open question "§9.9 Threshold: which band or bands write \"false\", and the hysteresis around them, wider than the cost banding (Decision 0008)."
+open question "§9.9 Threshold: the cost_mapping tier or tiers at or above which knarr writes \"false\", and its own hysteresis, wider than cost_mapping's margin (Decision 0008)."
 open question "§9.9 Removal: that ending protection removes the annotation rather than writing \"true\", and what is written for pods with emptyDir or hostPath volumes (Decision 0008, Exp4)."
 open question "§9.9 Pinning: the cap on the share of a workload's pods marked at once and on how long one mark is held, with expiry left to §9.12."
 open question "§9.9 Best effort: how the clauses state that a mark is honoured only up to CA's one re-check and not once eviction has started (Decision 0008)."

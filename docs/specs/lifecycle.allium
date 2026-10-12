@@ -15,7 +15,7 @@
 
 open question "§9.12 Cleanup scope: never, when a pod or workload leaves scope, or also on graceful shutdown."
 open question "§9.12 Expiry: the separate expiry for pod-deletion-cost and for safe-to-evict, and what knarr writes when one expires (§5 stale state)."
-open question "§9.12 Marker freshness: what the marker timestamp means when writes are sparse, so a steady band is told apart from hours of failed polls (§8)."
+open question "§9.12 Marker freshness: what the marker timestamp means when writes are sparse, so a steady cost is told apart from hours of failed polls (§8)."
 open question "§9.12 Restart: the conservative behaviour on restart when freshness is unknown, and the restart success threshold handed to §9.16."
 open question "§9.12 Startup reconciliation: which pods are reconciled on startup and in what order, so annotations do not flap (§3)."
 open question "§9.12 Crash leftovers: what happens to annotations left on pods after a crash or while knarr is down (§8 failure modes)."

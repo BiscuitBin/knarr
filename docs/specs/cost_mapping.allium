@@ -1,0 +1,127 @@
+-- allium: 3
+
+-- Module: cost_mapping.
+-- Scope: the pure mapping from a worker's cost, its drain state and the value
+-- last applied to the value the pod-deletion-cost annotation should carry,
+-- and to the string knarr writes for it: the sign convention, what an absent
+-- annotation means, the drained value, the clamp, the thresholds at which a
+-- write is due, the margin below each on the way down, and the canonical
+-- int32 string (§4 Map, §5 drain states, §6, §9.5). It replaces banding: the
+-- value written is the cost itself, never a band. Reading cost and accepting
+-- off the wire is worker_contract (§9.4a). The patch and the removal, which
+-- value stands as applied, the neutral fallback and cleanup are reconcile and
+-- lifecycle (§9.6, §9.12); the write budget is budget (§9.8); the override
+-- keys and their validation are config (§9.1).
+-- Owner: ticket 20 settled every question here with the maintainer on
+-- 2026-10-10, and replaced a relative change threshold with these thresholds
+-- after an adversarial review the same day. Ticket 31 builds it.
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+-- The value the annotation carries, as the ReplicaSet controller ranks it:
+-- an unannotated pod counts as 0 and lower is deleted first. 0 is absent,
+-- -1 is drained, and 1 to 2147483647 is the worker's cost. No other value
+-- exists; render and map are defined on these values only.
+value Mapped {
+    value: Integer
+}
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract CostMapping {
+    tier: (value: Integer, thresholds: List<Integer>) -> Integer
+    map: (cost: Integer, draining: Boolean, applied: Mapped, thresholds: List<Integer>, margin: Integer) -> Mapped
+    render: (mapped: Mapped) -> String?
+
+    @invariant Continuous
+        -- There are no bands and no quantization. When a write is due the
+        -- annotation carries the clamped cost of that reading itself, and
+        -- between crossings the applied value stands whatever the cost
+        -- does. knarr never overrides a positive cost and applies no floor.
+    @invariant Sign
+        -- Idle is below the first threshold and is 0; busy is a cost at or
+        -- above it. Lower is deleted first, so among pods of one ReplicaSet
+        -- that tie on the earlier ranking steps a busy pod is deleted after
+        -- every idle and unannotated pod, and a higher cost after a lower
+        -- one. cost is not negative: worker_contract's ValidReading rejects
+        -- a negative cost before map sees one.
+    @invariant Absent
+        -- An absent annotation means 0 and is the neutral value. map never
+        -- returns a positive value below the first threshold: a reading
+        -- that lands below it and is not draining maps to 0, and 0 is spelled by
+        -- removing the annotation: render returns null for it and the
+        -- string "0" is never written. For pod-deletion-cost, removal, the
+        -- neutral fallback (reconcile, ticket 21) and cleanup (lifecycle,
+        -- ticket 23) are one operation: the same removal of the same
+        -- annotation.
+    @invariant Drained
+        -- A reading whose worker_contract draining is true and whose
+        -- clamped cost is below the first threshold maps to -1, which is
+        -- deleted before every idle and unannotated pod. At or above the
+        -- first threshold the cost rules, draining or not, as Continuous
+        -- says. -1 is entered and left on the reading that says so, with no
+        -- margin: accepting is a statement, not a measurement.
+    @invariant Clamp
+        -- A cost above 2147483647 is 2147483647 for every purpose here:
+        -- tiers are counted against the clamped cost and the clamped cost is
+        -- what is written. Every mapped value is -1, 0 or 1 to 2147483647,
+        -- and every one parses as int32.
+    @invariant Tiers
+        -- thresholds is a strictly increasing list of positive integers with
+        -- at least one member; margin is 0 or more and below the first
+        -- threshold. The defaults are config.thresholds and
+        -- config.threshold_margin; a Deployment may override both, and the
+        -- override keys and an invalid override are config's (ticket 19).
+        -- tier(value, thresholds) is the number of thresholds at or below
+        -- value, so it is 0 for -1 and 0, and the defaults assume a cost
+        -- reported as the elapsed seconds of the longest active task
+        -- (worker_contract Payload).
+    @invariant Crossing
+        -- map is the only damping, and it reads nothing but its arguments.
+        -- Let k be tier(applied.value). A reading whose clamped cost has a
+        -- tier above k maps to that cost. Otherwise, when k is at least 1
+        -- and the cost is below the k-th threshold minus margin, the
+        -- reading maps to the cost if the cost's own tier is at least 1 and
+        -- to 0 if it is not; the new value's own tier then stands, so a
+        -- drop from 950 to 250 with thresholds 300 and 900 and margin 60
+        -- maps to 0. Every other reading maps to applied unchanged, with
+        -- one exception: an applied value above 0 whose own tier is 0,
+        -- which only a threshold override that raised the first threshold
+        -- above it can leave behind, counts as 0 here, so the reading maps
+        -- to the cost when the cost's tier is at least 1, to -1 when
+        -- draining, and to 0 otherwise. No positive value below the first
+        -- threshold survives a reading.
+        -- Drained takes precedence for a draining reading below the first
+        -- threshold, and a reading at -1 that is no longer draining and
+        -- still below the first threshold maps to 0. A write is due exactly
+        -- when the mapped value differs from applied; that comparison and
+        -- the patch are reconcile's (ticket 31).
+    @invariant Canonical
+        -- render returns the canonical signed decimal int32 string: the
+        -- digits of the value with no plus sign, no leading zeros and no
+        -- whitespace, "-1" for drained, and null for 0, which is no string
+        -- at all. What reaches the pod is that string or the removal,
+        -- nothing else.
+    @invariant Pure
+        -- tier, map and render are functions of their arguments alone: the
+        -- same arguments give the same results, and none reads state, time
+        -- or the pod, or makes a request. applied is the value knarr's own
+        -- marker records as last applied to the pod (ownership, ticket 22);
+        -- a value on the pod that knarr did not apply is ownership's to
+        -- recognise and is never passed here as applied. Which pod state
+        -- feeds map, the patch and the removal are reconcile's (ticket 31);
+        -- whether a due write may go now is budget's (ticket 24).
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    thresholds: List<Integer> = [300, 900, 1800, 3600]
+    threshold_margin: Integer = 60
+}

@@ -59,11 +59,6 @@
   p { margin: 0 0 12px; max-width: 70ch; }
   .lede { color: var(--muted); }
   code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .tag {
-    display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
-    padding: 1px 7px; border-radius: 4px; border: 1.5px dashed var(--open); color: var(--open);
-    vertical-align: middle;
-  }
   .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 16px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 0.9rem; }
   .legend li { display: flex; align-items: center; gap: 8px; }
   .sw { width: 22px; height: 14px; border-radius: 3px; display: inline-block; }
@@ -96,12 +91,6 @@
   .decide.k { background: var(--yes-bg); color: var(--yes-fg); }
   .decide.w { background: var(--no-bg); color: var(--no-fg); }
   .note { font-size: 0.85rem; color: var(--muted); display: block; font-weight: 400; }
-
-  /* Sign convention */
-  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 12px; }
-  .option { background: var(--surface); border: 2px dashed var(--open); border-radius: 8px; padding: 12px 14px; }
-  .option h3 { margin: 0 0 4px; font-size: 0.95rem; }
-  .option p { font-size: 0.88rem; margin: 6px 0 0; color: var(--muted); }
 
   /* Matrix */
   .matrix th.lever { min-width: 10em; }
@@ -180,91 +169,65 @@
 
   <!-- 2. Cost line -->
   <h2 id="cost">2. From worker cost to annotation value</h2>
-  <p>Knarr clamps the worker's cost, then quantizes it into a few bands (§4, §6). Hysteresis at each band edge stops a value near the boundary from flipping the band, and so the annotation, on every poll. The band names, the number of bands and the edges are illustrative: they are <span class="tag">OPEN §9.5</span>.</p>
+  <p>Knarr writes the worker's cost itself, clamped to int32, when the cost crosses a configured threshold (§4, §6). Below the first threshold the pod is idle and carries no annotation; a draining pod below the first threshold is <code>-1</code>, entered and left on the reading that says so, with no margin. Between crossings the applied value stands. A margin below each threshold damps the way down. Settled in <code>docs/specs/cost_mapping.allium</code> (§9.5).</p>
 
   <figure>
-    <div class="scroll"><svg class="wide" viewBox="0 0 720 170" role="img" aria-label="A clamped cost axis split into three illustrative bands, zero, low and high, with a hysteresis zone at each of the two band edges.">
+    <div class="scroll"><svg class="wide" viewBox="0 0 720 170" role="img" aria-label="A cost axis with a drained region at minus one, an absent region below the first threshold, and the cost itself above it, with four thresholds marked and a shaded margin zone just below each.">
       <defs>
         <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
         </marker>
       </defs>
       <g font-size="13" fill="currentColor">
-        <text x="40" y="24" class="mut">clamp min</text>
-        <text x="680" y="24" text-anchor="end" class="mut">clamp max</text>
-        <rect x="40" y="40" width="200" height="44" class="b1"/>
-        <rect x="240" y="40" width="220" height="44" class="b2"/>
-        <rect x="460" y="40" width="220" height="44" class="b3"/>
-        <rect x="222" y="40" width="36" height="44" class="hz"/>
-        <rect x="442" y="40" width="36" height="44" class="hz"/>
-        <text x="130" y="67" text-anchor="middle" font-weight="600">zero</text>
-        <text x="350" y="67" text-anchor="middle" font-weight="600">low</text>
-        <text x="570" y="67" text-anchor="middle" font-weight="600">high</text>
+        <text x="40" y="24" class="mut">-1</text>
+        <text x="680" y="24" text-anchor="end" class="mut">clamp: 2147483647</text>
+        <rect x="40" y="40" width="80" height="44" class="b1"/>
+        <rect x="120" y="40" width="160" height="44" class="b2"/>
+        <rect x="280" y="40" width="400" height="44" class="b3"/>
+        <rect x="250" y="40" width="30" height="44" class="hz"/>
+        <rect x="370" y="40" width="30" height="44" class="hz"/>
+        <rect x="490" y="40" width="30" height="44" class="hz"/>
+        <rect x="610" y="40" width="30" height="44" class="hz"/>
+        <text x="80" y="67" text-anchor="middle" font-weight="600">drained</text>
+        <text x="185" y="67" text-anchor="middle" font-weight="600">absent</text>
+        <text x="460" y="67" text-anchor="middle" font-weight="600">the cost itself, as of its last crossing</text>
         <line x1="40" y1="96" x2="680" y2="96" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)"/>
-        <text x="360" y="116" text-anchor="middle" class="mut">worker cost after clamping</text>
-        <line x1="240" y1="40" x2="240" y2="132" stroke="currentColor" stroke-dasharray="3 3"/>
-        <line x1="460" y1="40" x2="460" y2="132" stroke="currentColor" stroke-dasharray="3 3"/>
-        <text x="240" y="150" text-anchor="middle">band edge</text>
-        <text x="460" y="150" text-anchor="middle">band edge</text>
+        <text x="185" y="116" text-anchor="middle" class="mut">annotation value</text>
+        <line x1="280" y1="40" x2="280" y2="132" stroke="currentColor" stroke-dasharray="3 3"/>
+        <line x1="400" y1="40" x2="400" y2="132" stroke="currentColor" stroke-dasharray="3 3"/>
+        <line x1="520" y1="40" x2="520" y2="132" stroke="currentColor" stroke-dasharray="3 3"/>
+        <line x1="640" y1="40" x2="640" y2="132" stroke="currentColor" stroke-dasharray="3 3"/>
+        <text x="280" y="150" text-anchor="middle">300</text>
+        <text x="400" y="150" text-anchor="middle">900</text>
+        <text x="520" y="150" text-anchor="middle">1800</text>
+        <text x="640" y="150" text-anchor="middle">3600</text>
+        <text x="460" y="116" text-anchor="middle" class="mut">thresholds, in the seconds the worker reports</text>
       </g>
     </svg></div>
-    <figcaption>Shaded zones are hysteresis: a pod's band holds until its cost leaves the zone, so small wobbles at an edge cause no patch. Only a band change (or another change to the desired state) leads to a write, and that write still waits for the per-pod interval and the global QPS budget.</figcaption>
+    <figcaption>Crossing a threshold upward writes the cost at that reading. The shaded zones are the margin (60 by default): on the way down a threshold counts as crossed only once the cost is below it minus the margin, so a cost that wobbles at an edge does not write. The thresholds and the margin are configurable per workload. Any write still waits for the per-pod interval and the global QPS budget.</figcaption>
   </figure>
 
-  <h3>Where the bands sit relative to the implicit <code>0</code> <span class="tag">OPEN §9.5</span></h3>
-  <p>Pods with no annotation count as <code>0</code>, and lower cost is deleted first. So the sign convention decides how Knarr's bands compare with Ready pods that Knarr has not annotated yet (§6). The doc lists three consequences; each panel shows one, comparing only the two pods it names.</p>
+  <h3>Where the values sit relative to the implicit <code>0</code></h3>
+  <p>Pods with no annotation count as <code>0</code>, and lower cost is deleted first. Knarr's convention puts idle, a cost below the first threshold, at <code>0</code>, so Ready pods that Knarr has not annotated yet tie with idle pods; busy pods carry their cost and are protected over both; a draining pod below the first threshold is <code>-1</code> and goes first (§6).</p>
 
-  <div class="options">
-    <figure class="option">
-      <h3>If idle = <code>0</code></h3>
-      <svg viewBox="0 0 280 110" role="img" aria-label="Idle pods at zero sit at the same point as unannotated pods, so they tie on cost.">
-        <g font-size="12" fill="currentColor">
-          <line x1="16" y1="62" x2="264" y2="62" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="140" y1="54" x2="140" y2="70" stroke="currentColor" stroke-width="1.5"/>
-          <text x="140" y="86" text-anchor="middle">0</text>
-          <circle cx="140" cy="40" r="7" class="kn"/>
-          <circle cx="140" cy="22" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
-          <text x="154" y="44">idle (Knarr)</text>
-          <text x="154" y="26">unannotated</text>
-          <text x="16" y="104" class="mut">← deleted first</text>
-        </g>
-      </svg>
-      <p>Unannotated pods <strong>tie</strong> with idle pods on cost.</p>
-    </figure>
-    <figure class="option">
-      <h3>If idle &lt; <code>0</code></h3>
-      <svg viewBox="0 0 280 110" role="img" aria-label="Idle pods below zero sit left of unannotated pods, so idle pods are deleted first.">
-        <g font-size="12" fill="currentColor">
-          <line x1="16" y1="62" x2="264" y2="62" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="160" y1="54" x2="160" y2="70" stroke="currentColor" stroke-width="1.5"/>
-          <text x="160" y="86" text-anchor="middle">0</text>
-          <circle cx="70" cy="40" r="7" class="kn"/>
-          <text x="70" y="24" text-anchor="middle">idle (Knarr)</text>
-          <circle cx="160" cy="40" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
-          <text x="174" y="44">unannotated</text>
-          <text x="16" y="104" class="mut">← deleted first</text>
-        </g>
-      </svg>
-      <p>Unannotated pods <strong>rank after</strong> idle pods: idle pods go first.</p>
-    </figure>
-    <figure class="option">
-      <h3>If busy &gt; <code>0</code></h3>
-      <svg viewBox="0 0 280 110" role="img" aria-label="Busy pods above zero sit right of unannotated pods, so unannotated pods are deleted before busy ones.">
-        <g font-size="12" fill="currentColor">
-          <line x1="16" y1="62" x2="264" y2="62" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="100" y1="54" x2="100" y2="70" stroke="currentColor" stroke-width="1.5"/>
-          <text x="100" y="86" text-anchor="middle">0</text>
-          <circle cx="100" cy="40" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
-          <text x="100" y="24" text-anchor="middle">unannotated</text>
-          <circle cx="210" cy="40" r="7" class="kn"/>
-          <text x="210" y="24" text-anchor="middle">busy (Knarr)</text>
-          <text x="16" y="104" class="mut">← deleted first</text>
-        </g>
-      </svg>
-      <p>Busy pods are <strong>protected over</strong> unannotated pods.</p>
-    </figure>
-  </div>
-  <p style="margin-top:14px">The same choice fixes the neutral fallback value (§9.6) and what removing an annotation means (§9.12). §6 also suggests reserving bands for Knarr's own states, for example unknown.</p>
+  <figure>
+    <svg viewBox="0 0 480 110" role="img" aria-label="Drained pods at minus one sit left of zero, idle and unannotated pods share the point zero, and busy pods sit right of zero at their own cost.">
+      <g font-size="12" fill="currentColor">
+        <line x1="16" y1="62" x2="464" y2="62" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="215" y1="54" x2="215" y2="70" stroke="currentColor" stroke-width="1.5"/>
+        <text x="215" y="86" text-anchor="middle">0</text>
+        <circle cx="70" cy="40" r="7" class="kn"/>
+        <text x="70" y="24" text-anchor="middle">drained, -1 (Knarr)</text>
+        <circle cx="215" cy="40" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="215" y="10" text-anchor="middle">(below the first threshold)</text>
+        <text x="215" y="24" text-anchor="middle">idle and unannotated</text>
+        <circle cx="390" cy="40" r="7" class="kn"/>
+        <text x="390" y="24" text-anchor="middle">busy, its cost (Knarr)</text>
+        <text x="16" y="104" class="mut">← deleted first</text>
+      </g>
+    </svg>
+  </figure>
+  <p style="margin-top:14px">The same choice fixes the neutral fallback value (§9.6) and what removing an annotation means (§9.12): both are the removed annotation, the same as idle. No values are reserved for Knarr's own states.</p>
 
   <!-- 3. Matrix -->
   <h2 id="paths">3. Which levers work on which kill path</h2>

@@ -1,6 +1,6 @@
 # 21: Elicit: unknown and unreachable policy (§9.6)
 
-**Context:** OVERVIEW §5 ("Unreachable, invalid or absent endpoints") and the §8 failure-mode table propose defaults for an unreachable pod, a timeout or 5xx, a 404 or never-implemented endpoint, an invalid payload, and a pod that has just started. §9.6 leaves open how long to keep the last value (in polls and in time), the neutral value, and how to detect an absent contract. It depends on the cost mapping (20).
+**Context:** OVERVIEW §5 ("Unreachable, invalid or absent endpoints") and the §8 failure-mode table propose defaults for an unreachable pod, a timeout or 5xx, a 404 or never-implemented endpoint, an invalid payload, and a pod that has just started. §9.6 leaves open how long to keep the last value (in polls and in time) before the neutral removal 20 fixed, and how to detect an absent contract. It depends on the cost mapping (20).
 
 **What to build:** Allium clauses for every poll outcome other than a valid payload, settled with the maintainer, including when knarr writes neutral and when it treats a pod as unmanaged.
 

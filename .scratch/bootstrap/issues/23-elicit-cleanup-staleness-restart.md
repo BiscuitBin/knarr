@@ -15,7 +15,7 @@ It also covers:
 - annotations left after a crash
 - an uninstall procedure
 
-§8 names the open tension: writes are sparse, so a last-written timestamp cannot tell a steady band from hours of failed polls. A §3 success criterion requires that a restart does not make annotations flap.
+§8 names the open tension: writes are sparse, so a last-written timestamp cannot tell a steady cost from hours of failed polls. A §3 success criterion requires that a restart does not make annotations flap.
 
 **What to build:** Allium clauses for cleanup, staleness, restart and uninstall, settled with the maintainer, consistent with the sign convention (20) and the marker (22).
 

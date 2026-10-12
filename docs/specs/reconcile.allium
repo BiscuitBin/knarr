@@ -14,8 +14,7 @@
 -- Open Questions
 ------------------------------------------------------------
 
-open question "§9.6 Transient failure: how many polls and how much time the last-known value is kept after a timeout, 5xx or unparsable payload before knarr writes neutral (§5)."
-open question "§9.6 Neutral: the value knarr writes once the bounded window has passed, under the sign convention from §9.5."
+open question "§9.6 Transient failure: how many polls and how much time the last-known value is kept after a timeout, 5xx or unparsable payload before knarr removes the annotation, the neutral value cost_mapping's Absent fixes (§5)."
 open question "§9.6 Absent contract: how many consecutive 404 or refused polls since the pod started mark the contract absent, and whether a NetworkPolicy block is distinguishable from it (§8 failure modes)."
 open question "§9.6 Unmanaged: what knarr does on an absent contract: remove the annotations it owns, emit a per-Deployment Event and metric, and whether it keeps polling."
 open question "§9.6 Just started: how long a pod stays unannotated before its first valid poll, and whether pods without a pod IP are tracked at all (§5; every pod with a pod IP is polled whatever its phase or readiness, see worker_contract Discovery)."

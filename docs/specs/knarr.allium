@@ -3,8 +3,8 @@
 -- Knarr root specification: the walking skeleton lives here.
 -- Decision 0009 maps OVERVIEW §4–§9 onto the modules beside this file,
 -- which hold the open questions their owning elicitation tickets settle:
---   worker_contract, config, banding, reconcile, ownership, lifecycle, budget,
---   safe_to_evict, k8s_client and observability.
+--   worker_contract, config, cost_mapping, reconcile, ownership, lifecycle,
+--   budget, safe_to_evict, k8s_client and observability.
 
 -- Walking skeleton only. Worker behaviour belongs to later tickets.
 

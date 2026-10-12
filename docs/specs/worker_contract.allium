@@ -5,9 +5,9 @@
 -- endpoint shape (OVERVIEW §9.4a), how knarr discovers the endpoint on a pod,
 -- auth and NetworkPolicy compatibility (§9.4b), the meaning of the drain states
 -- (§5) and the readiness guidance (§9.7). The per-poll timeout is a budget
--- value (§9.8), the handling of each drain state is banding (§9.5), and what
--- knarr does over time with an invalid, absent or unreachable reading is
--- reconcile (§9.6).
+-- value (§9.8), the handling of each drain state is cost_mapping (§9.5), and
+-- what knarr does over time with an invalid, absent or unreachable reading
+-- is reconcile (§9.6).
 -- Owner: ticket 18 settled every question here with the maintainer on
 -- 2026-10-09. Ticket 43 builds the poller from this contract and ticket 29 the
 -- fake worker.
@@ -51,9 +51,10 @@ value Outcome {
 }
 
 -- The v1 payload. cost is the worker's own estimate of the cost to kill it
--- now: higher is more expensive, 0 is the floor, no unit, no upper bound on
--- the wire. accepting is whether the worker takes new work; false means it is
--- draining.
+-- now, intended as the seconds its longest-running active task has run so
+-- far: higher is more expensive, 0 is the floor, no unit on the wire, no
+-- upper bound. accepting is whether the worker takes new work; false means it
+-- is draining.
 value Status {
     cost: Integer
     accepting: Boolean
@@ -136,13 +137,17 @@ contract StatusEndpoint {
         -- The v1 payload is cost and accepting; knarr reads nothing else. cost
         -- is the worker's estimate of the cost to kill it now, higher meaning
         -- more expensive, 0 the floor, with no unit and no upper bound on the
-        -- wire; banding clamps and maps it. accepting false means the worker
+        -- wire. It is intended as the number of seconds the worker's
+        -- longest-running active task has run so far, 0 when none is active;
+        -- a worker may report another non-negative measure, but
+        -- cost_mapping's default thresholds assume seconds. cost_mapping
+        -- clamps and maps it. accepting false means the worker
         -- started a drain itself, and bears on knarr only while the pod has no
         -- deletionTimestamp; after that no patch is made whatever it reports.
         -- draining is true for exactly that: a valid reading whose accepting
         -- is false. It is false for every other reading, and it is the one
         -- place the drain state is read; what to do with a draining pod is
-        -- banding's.
+        -- cost_mapping's.
     @invariant Unauthenticated
         -- The status GET carries no credential and must be read-only and free
         -- of side effects, safe to expose on the pod network. Access control,
@@ -162,9 +167,9 @@ contract StatusEndpoint {
         -- budget sets; a slower answer is a timed_out outcome.
     @invariant ReadinessWarning
         -- knarr keeps a gauge of pods whose Ready condition is false while
-        -- their last valid reading maps to a band above the lowest band
-        -- banding defines, and logs a line when a pod enters that state. No
-        -- Event is emitted. The gauge and log names are observability's.
+        -- their last valid reading maps to a value above 0 under cost_mapping,
+        -- and logs a line when a pod enters that state. No Event is emitted.
+        -- The gauge and log names are observability's.
     @guidance
         -- ReplicaSet scale-down deletes a NotReady pod before a Ready one
         -- whatever their costs. A queue consumer should never signal busy or

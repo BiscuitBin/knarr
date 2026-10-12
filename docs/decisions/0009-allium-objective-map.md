@@ -22,7 +22,7 @@ requires: []
 | --- | --- | --- |
 | `worker_contract` | What a worker pod exposes and what each field means: endpoint shape, discovery, auth, NetworkPolicy compatibility, drain-state meaning, readiness guidance | 18 |
 | `config` | Every label and annotation knarr reads, its type, default, validation and invalid-value behaviour; unsupported kinds; the target set in one namespace | 19 |
-| `banding` | The pure mapping from cost and `accepting` to a band and to the emitted `pod-deletion-cost` string: clamp, sign convention, edges, hysteresis, reserved bands, canonical int32 | 20 |
+| `cost_mapping` | The pure mapping from cost and `accepting` to the emitted `pod-deletion-cost` value: sign convention, absent, drained, clamp, canonical int32, thresholds and margin. Named `banding` until ticket 20 settled that there are no bands | 20 |
 | `reconcile` | The per-pod loop: poll outcome to pod state, desired state against last applied, patch on meaningful change, pending changes, no patches after `deletionTimestamp`, rollouts untouched | 21, then 31 |
 | `ownership` | What knarr may write and how: owned annotations only, live Pods, `metadata.annotations` only, never the pod template, never replicas; marker, write mode, conflicts, Event and back-off, rejected patches | 22, then 32 |
 | `lifecycle` | Startup reconciliation, marker freshness, expiry and cleanup, crash leftovers, the `Recreate` gap, single replica, uninstall | 23, then 32 |
@@ -65,9 +65,9 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 | The LIST runs on its own cadence, slower than polling | §4.1 | `budget` | decided | 24 |
 | Poll with jitter, no overlapping polls of one pod, and bounded concurrency | §4.2 | `budget` | decided | 24 |
 | The per-poll timeout, shorter than the poll interval | §4.2, §9.8 | `budget` | open | 24 |
-| Treat cost as untrusted: clamp, combine with `accepting`, quantize into bands | §4.3 | `banding` | open | 20 |
-| Derive the desired state: band, opt-in `safe-to-evict`, marker | §4.3 | `reconcile` | decided | 31 |
-| Patch only when desired differs from last applied, covering band change, first annotation, startup repair, cleanup and flips | §4.4 | `reconcile` | decided | 31 |
+| Treat cost as untrusted: clamp, combine with `accepting`, write at threshold crossings | §4.3 | `cost_mapping` | open | 20 |
+| Derive the desired state: cost value, opt-in `safe-to-evict`, marker | §4.3 | `reconcile` | decided | 31 |
+| Patch only when desired differs from last applied, covering a threshold crossing, first annotation, startup repair, cleanup and flips | §4.4 | `reconcile` | decided | 31 |
 | One rate-limited patcher: per-pod minimum interval plus global QPS | §4.4 | `budget` | decided | 24 |
 | Throttled changes stay pending and are not dropped | §4.4 | `reconcile` | decided | 31 |
 | No patches once `deletionTimestamp` is set; polling may continue | §4.5 | `reconcile` | decided | 31 |
@@ -80,7 +80,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 | --- | --- | --- | --- | --- |
 | Pull model: knarr polls, workers do not push | §5 | `worker_contract` | decided | 18 |
 | The payload carries only `cost` and `accepting`; more fields are out of scope | §5 | `worker_contract` | decided | 18 |
-| Type, range and units of `cost` | §5, §9.5 | `banding` | open | 20 |
+| Type, range and units of `cost` | §5, §9.5 | `cost_mapping` | open | 20 |
 | Plain HTTP to pod IPs, no mTLS, no service mesh | §5 | `worker_contract` | decided | 18 |
 | NetworkPolicy configuration a worker namespace needs | §5, §9.4b | `worker_contract` | open | 18 |
 | The NetworkPolicy page | §5, §9.4b | none | open | 34 |
@@ -89,8 +89,8 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 | The readiness trade-off page | §5, §9.7 | none | open | 34 |
 | `accepting: false` matters only for a drain the worker starts itself | §5 | `worker_contract` | decided | 18 |
 | A terminating pod gets no patches; the worker's graceful shutdown applies | §5 | `reconcile` | decided | 31 |
-| Candidate handling per drain state, including a floor for draining pods | §5, §9.5 | `banding` | open | 20 |
-| knarr does not override the worker's cost by default | §5 | `banding` | decided | 20 |
+| Handling per drain state; a floor for draining pods was a candidate and is rejected | §5, §9.5 | `cost_mapping` | open | 20 |
+| knarr never overrides a positive cost | §5 | `cost_mapping` | decided | 20 |
 | Never treat missing data as busy; keep any fallback bounded | §5 | `reconcile` | decided | 21 |
 | Transient failure: keep the last value for bounded polls and time, then neutral | §5, §9.6 | `reconcile` | open | 21 |
 | Contract absent: unmanaged, remove owned annotations, raise an Event and metric | §5, §9.6 | `reconcile` | open | 21 |
@@ -106,15 +106,15 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 | --- | --- | --- | --- | --- |
 | Whether knarr checks the `PodDeletionCost` feature gate, and how | §6, §9.11 | `budget` | open | 24 |
 | The prerequisite page | §6, §9.11 | none | open | 34 |
-| Emit canonical signed decimal int32 strings only | §6 | `banding` | decided | 31 |
-| Quantize into a few bands; a worker folds duration into cost | §6, §9.5 | `banding` | open | 20 |
-| Hysteresis at band edges, and its width | §6, §9.5 | `banding` | open | 20 |
+| Emit canonical signed decimal int32 strings only | §6 | `cost_mapping` | decided | 31 |
+| Write the cost itself at threshold crossings, no bands; a worker reports elapsed seconds | §6, §9.5 | `cost_mapping` | open | 20 |
+| A margin below each threshold on the way down, and its width | §6, §9.5 | `cost_mapping` | open | 20 |
 | Patch only on desired-state change | §6 | `reconcile` | decided | 31 |
 | Per-pod minimum interval, global QPS budget, documented expected write rate | §6, §9.8 | `budget` | open | 24 |
 | Patch only `metadata.annotations` | §6 | `ownership` | decided | 32 |
 | Merge patch or conditional write | §6, §9.10 | `ownership` | open | 22 |
-| Sign convention and what an absent annotation means | §6, §9.5 | `banding` | open | 20 |
-| Reserve bands for knarr's own states | §6, §9.5 | `banding` | open | 20 |
+| Sign convention and what an absent annotation means | §6, §9.5 | `cost_mapping` | open | 20 |
+| No values reserved for knarr's own states | §6, §9.5 | `cost_mapping` | open | 20 |
 | `safe-to-evict` is off by default, enabled per workload | §6 | `config` | decided | 19 |
 | knarr manages only `"false"` or removes the annotation | §6, §9.9 | `safe_to_evict` | open | 25 |
 | `"false"` above a threshold, removal below; local-storage pods | §6, §9.9 | `safe_to_evict` | open | 25 |
@@ -168,7 +168,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 | 9.3 Scaling ownership (a) | `ownership` | decided | 32 |
 | 9.4a Endpoint shape | `worker_contract` | open | 18 |
 | 9.4b Discovery, auth, network | `worker_contract` | open | 18 |
-| 9.5 Cost mapping | `banding` | open | 20 |
+| 9.5 Cost mapping | `cost_mapping` | open | 20 |
 | 9.6 Unknown and unreachable | `reconcile` | open | 21 |
 | 9.7 Readiness interaction | `worker_contract` | open | 18 |
 | 9.8 Poll, concurrency, write budget | `budget` | open | 24 |
@@ -181,7 +181,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 | 9.13 Rollouts: guidance on `maxUnavailable` and `maxSurge` | none | open | 34 |
 | 9.14 Observability | `observability` | open | 30 |
 | 9.15 Packaging | none | open | 28 |
-| 9.16 Testing strategy: unit tests for banding | `banding` | decided | 20, through `propagate` in its spec-then-build |
+| 9.16 Testing strategy: unit tests for the cost mapping | `cost_mapping` | decided | 20, through `propagate` in its spec-then-build |
 | 9.16 Testing strategy: the kind substitute for envtest | none | decided | [Decision 0007](0007-local-cluster.md) |
 | 9.16 Testing strategy: end-to-end tests on kind with a fake worker image | none | decided | 29 (the image), 33 (the harness) |
 | 9.16 Thresholds: restart does not flap | `lifecycle` | open | 23 |
@@ -201,11 +201,11 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 - Every elicitation ticket starts from a module the gate accepts and deletes open questions as it settles them. A module whose questions are all gone and whose clauses are all in is done.
 - Ticket 30 is a new elicitation ticket, and 31 to 34 are round 2. The bootstrap README's graph and waves table carry them, and the longest chain grows from nine tickets to eleven.
 - Tickets 14, 15, 16 and 28, Decision 0007 and DEFERRED.md own rows that 17's definition of an owner does not cover. If any is reshaped, the rows here move with it.
-- The class of a row is a reading of the overview on 2026-10-08. A ticket that finds the overview wrong amends the overview, and this map follows.
+- The class of a row is a reading of the overview on 2026-10-08. A ticket that finds the overview wrong amends the overview, and this map follows. Ticket 20 did so on 2026-10-10: it renamed `banding` to `cost_mapping`, settled quantization and reserved bands as none and hysteresis as a margin below each threshold, and amended OVERVIEW §4, §5 and §6 to match; the rows above keep their 2026-10-08 class and follow the amended text, as 18's rows do.
 
 ## What would reopen this
 
-- An elicitation ticket finds that a behaviour belongs in a different module than the one mapped here, for example a drain-state rule that is better placed in `worker_contract` than in `banding`.
+- An elicitation ticket finds that a behaviour belongs in a different module than the one mapped here, for example a drain-state rule that is better placed in `worker_contract` than in `cost_mapping`.
 - The Allium pin moves and the gate starts to warn on `open question`, which changes what a skeleton may hold.
 - A follow-up ticket is merged into another or split, which changes an owner.
 

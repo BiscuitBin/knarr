@@ -11,7 +11,7 @@
 -- Open Questions
 ------------------------------------------------------------
 
-open question "§9.14 Metrics: the names and labels of the metrics for poll results, band distribution, patch rate and errors."
+open question "§9.14 Metrics: the names and labels of the metrics for poll results, cost distribution, patch rate and errors."
 open question "§9.14 Events: the Event reasons and targets for an absent contract, a rejected patch, a conflict with another writer and a failed cleanup (§5, §8 failure modes)."
 open question "§9.14 Logs: the log fields and levels, and what is never logged (for example the service-account token, §9.2)."
 open question "§9.14 Probes: what knarr's own liveness and readiness probes report (§8)."
