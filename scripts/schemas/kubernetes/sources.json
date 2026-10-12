@@ -12,6 +12,9 @@
     "rolebinding-rbac-v1.json": {
       "sha256": "87ab620d0adddcd2803b92357fce2854af752326df8c5408a7588aae98b3031d"
     },
+    "service-v1.json": {
+      "sha256": "8bf019854daed511e7c174896a898173fa65d88ec5937c687a37303d4cc9351b"
+    },
     "serviceaccount-v1.json": {
       "sha256": "8193d6c3561475c6d3d5c44e1faedb1df53905373d904bc17015694326d659cf"
     }

@@ -1,12 +1,15 @@
 # taplo's configuration for `just toml-check` and `just fix`.
 # manifest.toml is written by gleam in its own layout and is never edited by
-# hand; the evidence probe under .scratch/ is a recorded fixture.
+# hand, in the root and in the fake worker fixture, whose build/ holds its
+# downloaded packages; the evidence probe under .scratch/ is a recorded fixture.
 exclude = [
   ".pixi/**",
   ".tools/**",
   "build/**",
   "ai_tmp/**",
   "manifest.toml",
+  "fixtures/fake_worker/build/**",
+  "fixtures/fake_worker/manifest.toml",
   ".scratch/bootstrap/evidence/**",
 ]
 

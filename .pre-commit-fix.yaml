@@ -8,6 +8,7 @@ exclude: >-
     ai_tmp/|
     pixi\.lock$|
     manifest\.toml$|
+    fixtures/fake_worker/manifest\.toml$|
     \.scratch/bootstrap/evidence/|
     \.agents/skills/(allium|distill|elicit|propagate|tend|weed|witness)/|
     scripts/schemas/kubernetes/

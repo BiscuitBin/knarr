@@ -16,7 +16,7 @@ This page covers knarr's unit tests: the tools, the snapshot workflow, and the s
 
 - **unit**: gleeunit, qcheck and birdie, through `just test` in `just check`. The rest of this page covers it.
 - **kwok**: a real apiserver and real controllers with simulated pods, in its own CI job, outside the read-only gate.
-- **kind**: everything kwok gives, plus real pods. 13's smoke test and the e2e job use it.
+- **kind**: everything kwok gives, plus real pods. 13's smoke test and the e2e job use it, the latter with [the fake worker fixture](fake-worker.md) as its workload.
 - **GKE**: run by hand against a short-lived cluster, never on every change.
 
 The gate also runs the diagnostics adapter against local HTTP sockets and

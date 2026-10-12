@@ -8,6 +8,7 @@ Knarr is a Kubernetes controller, written in Gleam on the BEAM, that biases Depl
 - `docs/`: the handbook, governed by [the documentation contract](docs/reference/documentation-contract.md). `docs/decisions/` records choices already made; `docs/OVERVIEW.md` is direction, not specification.
 - `docs/specs/`: the Allium specifications. They decide behaviour.
 - `scripts/checks/`: the gate checkers, configured by `checks.toml`; their tests sit beside them.
+- `fixtures/`: test fixtures built outside knarr's shipment. `fixtures/fake_worker/` is the worker image tests on kind run against (ticket 29), its own Gleam project with its own `just fake-worker-*` recipes.
 - `.scratch/bootstrap/`: the bootstrap tickets and the evidence the decision records cite. Tracked on purpose.
 - `.agents/skills/`: task procedures, one directory each; `.claude/skills/` holds thin bridges to them. [The agent contract](docs/reference/agent-contract.md) governs both.
 - `ai_tmp/`: scratch, gitignored. Nothing there is part of a change.

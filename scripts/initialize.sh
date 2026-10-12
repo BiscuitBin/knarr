@@ -32,6 +32,14 @@ gleam deps download
 [ "$(cksum < manifest.toml)" = "$before" ] ||
   { printf '%s\n' 'gleam deps download rewrote manifest.toml; read the diff' >&2; exit 1; }
 
+# The fake worker fixture is a second Gleam project (ticket 29), with the same
+# pre-check and guard.
+python3 scripts/checks/manifest_check.py fixtures/fake_worker
+before=$(cksum < fixtures/fake_worker/manifest.toml)
+(cd fixtures/fake_worker && gleam deps download)
+[ "$(cksum < fixtures/fake_worker/manifest.toml)" = "$before" ] ||
+  { printf '%s\n' 'gleam deps download rewrote fixtures/fake_worker/manifest.toml; read the diff' >&2; exit 1; }
+
 sh scripts/install-hooks.sh
 
 printf '\n%s\n' 'Ready. Next: just check (no network needed).'

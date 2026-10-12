@@ -101,6 +101,11 @@ the pixi manifest's OTP major (with lock agreement checked by the gate) and that
 The kind smoke job proves actual endpoint access; the kwok job proves cluster
 readiness only. Both jobs remain outside aggregate `check`.
 
+The fake worker fixture has its own recipes on the same cluster:
+`just fake-worker-image-build`, `just fake-worker-image-check`,
+`just fake-worker-deploy` and `just fake-worker-smoke`. Its
+[reference page](../reference/fake-worker.md) describes them.
+
 After 14 consecutive days without infrastructure-related failures, a maintainer
 may consider making kind required. That is a separate branch-protection decision,
 not an automatic workflow change. See the [metrics decision](../decisions/0010-metrics.md)

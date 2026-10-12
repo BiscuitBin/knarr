@@ -51,6 +51,35 @@ jobs:
       - if: always()
         run: just cluster-down
 
+  # Ticket 29's fake worker on kind: its image with a real SIGTERM to PID 1,
+  # then several replicas set to mixed states through control, read back from
+  # status, and two of them deleted so their kill records reach the collector.
+  # Non-required, like the smoke job, and never in needs below.
+  fake-worker-smoke:
+    name: Kind fake worker smoke (non-required)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      KNARR_CLUSTER: kind
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          cluster: "true"
+      - run: just cluster-up
+      - run: just fake-worker-image-build
+      - run: just fake-worker-image-check
+      - run: just fake-worker-deploy
+      - run: just fake-worker-smoke
+      - if: failure()
+        run: just cluster-diagnostics
+      - if: always()
+        run: just cluster-down
+
   cluster-kwok:
     name: Kwok readiness (non-required)
     runs-on: ubuntu-24.04

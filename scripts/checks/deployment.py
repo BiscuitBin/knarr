@@ -1,9 +1,11 @@
 """Offline validation with immutable, checksum-verified upstream schemas.
 
-With --render, kustomize renders every variant under deploy/ and kubeconform
-validates each; the release overlay may then differ from the base only in the
-container image, to the published one pinned by digest, and its pull policy
-(Decision 0012). With --render <variant>, it renders and validates that one.
+With no arguments, kubeconform validates the base resources and the fake worker
+fixture's (ticket 29), which is not a deploy/ variant. With --render, kustomize
+renders every variant under deploy/ and kubeconform validates each; the release
+overlay may then differ from the base only in the container image, to the
+published one pinned by digest, and its pull policy (Decision 0012). With
+--render <variant>, it renders and validates that one.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS = ROOT / "scripts/schemas/kubernetes"
 DEPLOY = ROOT / "deploy"
+FAKE_WORKER = ROOT / "fixtures/fake_worker/deploy/resources.json"
 # What each line the release overlay changes must become.
 RELEASE_VALUES = {
     "image": re.compile(r"ghcr\.io/steven-cutting/knarr@sha256:[0-9a-f]{64}"),
@@ -102,6 +105,7 @@ def main():
     arguments = sys.argv[1:]
     if not arguments:
         validate((DEPLOY / "base/resources.json").read_text())
+        validate(FAKE_WORKER.read_text())
     elif arguments == ["--render"]:
         renders = {}
         for variant in variants():

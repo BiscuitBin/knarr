@@ -1,0 +1,7 @@
+# The fake worker on kind (ticket 29): four workers and the collector that
+# keeps their kill records. `just fake-worker-deploy` renders it with the local
+# image; it is not a knarr variant, so it lives outside deploy/.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - resources.json

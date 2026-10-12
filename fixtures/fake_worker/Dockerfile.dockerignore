@@ -1,0 +1,16 @@
+# The fake worker image's build context, an allowlist like the root
+# .dockerignore, which BuildKit reads instead of that file for this Dockerfile.
+*
+!pixi.toml
+!pixi.lock
+!scripts/
+scripts/*
+!scripts/container-entrypoint.sh
+!fixtures/
+fixtures/*
+!fixtures/fake_worker/
+fixtures/fake_worker/*
+!fixtures/fake_worker/gleam.toml
+!fixtures/fake_worker/manifest.toml
+!fixtures/fake_worker/src/
+!fixtures/fake_worker/src/**

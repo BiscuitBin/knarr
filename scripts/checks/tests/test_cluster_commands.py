@@ -8,6 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+import cluster
+
 SCRIPT = Path(__file__).resolve().parents[1] / "cluster.py"
 
 
@@ -193,3 +197,29 @@ def test_diagnostics_include_pod_termination_and_previous_logs(tmp_path: Path) -
         "--previous",
         "--tail=100",
     ] in arguments
+
+
+def test_port_forward_yields_the_local_port_and_stops_the_forward(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    pid_file = tmp_path / "kubectl.pid"
+    kubectl = binaries / "kubectl"
+    kubectl.write_text(
+        f"#!{sys.executable}\n"
+        "import os, sys, time\n"
+        f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+        "assert sys.argv[1:] == ['port-forward', '--address=127.0.0.1', 'pod/w-1', ':8081']\n"
+        "print('Forwarding from 127.0.0.1:43210 -> 8081', flush=True)\n"
+        "time.sleep(60)\n"
+    )
+    kubectl.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{binaries}:{os.environ['PATH']}")
+    with cluster.port_forward(tmp_path, "pod/w-1", 8081) as port:
+        assert port == 43210
+        pid = int(pid_file.read_text())
+    # Stopped and reaped: no process has that pid any more.
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+    assert (tmp_path / "port-forward-pod-w-1-8081.log").read_text().startswith("Forwarding from")

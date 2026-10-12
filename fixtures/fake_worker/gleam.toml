@@ -1,0 +1,32 @@
+name = "fake_worker"
+version = "0.1.0"
+description = "A configurable worker that serves knarr's status contract, for tests on kind (ticket 29)."
+licences = ["Apache-2.0"]
+target = "erlang"
+
+# No application start module: `gleam test` and glinter start this package's
+# application, which must never boot a worker. `main` starts the tree instead.
+[erlang]
+# httpc, which delivers kill records to the collector, starts with inets.
+extra_applications = ["inets"]
+
+# The same ranges as knarr's gleam.toml; test_fake_worker_manifest.py holds
+# both manifest.toml files to the same locked versions.
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+gleam_erlang = ">= 1.0.0 and < 2.0.0"
+gleam_otp = ">= 1.0.0 and < 2.0.0"
+gleam_http = ">= 4.4.0 and < 5.0.0"
+gleam_json = ">= 3.1.0 and < 4.0.0"
+mist = ">= 6.0.3 and < 7.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.11.0 and < 2.0.0"
+glinter = ">= 2.19.2 and < 3.0.0"
+
+[tools.glinter]
+include = ["src/", "test/"]
+warnings_as_errors = true
+
+[tools.glinter.ignore]
+"test/**/*_test.gleam" = ["unused_exports"]

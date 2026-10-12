@@ -372,6 +372,20 @@
         "decision_in_cluster_client"
       ],
       "requires": []
+    },
+    {
+      "path": "reference/fake-worker.md",
+      "title": "The fake worker fixture",
+      "kind": "reference",
+      "audience": [
+        "contributor",
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "fake_worker_fixture"
+      ],
+      "requires": []
     }
   ]
 }
