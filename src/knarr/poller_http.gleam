@@ -25,7 +25,9 @@ pub const default_timeout_ms = 5000
 /// request and the connect included, is `TimedOut`. A send while no profile
 /// is registered, as between a crash and its restart, is `Unreachable`. The
 /// body is read whole; only `poller.decode` applies the contract's cap.
-/// Another method is a programming error and crashes the caller.
+/// A poll that timed out before the profile took it may still be sent once
+/// the profile resumes, and its answer is discarded. Another method is a
+/// programming error and crashes the caller.
 pub fn send(
   request request: Request(String),
   timeout_ms timeout_ms: Int,

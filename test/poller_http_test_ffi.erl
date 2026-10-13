@@ -1,6 +1,7 @@
 -module(poller_http_test_ffi).
 -export([start_responder/1, stop_responder/1, closed_port/0,
   restart_profile_during/1, kill_profile_during_admission/1,
+  helper_dies_with_caller/1,
   without_profile/1, with_profile_suspended/1, without_ca_bundle/1,
   mailbox_size/0, timed/1, gleam_toml_version/0]).
 
@@ -126,6 +127,30 @@ kill_profile_during_admission(Poll) ->
   {Poller, PollerMonitor} = spawn_monitor(fun() -> Self ! {polled, self(), Poll()} end),
   true = await_queued(Old, 100),
   kill_and_collect(Old, Poller, PollerMonitor).
+
+%% Suspends the profile so Poll's request waits for admission, runs Poll in
+%% a process of its own, finds the helper that process monitors, kills the
+%% process, and returns whether the helper died within 500 ms. A helper
+%% still alive then is killed, and the profile is resumed after.
+helper_dies_with_caller(Poll) ->
+  Profile = whereis(?PROFILE),
+  true = is_pid(Profile),
+  ok = sys:suspend(Profile),
+  try
+    Caller = spawn(fun() -> Poll() end),
+    true = await_queued(Profile, 100),
+    {monitors, [{process, Helper}]} = process_info(Caller, monitors),
+    Monitor = monitor(process, Helper),
+    exit(Caller, kill),
+    receive {'DOWN', Monitor, process, Helper, _} -> true
+    after 500 ->
+      demonitor(Monitor, [flush]),
+      exit(Helper, kill),
+      false
+    end
+  after
+    sys:resume(Profile)
+  end.
 
 kill_and_collect(Old, Poller, PollerMonitor) ->
   Monitor = monitor(process, Old),

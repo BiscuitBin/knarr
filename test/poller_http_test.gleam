@@ -31,6 +31,9 @@ fn kill_profile_during_admission(
   poll: fn() -> poller.Outcome,
 ) -> #(poller.Outcome, Int)
 
+@external(erlang, "poller_http_test_ffi", "helper_dies_with_caller")
+fn helper_dies_with_caller(poll: fn() -> poller.Outcome) -> Bool
+
 @external(erlang, "poller_http_test_ffi", "without_profile")
 fn without_profile(body: fn() -> a) -> a
 
@@ -274,6 +277,20 @@ pub fn send_is_unreachable_when_the_profile_dies_during_admission_test() -> Nil 
 
   assert during == Error(Unreachable)
   assert after_kill < 1000
+}
+
+// StatusEndpoint.Transport and supervision: the helper a send waits on is
+// linked to the caller, so a caller killed while its poll waits for
+// admission takes the helper with it rather than leaving it in the queue.
+pub fn send_helper_dies_with_its_caller_test() -> Nil {
+  let responder = start_responder("inet")
+  let died =
+    helper_dies_with_caller(fn() {
+      get_within(port: responder.0, path: "/status", timeout_ms: 3000)
+    })
+  stop_responder(responder)
+
+  assert died
 }
 
 // Budget Timeout: the per-poll timeout is 5 seconds unless the install sets

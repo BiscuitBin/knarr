@@ -260,6 +260,15 @@ pub fn decode_reads_trailing_data_as_invalid_test() -> Nil {
   assert read("{\"cost\":1,\"accepting\":true}{}") == Invalid
 }
 
+// StatusEndpoint.ValidReading: whitespace after the object is still JSON,
+// so a body ending in a newline is valid.
+pub fn decode_reads_trailing_whitespace_as_valid_test() -> Nil {
+  assert read("{\"cost\":1,\"accepting\":true}\n")
+    == Valid(Status(cost: 1, accepting: True))
+  assert read("{\"cost\":1,\"accepting\":true} \t\r\n")
+    == Valid(Status(cost: 1, accepting: True))
+}
+
 // ------------------------------------------------------------- Transport ---
 
 // StatusEndpoint.Transport: decode maps each failure to the reading of the
