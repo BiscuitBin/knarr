@@ -4,11 +4,13 @@
 -- Scope: the in-cluster API boundary (§8, §9.2). Verified TLS with the
 -- service-account CA and an IP-SAN hostname check, token reload from disk,
 -- and the two verbs spike S1 proved: list and patch on pods. Get on pods, get
--- and list on Deployments and ReplicaSets, and the patch content types and
--- preconditions the write mode needs (§9.10) are later tickets' clauses.
+-- and list on Deployments and ReplicaSets, the JSON Patch write mode with the
+-- preconditions ownership's WriteMode states, and the Event create
+-- ownership's Event needs are ticket 41's to build from this contract.
 -- Owner: spike S1 (ticket 14) settled the TLS, token and verb questions in
--- Decision 0013; ticket 41 builds the full module from this contract and
--- ticket 22 amends it with what the write mode needs.
+-- Decision 0013; ticket 22 amended Verbs, NoPatchWhileTerminating and the
+-- Pod and patch shapes with what the write mode needs (ownership, §9.10);
+-- ticket 41 builds the full module.
 
 value Target {
     host: String
@@ -20,17 +22,21 @@ value Annotation {
     value: String
 }
 
--- A pod as the client reads it: its annotations are a key-value map, here
--- the list of its pairs, and an absent map reads as empty.
+-- A pod as the client reads it: its uid, which the conflict Event's
+-- involvedObject names; its annotations as the list of the map's pairs, null
+-- when the response carries no annotations map, which is also how the
+-- apiserver serves an empty one and what ownership's WriteMode branches on;
+-- and its deletion timestamp.
 value Pod {
     name: String
-    annotations: List<Annotation>
+    uid: String
+    annotations: List<Annotation>?
     deletion_timestamp: Timestamp?
 }
 
 contract Client {
     list_pods: (target: Target, namespace: String) -> List<Pod>
-    patch_annotation: (target: Target, namespace: String, pod_name: String, annotation: Annotation) -> Pod
+    patch_pod: (target: Target, namespace: String, pod_name: String, patch: String) -> Pod
 
     @invariant VerifiedTls
         -- Every request to the apiserver verifies the peer (verify_peer)
@@ -46,18 +52,27 @@ contract Client {
         -- The token itself is never logged; a change of its file is logged
         -- as the file's sha256 and the token's expiry claim.
     @invariant Verbs
-        -- The client lists pods in its own namespace and merge-patches
-        -- annotations on one pod. The Role grants exactly list and patch on
-        -- pods, no other verb and no other resource.
+        -- The client lists pods in its own namespace and patches one pod
+        -- with a JSON Patch (application/json-patch+json) whose body
+        -- ownership's document produces; patch_pod returns the patched pod
+        -- as the newest view ownership's Adoption reads from, and reports a
+        -- 422 as the precondition failure ownership's Precondition and
+        -- Rejected classify. Ticket 41 adds the create of the conflict Event
+        -- ownership's Event raises. The Role grants exactly list and patch
+        -- on pods and create on events, no other verb and no other
+        -- resource.
     @invariant NoPatchWhileTerminating
         -- A pod is not patched when the most recent list shows its
-        -- deletion_timestamp set. Closing the window between that list and
-        -- the patch needs a write precondition, which is the §9.10 open
-        -- question.
+        -- deletion_timestamp set, and every patch tests that
+        -- /metadata/deletionTimestamp is still null, so a deletion that
+        -- lands between the list and the patch fails the patch with 422
+        -- instead of being written over (ownership WriteMode and
+        -- Precondition). Amended by ticket 22: the window the list-only
+        -- check left open is closed by the test.
 }
 
 ------------------------------------------------------------
 -- Open Questions
 ------------------------------------------------------------
 
-open question "§9.10 Patch support: the patch content types and preconditions the client must support once ticket 22 chooses the write mode, and the failed patch and the failed list surfaced as values carrying the response status and the Retry-After header, which budget's BackOff and PauseScope read (ticket 24); today patch_annotation and list_pods return only Pod."
+open question "§9.10 Patch support: the failed patch and the failed list surfaced as values carrying the response status and the Retry-After header, which budget's BackOff and PauseScope read (ticket 24); today patch_pod and list_pods return only Pod."

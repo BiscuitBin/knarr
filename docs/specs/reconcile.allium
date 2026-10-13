@@ -3,9 +3,11 @@
 -- Module: reconcile.
 -- Scope: the per-pod loop. A poll outcome becomes a pod state (the §5 state
 -- diagram), the desired annotation state is compared with the last applied
--- state, a patch happens only on meaningful change, a throttled change stays
--- pending, no patch is made once deletionTimestamp is set (§4), and a
--- Deployment rollout gets no special handling (§8 failure modes, §9.13).
+-- state, which ownership's marker records (ownership Applied), a patch
+-- happens only on meaningful change and only where ownership's may_write
+-- allows it, a throttled change stays pending, no patch is made once
+-- deletionTimestamp is set (§4), and a Deployment rollout gets no special
+-- handling (§8 failure modes, §9.13).
 -- Owner: ticket 21 for the unknown and unreachable policy (§9.6). The decided
 -- loop safeguards, including the rollout rule, are built by the round-2
 -- spec-then-build ticket 31; the rollout guidance page is ticket 34.

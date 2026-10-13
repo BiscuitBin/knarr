@@ -2,6 +2,8 @@
 
 **Context:** OVERVIEW §9.14 leaves open the metrics (poll results, cost distribution, patch rate, errors), the Events and the logs knarr emits. §5 and the §8 failure-mode table name the points that raise an Event and a metric: an absent contract, a rejected patch, a failed cleanup and a conflict with another writer. Ticket 24 excludes "metric names and Events in general" from its scope, so no ticket in 18–25 owns §9.14. [Decision 0009](../../../docs/decisions/0009-allium-objective-map.md) maps it to the `observability` module, which holds only the open questions.
 
+Ticket 22 fixed the conflict Event's content and message in the `Event` clause of [ownership.allium](../../../docs/specs/ownership.allium): at most one per yield, on the Pod, one create attempt after the yield patch is accepted, with no retry when it fails; this ticket names its reason. This ticket also names the gauge and the log line ownership's `Adoption` requires for a foreign annotation, which raises no Event, and settles the cadence of that log line: on each LIST that shows the foreign value, or on entry.
+
 **What to build:** Allium clauses for the `observability` module, settled with the maintainer: the metric names and labels, the Event reasons and targets, the log fields and levels, and what knarr's own probes report. The emission points stay in the owning modules; this module names what they emit.
 
 **Non-goals:** The metrics library, which 13 picks. The emission conditions themselves (21, 22, 23).

@@ -66,7 +66,7 @@ The MVP uses option (A): pure Gleam plus a thin Erlang FFI over `httpc`/`ssl`/`p
 
 The MVP runs a single replica with no leader election (OVERVIEW §8). Notes for a later HA model:
 
-- **Leader election:** under option (A), a Lease-based elector would likely be hand-written, since no Gleam leader-election library was found. This interacts with ownership detection. If Knarr spots third-party writers by comparing against "the value Knarr last wrote", that record must belong to Knarr as one logical writer (stored in a marker annotation, not per replica). Otherwise two replicas will treat each other as foreign writers and the values will flap. A shared identity alone does not stop two replicas from applying stale decisions. That needs leader election or conditional writes (§9.10).
+- **Leader election:** under option (A), a Lease-based elector would likely be hand-written, since no Gleam leader-election library was found. This interacts with ownership detection. If Knarr spots third-party writers by comparing against "the value Knarr last wrote", that record must belong to Knarr as one logical writer (stored in a marker annotation, not per replica). Otherwise two replicas will treat each other as foreign writers and the values will flap. A shared identity alone does not stop two replicas from applying stale decisions. The JSON Patch `test` operations [ownership.allium](specs/ownership.allium) requires are those conditional writes (§9.10): a patch is accepted only against the view it was built from, so two replicas cannot apply stale decisions over each other. The single logical writer identity is still needed for the marker.
 - **Failure mode (from old §8):**
 
   | Scenario | Knarr behavior (proposed) | Effect on scale-down | Ticket |
@@ -74,7 +74,7 @@ The MVP runs a single replica with no leader election (OVERVIEW §8). Notes for 
   | Two replicas running (split-brain) | Must share one logical writer identity | Extra load; values may flap if not | §9.19, §9.10 |
 
 - **Extra RBAC:** `coordination.k8s.io` `leases`: get, create, update.
-- **Open question (old §9.19), HA model.** Options: (i) a single replica (chosen for the MVP); (ii) Lease-based leader election. Depends on §9.10.
+- **Open question (old §9.19), HA model.** Options: (i) a single replica (chosen for the MVP); (ii) Lease-based leader election. The conditional writes §9.10 asked for are settled in [ownership.allium](specs/ownership.allium); what remains is the single writer identity the marker assumes.
 
 ## 5. Install scope and configuration alternatives
 
@@ -93,7 +93,7 @@ Karpenter is not an MVP target.
 
 - `karpenter.sh/do-not-disrupt` is a possible future addition. `safe-to-evict` does not affect Karpenter.
 - Karpenter already reads `pod-deletion-cost` when scoring consolidation, so Knarr's values can affect Karpenter clusters indirectly.
-- kubernetes-sigs/karpenter #2894 (merged 2026-10-01; the first release containing it is unverified) adds a `PodDeletionCostManagement` gate. With the gate off (the default), Karpenter reads its new `karpenter.sh/disruption-cost` and falls back to `pod-deletion-cost`. With the gate on, Karpenter **writes** `pod-deletion-cost` itself, which would conflict with Knarr (§9.10).
+- kubernetes-sigs/karpenter #2894 (merged 2026-10-01; the first release containing it is unverified) adds a `PodDeletionCostManagement` gate. With the gate off (the default), Karpenter reads its new `karpenter.sh/disruption-cost` and falls back to `pod-deletion-cost`. With the gate on, Karpenter **writes** `pod-deletion-cost` itself, which conflicts with Knarr (§9.10): under the `Yield` clause of [ownership.allium](specs/ownership.allium) Knarr yields every pod Karpenter writes, once each, with at most one Event per pod, so the gate on means Knarr is effectively disabled for that cluster.
 
 References:
 

@@ -110,9 +110,10 @@ contract CostMapping {
         -- tier, map and render are functions of their arguments alone: the
         -- same arguments give the same results, and none reads state, time
         -- or the pod, or makes a request. applied is the value knarr's own
-        -- marker records as last applied to the pod (ownership, ticket 22);
-        -- a value on the pod that knarr did not apply is ownership's to
-        -- recognise and is never passed here as applied. Which pod state
+        -- marker records as last applied to the pod, absent for a recorded
+        -- removal (ownership Applied); a value on the pod that knarr did
+        -- not apply is foreign or yielded under ownership's Adoption and
+        -- Yield and is never passed here as applied. Which pod state
         -- feeds map, the patch and the removal are reconcile's (ticket 31);
         -- whether a due write may go now is budget's (ticket 24).
 }

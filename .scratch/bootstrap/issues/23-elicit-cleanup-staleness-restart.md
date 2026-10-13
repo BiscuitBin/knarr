@@ -17,6 +17,8 @@ It also covers:
 
 §8 names the open tension: writes are sparse, so a last-written timestamp cannot tell a steady cost from hours of failed polls. A §3 success criterion requires that a restart does not make annotations flap.
 
+Ticket 22 settled the marker in [ownership.allium](../../../docs/specs/ownership.allium) and hands this over. Cleanup removes the annotations standing owned; a yielded or foreign value stays. `standing` is defined for both owned annotations whatever the Deployment enables, and reconcile asks it for one the Deployment no longer enables only while the marker holds a record for it, so the value an opt-out leaves behind falls to cleanup here, under the opt-out gate 25 settles. Whether the marker goes with the last owned annotation is yours to settle, since ownership's `Applied` keeps it on the idle removal. The operator releases a yield by removing the marker together with every owned annotation on the pod ([22's Settled row 10](22-elicit-ownership-and-conflicts.md#settled)); removing the marker alone leaves every present value foreign, and the procedure page is 34's. The marker's `at` and each record's `at` are the write times whose meaning this ticket settles, and a `Pod` may carry no annotations map at all (`Pod.annotations` null).
+
 **What to build:** Allium clauses for cleanup, staleness, restart and uninstall, settled with the maintainer, consistent with the sign convention (20) and the marker (22).
 
 **Non-goals:** The `safe-to-evict` threshold itself (25).
