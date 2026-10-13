@@ -21,10 +21,11 @@ pub const default_timeout_ms = 5000
 
 /// Sends `request`, a GET, over plain HTTP and returns what came back. A
 /// redirect is never followed and a Retry-After never retried. No response
-/// within `timeout_ms`, connect included, is `TimedOut`. The body is read
-/// whole; only `poller.decode` applies the contract's cap. Another method,
-/// or a send with no profile registered, is a programming error and crashes
-/// the caller.
+/// within `timeout_ms` of the call, the wait for the profile to take the
+/// request and the connect included, is `TimedOut`. A send while no profile
+/// is registered, as between a crash and its restart, is `Unreachable`. The
+/// body is read whole; only `poller.decode` applies the contract's cap.
+/// Another method is a programming error and crashes the caller.
 pub fn send(
   request request: Request(String),
   timeout_ms timeout_ms: Int,
@@ -59,8 +60,7 @@ fn do_request(
 /// under its own supervisor: three restarts a minute before the root sees
 /// one failure, so a crashing profile cannot take the listener down with it
 /// inside the root's two-in-five-seconds tolerance. A poll in flight when
-/// the profile dies is answered at once with the exit, which `send` reports
-/// as `Unreachable`.
+/// the profile dies, or sent before it is back, is `Unreachable`.
 pub fn supervised() -> supervision.ChildSpecification(supervisor.Supervisor) {
   supervisor.new(supervisor.OneForOne)
   |> supervisor.restart_tolerance(intensity: 3, period: 60)

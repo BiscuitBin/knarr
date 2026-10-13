@@ -3,37 +3,71 @@
 
 -define(PROFILE, knarr_poller_httpc).
 
+%% One poll, held to one deadline. httpc's own timeout starts only once the
+%% profile's manager has admitted the request, and that admission is a
+%% gen_server call with no bound, so the call runs in a helper process and
+%% the caller waits Timeout for it from the start. On expiry the helper is
+%% killed, which also releases the alias httpc answers to, so a late answer
+%% reaches no one. A method other than GET is a programming error and
+%% crashes the caller before any helper starts.
+request(Method, Url, Headers, Ipv6, Timeout) ->
+  Get = method(Method),
+  Caller = self(),
+  {Helper, Ref} = spawn_monitor(fun() ->
+    Caller ! {self(), call(Get, Url, Headers, Ipv6, Timeout)}
+  end),
+  receive
+    {Helper, Result} ->
+      demonitor(Ref, [flush]),
+      Result;
+    {'DOWN', Ref, process, Helper, _} ->
+      {error, unreachable}
+  after Timeout ->
+    exit(Helper, kill),
+    demonitor(Ref, [flush]),
+    receive {Helper, _} -> ok after 0 -> ok end,
+    {error, timed_out}
+  end.
+
+%% The profile is not registered between a crash and its restart, and a
+%% manager that exits while admitting the request exits the call; both are
+%% unreachable.
+call(Method, Url, Headers, Ipv6, Timeout) ->
+  case whereis(?PROFILE) of
+    undefined -> {error, unreachable};
+    Profile -> call(Profile, Method, Url, Headers, Ipv6, Timeout)
+  end.
+
 %% One synchronous httpc call through the poller's profile. httpc's
 %% timeouts cover connect and the response; on expiry httpc cancels the
 %% request, and since a synchronous call answers to an alias it releases
-%% afterwards, a late answer is dropped rather than left in the caller's
-%% mailbox. autoretry 0 returns a 503 with Retry-After as it is, where httpc
+%% afterwards, a late answer is dropped. That cancel goes to the default
+%% profile, not this one (httpc:handle_answer/5 calls cancel_request/1), so
+%% the handler is stopped by its own request timer, set to the same timeout.
+%% {ssl, []} stands in for httpc's default ssl options, which load the OS CA
+%% bundle on every request, http included, and crash where there is none.
+%% autoretry 0 returns a 503 with Retry-After as it is, where httpc
 %% would otherwise retry it through a registered manager name a stand-alone
 %% profile does not have, and the poll would time out. The Host header of an
 %% IPv6 poll keeps its brackets. The error terms are shaped as k8s_http_ffi
 %% documents: a refused connection is {failed_connect, [{to_address, _},
 %% {inet, _, econnrefused}]}, and a connect that times out, as a
 %% NetworkPolicy drop does, carries timeout in the same place.
-request(Method, Url, Headers, Ipv6, Timeout) ->
-  HttpOptions = [{autoredirect, false}, {autoretry, 0}, {timeout, Timeout},
-    {connect_timeout, Timeout}],
+call(Profile, Method, Url, Headers, Ipv6, Timeout) ->
+  HttpOptions = [{autoredirect, false}, {autoretry, 0}, {ssl, []},
+    {timeout, Timeout}, {connect_timeout, Timeout}],
   Options = [{body_format, binary}, {ipv6_host_with_brackets, Ipv6},
     {socket_opts, [{ipfamily, family(Ipv6)}]}],
   Request = {unicode:characters_to_list(Url),
     [{unicode:characters_to_list(K), unicode:characters_to_list(V)} || {K, V} <- Headers]},
-  case httpc:request(method(Method), Request, HttpOptions, Options, profile()) of
+  try httpc:request(Method, Request, HttpOptions, Options, Profile) of
     {ok, {{_, Status, _}, ResponseHeaders, Body}} ->
       {ok, {Status,
             [{unicode:characters_to_binary(K), unicode:characters_to_binary(V)} || {K, V} <- ResponseHeaders],
             iolist_to_binary(Body)}};
     {error, Reason} -> {error, transport(Reason)}
-  end.
-
-%% The registered profile. Without it a poll is a programming error.
-profile() ->
-  case whereis(?PROFILE) of
-    Pid when is_pid(Pid) -> Pid;
-    undefined -> erlang:error({no_profile, ?PROFILE})
+  catch
+    exit:_ -> {error, unreachable}
   end.
 
 method(<<"GET">>) -> get.

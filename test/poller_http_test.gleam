@@ -26,6 +26,23 @@ fn restart_profile_during(
   poll: fn() -> poller.Outcome,
 ) -> #(poller.Outcome, Int)
 
+@external(erlang, "poller_http_test_ffi", "kill_profile_during_admission")
+fn kill_profile_during_admission(
+  poll: fn() -> poller.Outcome,
+) -> #(poller.Outcome, Int)
+
+@external(erlang, "poller_http_test_ffi", "without_profile")
+fn without_profile(body: fn() -> a) -> a
+
+@external(erlang, "poller_http_test_ffi", "with_profile_suspended")
+fn with_profile_suspended(body: fn() -> a) -> a
+
+@external(erlang, "poller_http_test_ffi", "without_ca_bundle")
+fn without_ca_bundle(body: fn() -> a) -> a
+
+@external(erlang, "poller_http_test_ffi", "mailbox_size")
+fn mailbox_size() -> Int
+
 @external(erlang, "poller_http_test_ffi", "timed")
 fn timed(body: fn() -> a) -> #(a, Int)
 
@@ -41,6 +58,18 @@ fn get(
 ) -> poller.Outcome {
   poller.request(endpoint: Endpoint(pod_ip:, port:, path:), version:)
   |> poller_http.send(timeout_ms: 2000)
+}
+
+fn get_within(
+  port port: Int,
+  path path: String,
+  timeout_ms timeout_ms: Int,
+) -> poller.Outcome {
+  poller.request(
+    endpoint: Endpoint(pod_ip: "127.0.0.1", port:, path:),
+    version:,
+  )
+  |> poller_http.send(timeout_ms:)
 }
 
 fn served(
@@ -158,6 +187,37 @@ pub fn send_reports_a_silent_worker_as_timed_out_test() -> Nil {
   assert elapsed < 1500
 }
 
+// StatusEndpoint.Transport: timed_out counts from the start of the send, so
+// a poll the profile has not yet admitted still ends at the timeout.
+pub fn send_times_out_while_the_profile_is_busy_test() -> Nil {
+  let responder = start_responder("inet")
+  let #(outcome, elapsed) =
+    with_profile_suspended(fn() {
+      timed(fn() {
+        get_within(port: responder.0, path: "/status", timeout_ms: 200)
+      })
+    })
+  stop_responder(responder)
+
+  assert outcome == Error(TimedOut)
+  assert elapsed >= 200
+  assert elapsed < 1500
+}
+
+// StatusEndpoint.Transport: a reply that arrives after the timeout is
+// dropped, and nothing is left in the caller's mailbox.
+pub fn send_leaves_no_late_reply_in_the_mailbox_test() -> Nil {
+  let responder = start_responder("inet")
+  let before = mailbox_size()
+  let outcome = get_within(port: responder.0, path: "/late", timeout_ms: 200)
+  process.sleep(600)
+  let after = mailbox_size()
+  stop_responder(responder)
+
+  assert outcome == Error(TimedOut)
+  assert after == before
+}
+
 // StatusEndpoint.Transport: unreachable for every other failure, a reset
 // connection among them.
 pub fn send_reports_a_reset_as_unreachable_test() -> Nil {
@@ -175,6 +235,47 @@ pub fn send_carries_exactly_one_user_agent_test() -> Nil {
   assert response.body == <<"knarr/0.1.0">>
 }
 
+// The adapter speaks plain HTTP only, so it needs no CA bundle: a poll
+// succeeds in an image without the ca-certificates package.
+pub fn send_needs_no_ca_bundle_test() -> Nil {
+  let responder = start_responder("inet")
+  let outcome =
+    without_ca_bundle(fn() {
+      get(pod_ip: "127.0.0.1", port: responder.0, path: "/status")
+    })
+  stop_responder(responder)
+
+  let response = outcome |> should.be_ok
+  assert response.status == 200
+}
+
+// StatusEndpoint.Transport: a send while the profile is not registered, as
+// between a crash and its restart, is unreachable.
+pub fn send_with_no_profile_is_unreachable_test() -> Nil {
+  let responder = start_responder("inet")
+  let outcome =
+    without_profile(fn() {
+      get(pod_ip: "127.0.0.1", port: responder.0, path: "/status")
+    })
+  stop_responder(responder)
+
+  assert outcome == Error(Unreachable)
+}
+
+// StatusEndpoint.Transport: a poll waiting to be admitted when the profile
+// dies is answered at once as unreachable, and the profile comes back.
+pub fn send_is_unreachable_when_the_profile_dies_during_admission_test() -> Nil {
+  let responder = start_responder("inet")
+  let #(during, after_kill) =
+    kill_profile_during_admission(fn() {
+      get_within(port: responder.0, path: "/status", timeout_ms: 3000)
+    })
+  stop_responder(responder)
+
+  assert during == Error(Unreachable)
+  assert after_kill < 1000
+}
+
 // Budget Timeout: the per-poll timeout is 5 seconds unless the install sets
 // another.
 pub fn default_timeout_is_five_seconds_test() -> Nil {
@@ -188,22 +289,14 @@ pub fn version_is_the_gleam_toml_version_test() -> Nil {
 }
 
 // The poller's httpc profile runs under its own supervisor in the
-// application's tree, registered by name. A poll in flight when it dies is
-// answered at once as Unreachable, and the profile comes back under the same
-// name, so a later send goes through.
+// application's tree, registered by name. A poll the worker has received
+// when the profile dies is answered at once as Unreachable, and the profile
+// comes back under the same name, so a later send goes through.
 pub fn profile_is_restarted_under_its_name_test() -> Nil {
   let responder = start_responder("inet")
   let #(during, after_kill) =
     restart_profile_during(fn() {
-      poller.request(
-        endpoint: Endpoint(
-          pod_ip: "127.0.0.1",
-          port: responder.0,
-          path: "/silent",
-        ),
-        version:,
-      )
-      |> poller_http.send(timeout_ms: 3000)
+      get_within(port: responder.0, path: "/held", timeout_ms: 3000)
     })
   let outcome = get(pod_ip: "127.0.0.1", port: responder.0, path: "/status")
   stop_responder(responder)
