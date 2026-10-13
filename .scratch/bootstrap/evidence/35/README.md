@@ -1,6 +1,6 @@
 # Ticket 35 evidence
 
-Evidence for [ticket 35](../../issues/35-bootstrap-verification-gaps.md), gathered on 2026-10-10 (UTC) at `e548efa66770317dd78cd9209b60998ee15d4ee7`, which was `main` and this branch's starting commit. Every run used that commit; the evidence files were untracked while they ran, and each clone was made from the committed branch.
+Evidence for [ticket 35](../../issues/35-bootstrap-verification-gaps.md), gathered on 2026-10-10 (UTC) at `e548efa66770317dd78cd9209b60998ee15d4ee7`, which was `main` and this branch's starting commit. Every run used that commit; the evidence files were untracked while they ran, and each clone was made from the committed branch. The one exception is the later stub check of the primary-hook probe, whose host and commit [its section](#open-the-maintainers-primary-hook) gives.
 
 The host was a disposable Claude Code cloud container: a Firecracker VM, Linux x86_64 (kernel 6.18.44), Ubuntu 24.04.5 LTS, 4 × Intel Xeon @ 2.10GHz, 15.7 GiB, running as uid 0. It is native linux-64: `/proc/cpuinfo` names no Rosetta CPU and `ERL_FLAGS` was unset. Pins: bootstrap pixi 0.81.0 and just 1.58.0 ([checksums](bootstrap.txt)); the locked environment's Gleam 1.19.0, erlang 29.1.1 (`pl5321h8f2c242_0`), openssl 3.6.5 (`h781a0a9_0`), Python 3.14.8 and pytest 9.1.1; rebar3 3.27.1 from `tools.txt`.
 
@@ -12,7 +12,7 @@ The host was a disposable Claude Code cloud container: a Firecracker VM, Linux x
 | --- | --- | --- |
 | 03, fully cold initialization | **Closed.** Cold `just initialize` 16.676 s, `just check` 183.112 s, network-denied `just check` 200.367 s; all exit 0, worktree clean | [cold.txt](cold.txt), [cold-initialize.txt](cold-initialize.txt), [cold-check.txt](cold-check.txt), [offline.txt](offline.txt), [offline-check.txt](offline-check.txt), [cold-results.json](cold-results.json), [caches-after.txt](caches-after.txt) |
 | 01, native Linux TLS and rebar3 | **Closed.** All six TLS cases in the default and the runtime environment; OTP 29 in both, matching `pixi.lock`; rebar3 compiles both dependencies and the build fails without it | [native-linux.txt](native-linux.txt) |
-| 03, maintainer's primary hook | **Open.** Needs the maintainer's checkout. A tested probe is [below](#open-the-maintainers-primary-hook) | — |
+| 03, maintainer's primary hook | **Open.** Needs the maintainer's checkout. The probe, [primary-hook.sh](primary-hook.sh), is [below](#open-the-maintainers-primary-hook); its verdicts and cleanup are checked against stub hooks | [primary-hook-stubs.txt](primary-hook-stubs.txt) |
 | 04, intermittent checker test | **Open.** 20 sequential runs of the current 402-test suite all passed, 8,040 test executions with no failure; green runs do not identify it. Static leads are recorded for the Mac | [checkers.txt](checkers.txt) |
 | 06, hosted audit | **Open.** The authorized dispatch was refused, `403 Resource not accessible by integration`; no scheduled run exists yet | [audit.json](audit.json) |
 | 05/06, restricted agent sandbox | **Open.** macOS only; nothing here observes it | — |
@@ -120,17 +120,34 @@ In either case, record the run URL, commit and result.
 
 ## Open: the maintainer's primary hook
 
-This needs the maintainer's own primary checkout, and authorization to use it. The installed hook is a prek shim that names an absolute `prek`, and every hook entry goes through `scripts/with-env.sh`, which resolves the environment from its own checkout. A linked worktree would therefore fail for want of `.pixi`, not on formatting. The probe has to run in the primary checkout, with a clean index:
+This needs the maintainer's own primary checkout, and authorization to use it. The installed hook is a prek shim that names an absolute `prek`, and every hook entry goes through `scripts/with-env.sh`, which resolves the environment from the checkout being committed in. A linked worktree would therefore check against its own `.pixi`, or fail for want of one, rather than exercise the primary's. The probe runs from the primary checkout, with its transcript written outside it:
 
 ```sh
-sed -n 's/^PREK=//p' .git/hooks/pre-commit   # expect "<this checkout>/.pixi/envs/default/bin/prek"
-printf 'pub fn probe( ) { Nil }\n' > src/hook_probe.gleam
-git add src/hook_probe.gleam
-PATH=/usr/bin:/bin git commit -m 'hook probe (must be refused)'; echo "exit $?"
-git rm --cached -q src/hook_probe.gleam && rm src/hook_probe.gleam && git status --short
+sh .scratch/bootstrap/evidence/35/primary-hook.sh > <outside-path>/primary-hook.txt 2>&1
 ```
 
-Run on this container's own primary checkout, the commit exited 1, with `gleam-format` reporting "These files have not been formatted: src/hook_probe.gleam". HEAD was unchanged and the probe file was removed. That shows the procedure works; it says nothing about the maintainer's hook.
+[primary-hook.sh](primary-hook.sh) touches nothing, and exits 2, unless every precondition holds:
+
+- it runs in a primary checkout, by the test `scripts/install-hooks.sh` uses;
+- the hook git would run, from `git rev-parse --git-path hooks/pre-commit`, which honours `core.hooksPath`, is executable;
+- the hook's `PREK` is `<checkout>/.pixi/envs/default/bin/prek`, and that file is executable;
+- the index is clean, no tracked file has unstaged changes, so prek has nothing to stash, and `src/hook_probe.gleam` does not exist.
+
+It then stages `pub fn probe( ) { Nil }` as `src/hook_probe.gleam` and commits it under `env -i HOME="$HOME" PATH=/usr/bin:/bin`, the bare environment of [03's probe](../03/fresh-clone.sh), with signing off. It passes only if gleam format refused the commit: the output must carry the `gleam format check…Failed` line and name the file. Afterwards HEAD, the index and `git status` must be as they were and the file must be gone. A refusal for any other reason fails the run (exit 1). That includes a shim that falls back to a `prek` not on the bare `PATH` (exit 127) and an identity or signing error.
+
+**It never leaves a commit.** A trap unstages and removes the file on every exit, including an interrupt. If the hook accepts the commit, the run fails and the trap resets HEAD to its recorded value with `git reset --soft`, then checks HEAD, the index and the status itself. It resets only when HEAD is the probe's own commit, by its message, directly on top of the recorded HEAD. Any other move of HEAD fails the run and is left, with the staged file, for the maintainer to inspect.
+
+The container ran an earlier inline form of this probe on its own primary checkout. That form used the same file and the same refusal path, but neither `env -i` nor `-c commit.gpgsign=false`. `gleam-format` refused the commit, reporting "These files have not been formatted: src/hook_probe.gleam", and HEAD was unchanged. Its cleanup was unsafe, which the Codex adversarial review found: had the hook accepted, `git rm --cached` would have left the commit in place and a staged deletion behind. The script replaces it.
+
+[primary-hook-stubs.sh](primary-hook-stubs.sh) checks the script's verdicts and cleanup against stub hooks. Each throwaway repository gets a prek-shaped shim, written as prek writes it, and a stub `prek` ([transcript](primary-hook-stubs.txt)):
+
+- a stub that refuses with gleam format's output passes, exit 0;
+- an accepting stub fails the run, exit 1, after the trap undoes its commit;
+- a stub that exits 127 with no output fails the run, exit 1, as "not by gleam format";
+- a missing hook, a shim naming another checkout's `prek`, and a linked worktree each stop the run before it touches anything, exit 2;
+- a stub that moves HEAD to a commit of its own fails the run, exit 1, and HEAD and the staged file are left as they are.
+
+In the first six cases, HEAD, the index and the status end as they began, and no probe file is left. No case sends an interrupt; the accepting case takes the same EXIT trap. The stubs ran on 2026-10-13 (UTC) on a Mac, Darwin arm64 with Apple Git 2.50.1. They ran in this branch's linked worktree at `c2f0449`, with both scripts untracked; the transcript records each script's sha256, which the committed files match. Neither the container's run nor the stubs exercised the maintainer's hook, so the item stays open.
 
 ## Open: the restricted agent sandbox and Copilot
 
