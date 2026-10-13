@@ -8,7 +8,7 @@
 
 **Blocked by:** 17
 
-**From 24:** two overrides: `poll_interval` (whole seconds, 5 to 300, default 30, valid only when greater than the install-wide `poll_timeout` of 5 s, else an invalid value under this ticket's rule) and `patch_interval` (whole seconds, 0 to 3600, default 60; 0 is valid and leaves the global bucket as the only bound on that Deployment's pods, after a rejection too, with no floor applied). The timeout has no override. The key syntax and the handling of an invalid value are this ticket's.
+**From 24:** two overrides: `poll_interval` (whole seconds, 5 to 300, default 30, valid only when greater than the install-wide `poll_timeout` as configured, 5 s by default and up to below the install-wide poll interval, else an invalid value under this ticket's rule) and `patch_interval` (whole seconds, 0 to 3600, default 60; 0 is valid and leaves the global bucket as the only bound on that Deployment's pods, after a rejection too, with no floor applied). The timeout has no override. The key syntax and the handling of an invalid value are this ticket's.
 
 **MVP critical path:** yes. Users configure the MVP through this schema.
 

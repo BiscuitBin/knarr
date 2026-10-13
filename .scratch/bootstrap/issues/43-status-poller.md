@@ -1,6 +1,6 @@
 # 43: Spec-then-build: the status poller
 
-**Context:** Ticket [18](18-elicit-worker-contract.md) settled the worker contract in `docs/specs/worker_contract.allium`: one GET of `http://<podIP>:<port>/knarr/v1/status` over plain HTTP, a 200 JSON object with `cost` and `accepting` as valid, 404 as not found, everything else invalid. Nothing fetches or decodes it yet, and neither [31](31-spec-then-build-reconcile-core.md) nor [32](32-spec-then-build-ownership-lifecycle.md) covers that adapter. The per-poll timeout is 5 seconds (budget `Timeout`); jitter, the concurrency bound and the no-overlap rule are [46](46-spec-then-build-poll-schedule-and-patcher.md)'s.
+**Context:** Ticket [18](18-elicit-worker-contract.md) settled the worker contract in `docs/specs/worker_contract.allium`: one GET of `http://<podIP>:<port>/knarr/v1/status` over plain HTTP, a 200 JSON object with `cost` and `accepting` as valid, 404 as not found, everything else invalid. Nothing fetches or decodes it yet, and neither [31](31-spec-then-build-reconcile-core.md) nor [32](32-spec-then-build-ownership-lifecycle.md) covers that adapter. The per-poll timeout is budget's `config.poll_timeout`, 5 seconds by default and install-configurable (budget `Timeout`); jitter, the concurrency bound and the no-overlap rule are [46](46-spec-then-build-poll-schedule-and-patcher.md)'s.
 
 **What to build:** The poller module from the `StatusEndpoint` contract: a pure request builder (URL from a pod IP of either family, port and path; the User-Agent header), a pure decoder from an outcome (a response, or a refused, timed-out or unreachable transport) to a reading, with the body cap, the `draining` predicate over a reading, and a sending function injected as in `k8s_client`. Tests derived with `propagate` first, then the code, in the order the `gleam-change` skill sets. The builder takes the pod IP as a string; reading it off the `Pod` value [41](41-k8s-client-spec-then-build.md) extends, and the Ready condition, are 31's.
 
@@ -10,7 +10,7 @@
 
 **From 18:** the hand-back notes of [ticket 18](18-elicit-worker-contract.md) and the `StatusEndpoint` contract.
 
-**From 24:** the timeout `send` enforces is budget `config.poll_timeout`, 5 seconds, install-wide with no per-Deployment override.
+**From 24:** the timeout `send` enforces is budget `config.poll_timeout`, 5 seconds by default and valid from 1 second to below the install-wide poll interval, install-wide with no per-Deployment override; the poller takes it as a parameter rather than hard-coding the default.
 
 **MVP critical path:** yes. Every reading the reconciler maps comes from it.
 
