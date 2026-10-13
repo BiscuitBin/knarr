@@ -15,7 +15,7 @@
 
 open question "§9.1 Schema: the label and annotation key prefix knarr owns, and which keys are labels and which are annotations."
 open question "§9.1 Opt-in: how a Deployment opts in, and what the discovery LIST selects on (§4)."
-open question "§9.1 Overrides: which tuning values a Deployment may override (endpoint, the thresholds and margin, unreachable windows, staleness, poll and write limits) and the valid range of each, taken from the owning ticket."
+open question "§9.1 Overrides: which tuning values a Deployment may override (endpoint, the thresholds and margin, unreachable windows, staleness, poll and write limits) and the valid range of each, taken from the owning ticket. From budget (ticket 24): poll_interval, whole seconds from 5 to 300, default config.poll_interval (30), valid only when greater than the install-wide poll_timeout; patch_interval, whole seconds from 0 to 3600, default config.patch_interval (60). The timeout has no override."
 open question "§9.1 Opt-in for safe-to-evict: how a workload enables the per-workload safe-to-evict policy, which is off by default (§6)."
 open question "§9.1 Invalid values: what knarr does with an unparsable or out-of-range value (ignore the key, ignore the workload, Event)."
 open question "§9.1 Unsupported kinds: whether knarr refuses or warns when pointed at a StatefulSet, Job or DaemonSet, and how (§3 non-goals)."

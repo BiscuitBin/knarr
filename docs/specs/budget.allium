@@ -5,17 +5,304 @@
 -- no overlapping polls of one pod, the per-pod minimum patch interval, the
 -- global patch QPS budget, back-off on API throttling (APF, 429), the v1 scale
 -- target and the expected write rate (§4, §6, §8 failure modes, §9.8), and the
--- PodDeletionCost feature-gate check (§6, §9.11).
--- Owner: ticket 24.
+-- PodDeletionCost feature-gate prerequisite (§6, §9.11). What a poll reads is
+-- worker_contract (§9.4a); whether a change is due is cost_mapping and
+-- reconcile (§9.5, §9.6); the patch itself, the marker and conflicts are
+-- ownership and k8s_client (§9.10); the override keys and an invalid override
+-- are config (§9.1); the metric and Event names are observability (§9.14).
+-- Owner: ticket 24 settled every question here with the maintainer on
+-- 2026-10-12. Ticket 46 builds it.
+--
+-- Scale target and expected write rate. The defaults are sized for 500
+-- polled pods across up to 50 opted-in Deployments in one namespace, one
+-- knarr replica. At that scale knarr sends about 17 status GETs per second
+-- on the pod network (500 pods every 30 s), one pod LIST and one Deployment
+-- LIST per minute, and in the common case well under 0.5 patches per second.
+-- The model behind that figure is a task that crosses the first threshold
+-- and no later one: it makes two writes, one at the crossing and one
+-- removal when the pod goes idle, since a non-draining pod below the first
+-- threshold never writes, and each further threshold a task crosses adds
+-- one write. The figure assumes the workload knarr is for, long tasks:
+-- fewer than about 15 completions a minute across the install of a task
+-- that crossed the first threshold only, which at 500 pods is roughly one
+-- per pod every half hour. A busier install, 500 pods each finishing such
+-- a task every 600 s, makes about 1.7 patches per second and still sits
+-- far under the cap. Longer tasks cross more thresholds but finish less
+-- often: a task past all four default thresholds lasts at least an hour
+-- and makes five writes, so 500 pods each finishing one an hour make about
+-- 0.7 per second. The worst case is one patch per pod every patch
+-- interval, 500 / 60 s, about 8.3 per second, which the bucket caps at
+-- 5·W + 10 patches in any W-second window. Every duration here is a whole
+-- number of seconds.
 
 ------------------------------------------------------------
--- Open Questions
+-- Value Types
 ------------------------------------------------------------
 
-open question "§9.8 Defaults: the numeric defaults for the poll interval, the per-poll timeout, the LIST cadence and the jitter."
-open question "§9.8 Scale target: the v1 target in pods, Deployments and interval that the defaults are sized for."
-open question "§9.8 Concurrency: the bound on concurrent polls, per Deployment and per cluster."
-open question "§9.8 Write budget: the per-pod minimum patch interval, the global patch QPS, and the write-budget threshold handed to §9.16 (§3)."
-open question "§9.8 Back-off: how knarr backs off on a 429 or APF throttling while keeping throttled changes pending (§8 failure modes)."
-open question "§9.8 Write rate: the documented expected API write rate at the scale target (§6)."
-open question "§9.11 Feature gate: document only, a startup self-test, or a periodic check of the PodDeletionCost gate, and what knarr does when the check fails (§8 failure modes)."
+-- One pod's place on the poll schedule: when its next poll is due and
+-- whether a poll of it is outstanding, waiting in the concurrency queue or
+-- sent and not yet returned.
+value Schedule {
+    pod_name: String
+    next_due: Timestamp
+    outstanding: Boolean
+}
+
+-- A change that is due but may not go yet: which pod, and when it first
+-- became due. The change itself is not stored; it is re-derived from the
+-- pod's latest reading when the pod's turn comes.
+value Pending {
+    pod_name: String
+    due_since: Timestamp
+}
+
+-- The global patch budget: whole tokens, and the second they were last
+-- refilled at.
+value Bucket {
+    tokens: Integer
+    refilled_at: Timestamp
+}
+
+-- The install-wide pause after a 429: when patching may resume, and how many
+-- consecutive 429s produced it.
+value Pause {
+    until: Timestamp
+    consecutive: Integer
+}
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract PollSchedule {
+    phase: (pod_name: String, now: Timestamp, interval: Duration, random: Integer) -> Schedule
+    next: (schedule: Schedule, now: Timestamp, interval: Duration, jitter_percent: Integer, random: Integer) -> Schedule
+    admit: (schedule: Schedule, now: Timestamp, sent: Integer, concurrency: Integer) -> Boolean
+    on_list: (schedules: List<Schedule>, listed: List<String>, joining: List<Schedule>) -> List<Schedule>
+
+    @invariant Interval
+        -- Each pod is polled on its Deployment's poll interval, which is
+        -- the Deployment's override (config, ticket 19) or else
+        -- config.poll_interval. The install-wide value is OTP application
+        -- configuration, as knarr's Listening reads the bind address, and is
+        -- valid from 5 to 300 seconds; an override is valid from 5 to 300
+        -- seconds and only when it is greater than the install-wide
+        -- timeout, else it is an invalid value under config's rule.
+    @invariant Timeout
+        -- One poll waits at most config.poll_timeout for its response, the
+        -- value worker_contract's Transport and Served name; a slower answer
+        -- is a timed_out outcome. The timeout is install-wide, valid from 1
+        -- second to below config.poll_interval, and no Deployment overrides
+        -- it, so Interval's floor keeps it below every effective interval.
+    @invariant Phase
+        -- A pod joining the schedule, at startup or when a LIST first shows
+        -- it, is first due at now plus a random delay of 0 to one interval
+        -- less one second: phase returns that, with random an integer from 0
+        -- to interval in seconds less one, drawn by the caller. Pods of one
+        -- Deployment therefore spread over the interval instead of polling
+        -- together.
+    @invariant Jitter
+        -- A pod's polls sit on a ladder of due times climbing from its
+        -- phase: each rung is the previous rung plus the interval plus a
+        -- random delay of 0 to jitter_percent of the interval, rounded down
+        -- to whole seconds, with a fresh draw for every rung;
+        -- config.poll_jitter_percent is 10 by default and valid from 0 to
+        -- 100, install-wide. The delay only ever lengthens the gap: no poll
+        -- is due early. After a poll returns, the next is due on the rung
+        -- after the one that poll consumed; a rung that has already passed
+        -- is skipped, and the next poll is due on the first rung after now.
+        -- next computes one rung from the schedule passed in and takes that
+        -- rung's draw; the caller calls it once per rung until the due time
+        -- is after now. A pod whose poll was delayed by the queue therefore
+        -- keeps its ladder and never polls early to catch up, and no poll
+        -- fires merely because the previous returned.
+    @invariant NoOverlap
+        -- At most one poll of a pod is outstanding, whether waiting in the
+        -- concurrency queue or sent and not yet returned, until it returns
+        -- or times out. A poll that falls due while one is outstanding is
+        -- skipped, not queued behind it, and the following poll is due on
+        -- the next rung of the ladder as Jitter says, counted from the
+        -- skipped due time.
+    @invariant Concurrency
+        -- admit is true for a due poll only while fewer than
+        -- config.poll_concurrency polls are sent and not yet returned; the
+        -- bound is 64 per install, valid from 1 to 1024, with no bound per
+        -- Deployment. A due poll that is not admitted waits in a queue,
+        -- served oldest-due first, and stays outstanding meanwhile, so under
+        -- load the effective interval stretches rather than polls piling up
+        -- (§8: costs refresh more slowly). Nothing is dropped from the
+        -- queue except as Leaving says.
+    @invariant ListCadence
+        -- The LIST of the namespace's pods and the LIST of its Deployments
+        -- form one discovery cycle, run on its own timer every
+        -- config.list_interval, 60 seconds by default, valid from 10 to 600
+        -- seconds, configured on its own and derived from no poll interval,
+        -- so the defaults coinciding as multiples is incidental. The cycle
+        -- is where knarr learns a pod's deletionTimestamp, a pod that has
+        -- gone, a Deployment's overrides and the applied value a drained pod
+        -- carries, so it is not slowed to the lowest threshold. A cycle in
+        -- which either LIST fails is retried whole on the next tick that is
+        -- sent, which is the next tick outside the LIST pause of
+        -- WriteBudget's PauseScope; a cycle in which either LIST is refused
+        -- with 429 is that pause's.
+    @invariant Leaving
+        -- A pod stays on the schedule, and is polled, while the LIST shows
+        -- it, deletionTimestamp set or not; no patch is made once it is set,
+        -- which is reconcile's. on_list drops every schedule whose pod the
+        -- latest LIST no longer shows; a poll of that pod waiting in the
+        -- queue leaves the queue at once and is never sent, and the response
+        -- to one already in flight is discarded when it returns. on_list
+        -- also adds, for every listed pod that has none, the schedule
+        -- joining holds for it: the caller builds joining with phase, one
+        -- entry per listed pod, each from that pod's Deployment interval and
+        -- its own draw, and on_list ignores an entry whose pod already has a
+        -- schedule. Joining and leaving are learned only from the LIST.
+    @invariant Restart
+        -- The schedule is in memory only. After a restart it is rebuilt
+        -- from the first LIST with every phase drawn afresh; nothing on a
+        -- pod records when it was last polled, and the marker timestamp
+        -- (ownership, ticket 22) is not read for scheduling.
+    @invariant Pure
+        -- phase, next, admit and on_list are functions of their arguments
+        -- alone: phase and next take the clock and the random draw, admit
+        -- the clock, and on_list the joining schedules already built with
+        -- phase, and none reads state, time or the pod, or makes a request.
+        -- Sending the poll
+        -- and the LIST are the injected effects of worker_contract and
+        -- k8s_client; running the timers is the scheduler that ticket 46
+        -- builds under supervision.
+}
+
+contract WriteBudget {
+    refill: (bucket: Bucket, now: Timestamp, rate_per_second: Integer, burst: Integer) -> Bucket
+    allow: (pending: Pending, last_attempt: Timestamp?, bucket: Bucket, pause: Pause, now: Timestamp, patch_interval: Duration) -> Boolean
+    pause: (pause: Pause, status: Integer, retry_after: Duration?, now: Timestamp, initial: Duration, cap: Duration) -> Pause
+    order: (pending: List<Pending>) -> List<Pending>
+
+    @invariant PerPod
+        -- At most one patch attempt is made to a pod per patch interval,
+        -- which is the Deployment's override (config, ticket 19) or else
+        -- config.patch_interval: 60 seconds by default, valid from 0 to
+        -- 3600 seconds, install-wide and for an override alike. A value of
+        -- 0 is valid and leaves the bucket as the only bound on the pods it
+        -- covers, after a rejection too; no floor is applied. The interval is
+        -- counted from the pod's last patch attempt whatever its outcome,
+        -- so a rejected patch, 429 or not, is not retried before it ends.
+        -- The interval is budget's only per-pod hold: a longer hold after a
+        -- conflict with another writer is ownership's (§9.10, ticket 22)
+        -- and sits on top of it, and the Event and metric a rejection
+        -- raises are ownership's and observability's. last_attempt is null
+        -- for a pod knarr has not patched since it started, and allow is
+        -- then not held by the interval.
+    @invariant Bucket
+        -- One token bucket per install bounds every patch: refill adds
+        -- config.patch_rate_per_second tokens per whole second elapsed since
+        -- refilled_at, never above config.patch_burst, and allow needs one
+        -- token, which the patch then spends. The defaults are 5 per second
+        -- and a burst of 10; the rate is valid from 1 to 100 and the burst
+        -- from 1 to 200. Tokens are integers: refill credits the whole
+        -- seconds elapsed and advances refilled_at by exactly those seconds,
+        -- never to now, so the fraction left over is carried into the next
+        -- call. From refilled_at 0, a call at 0.5 adds nothing and leaves
+        -- refilled_at at 0; a call at 1.5 adds one second of tokens and
+        -- sets refilled_at to 1.
+    @invariant Pending
+        -- A change that is due but not allowed, by PerPod, Bucket or
+        -- BackOff, stays pending and is not dropped. There is at most one
+        -- pending entry per pod, kept from when the change first became due;
+        -- when the pod's turn comes the change is re-derived from its latest
+        -- reading against the applied value, as reconcile's rule says, so a
+        -- change no longer due has nothing pending. order serves pods
+        -- oldest-due first, with no priority for a drained or terminating
+        -- change and no rotation by Deployment. A pod's pending entry is
+        -- discarded when a LIST first shows its deletionTimestamp set or no
+        -- longer shows the pod.
+    @invariant BackOff
+        -- A 429 from a patch pauses patching: the first in a run for
+        -- config.backoff_initial, 1 second by default and valid from 1
+        -- second to config.backoff_cap, doubling on each consecutive 429 up
+        -- to config.backoff_cap, 60 seconds by default, valid from 1 to 600
+        -- seconds. Both are install-wide.
+        -- A Retry-After header, in seconds, raises that pause to at least
+        -- its value, and the cap bounds only the doubling, so the pause is
+        -- the greater of the capped exponential and Retry-After. A pause is
+        -- never shortened: the until that pause returns is the greater of
+        -- the until passed in and now plus the computed pause, so a bare 429
+        -- a second after a Retry-After of 120 leaves until where it was. A
+        -- successful patch ends the run: pause returns consecutive 0 for a
+        -- 2xx status and leaves until as it is, and leaves the Pause as it
+        -- is for any other status that is not 429, so a rejection between
+        -- two 429s does not shorten the next pause. While paused, allow is
+        -- false for every pod, and pending changes wait and are re-derived
+        -- when the pause lifts.
+    @invariant PauseScope
+        -- The patch pause is install-wide: no pod is patched while it
+        -- lasts, while polling and the LIST continue. The discovery cycle
+        -- keeps a Pause of its own under the same rule: a 429 on either
+        -- LIST of a cycle skips the whole cycle, keeps the previous target
+        -- set and schedules, and lengthens the LIST pause as BackOff says; a
+        -- cycle whose tick falls inside that pause is not sent; the run ends
+        -- when a cycle completes with both LISTs succeeding. Neither pause
+        -- touches the other, and polls are never paused by a 429: the
+        -- apiserver is not what they reach.
+    @invariant Restart
+        -- The per-pod interval, the bucket and the pause are in memory only
+        -- and start fresh: every pod is patchable at once after a restart,
+        -- the bucket holds config.patch_burst tokens, and the global bucket
+        -- alone bounds the startup repair lifecycle describes (ticket 23).
+        -- The marker timestamp is not read for budgeting.
+    @invariant Threshold
+        -- From Bucket it follows that, within one run of the knarr
+        -- process, an install makes at most 5·W + 10 patches in any window
+        -- of W seconds at the defaults, so at most 310 in any minute and 5
+        -- per second sustained. A restart refills the bucket, as Restart
+        -- says, so a window spanning a restart may see up to
+        -- config.patch_burst more. This is the write-budget threshold §9.16
+        -- sets for the §3 success criterion; the harness that measures it
+        -- is ticket 33's.
+    @invariant Pure
+        -- refill, allow, pause and order are functions of their arguments
+        -- alone: the clock is passed in, and none reads state, time or the
+        -- pod, or makes a request. The status and Retry-After that pause
+        -- reads are the values k8s_client returns for a failed patch or
+        -- list; the patcher that keeps the bucket, the pause and the
+        -- pending set is ticket 46's, under supervision.
+    @invariant NoGateCheck
+        -- knarr performs no check of the PodDeletionCost feature gate,
+        -- neither at startup nor periodically: it sends no request whose
+        -- purpose is to learn the gate's state, reads no /metrics endpoint,
+        -- and keeps its namespaced Role with no ClusterRole for the check.
+        -- The gate is a documented prerequisite, as the guidance below says.
+    @guidance
+        -- A check was rejected because it would need a ClusterRole for
+        -- /metrics and would prove only the apiserver's gate, not the
+        -- controller-manager's, which is the one that ranks victims. The
+        -- prerequisite page ticket 34 writes carries: beta and
+        -- on by default since Kubernetes 1.22, needed on kube-apiserver and
+        -- kube-controller-manager, how to read it from the apiserver's
+        -- kubernetes_feature_enabled metric on 1.26 or later, the
+        -- behavioural test of two Ready pods of one Deployment on one node
+        -- (or on nodes with equal counts of its pods), the older annotated
+        -- -1 and the Deployment scaled down by one, where the older goes
+        -- with the gate on and the newer goes with it off, since ranking
+        -- then prefers the pod that became Ready more recently, and that
+        -- with the gate off knarr's writes are harmless and useless while
+        -- safe-to-evict is unaffected.
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    poll_interval: Duration = 30.seconds
+    poll_timeout: Duration = 5.seconds
+    poll_jitter_percent: Integer = 10
+    list_interval: Duration = 60.seconds
+    poll_concurrency: Integer = 64
+    patch_interval: Duration = 60.seconds
+    patch_rate_per_second: Integer = 5
+    patch_burst: Integer = 10
+    backoff_initial: Duration = 1.second
+    backoff_cap: Duration = 60.seconds
+}

@@ -70,3 +70,9 @@ contract Client {
         -- Precondition). Amended by ticket 22: the window the list-only
         -- check left open is closed by the test.
 }
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+open question "§9.10 Patch support: the failed patch and the failed list surfaced as values carrying the response status and the Retry-After header, which budget's BackOff and PauseScope read (ticket 24); today patch_pod and list_pods return only Pod."

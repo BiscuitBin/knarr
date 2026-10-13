@@ -204,7 +204,7 @@
         <text x="460" y="116" text-anchor="middle" class="mut">thresholds, in the seconds the worker reports</text>
       </g>
     </svg></div>
-    <figcaption>Crossing a threshold upward writes the cost at that reading. The shaded zones are the margin (60 by default): on the way down a threshold counts as crossed only once the cost is below it minus the margin, so a cost that wobbles at an edge does not write. The thresholds and the margin are configurable per workload. Any write still waits for the per-pod interval and the global QPS budget.</figcaption>
+    <figcaption>Crossing a threshold upward writes the cost at that reading. The shaded zones are the margin (60 by default): on the way down a threshold counts as crossed only once the cost is below it minus the margin, so a cost that wobbles at an edge does not write. The thresholds and the margin are configurable per workload. Any write still waits for the write budget, whose defaults are at most one patch per pod per 60 seconds and a global bucket refilled at 5 per second with a burst of 10.</figcaption>
   </figure>
 
   <h3>Where the values sit relative to the implicit <code>0</code></h3>

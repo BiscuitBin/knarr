@@ -4,9 +4,11 @@
 
 **What to build:** The full `k8s_client` module, specification first: the remaining operations and their Role verbs, pagination of a LIST, the error vocabulary callers branch on (RBAC refusal, conflict, not found, transport; a 404 and a 409 from the patch are reported as values and are not precondition failures), and the patch content type and preconditions 22 settled. Then the code, keeping the sans-IO shape 14 established, and the removal of `s1_probe` once 31 has a caller for the client, with the `NoPodEffects` clause and the Deployment's `ERL_FLAGS` updated in the same change.
 
-**Non-goals:** Watch (OVERVIEW §8 defers it). Rate limiting (§9.8, ticket 24). Event reasons and the metrics (ticket 30).
+**Non-goals:** Watch (OVERVIEW §8 defers it). Rate limiting (§9.8, ticket 24, built by [46](46-spec-then-build-poll-schedule-and-patcher.md)). Event reasons and the metrics (ticket 30).
 
 **Blocked by:** 14, 22
+
+**From 24:** budget's `BackOff` and `PauseScope` read the response status and the Retry-After header, in seconds, of a failed patch and a failed list; this ticket shapes the values that carry them, and [46](46-spec-then-build-poll-schedule-and-patcher.md) consumes them.
 
 **MVP critical path:** yes. Every read and write the reconciler makes goes through this module.
 
@@ -24,3 +26,4 @@
 - [ ] The S1 probe is removed once the reconciler calls the client, together with its `ERL_FLAGS` switch and the probe wording in `NoPodEffects`; the Role grants exactly what the client uses.
 - [ ] Decision 0013 is amended where the full module departs from the spike's findings.
 - [ ] The `cluster-s1` CI job is narrowed to the paths it proves, or gated by a label, once its transcripts sit beside the evidence scripts.
+- [ ] A failed patch and a failed list are returned as values carrying the response status and the Retry-After header in seconds, which budget's `BackOff` and `PauseScope` read ([46](46-spec-then-build-poll-schedule-and-patcher.md)); the §9.10 open question names it.
