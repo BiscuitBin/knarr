@@ -176,7 +176,8 @@ contract Catalogue {
         -- budget's six signals. The patch rate is knarr_patches_total. A 429
         -- is counted once, as result throttled: on knarr_patches_total for a
         -- patch and on knarr_lists_total{resource, result} for a LIST, whose
-        -- resource is pods or deployments and whose result is list_result's
+        -- resource is pods, replicasets or deployments (config Discovery,
+        -- ticket 19) and whose result is list_result's
         -- label: succeeded for a 2xx, throttled for 429, error for every
         -- other status and for null; no other metric counts a 429.
         -- knarr_paused{scope} is 1 while budget's pause of that scope lasts
@@ -203,7 +204,8 @@ contract Catalogue {
         -- decides it (ticket 21).
     @invariant Install
         -- knarr_last_discovery_timestamp_seconds is the end of the last
-        -- discovery cycle in which both LISTs succeeded (budget ListCadence),
+        -- discovery cycle in which every LIST of it succeeded (budget
+        -- ListCadence),
         -- and knarr_discovery_duration_seconds is a histogram with no labels
         -- of the length of every cycle sent, under the buckets Buckets
         -- names. knarr_events_total{reason, result} counts every Event
@@ -225,7 +227,8 @@ contract Catalogue {
         -- pod counts only in knarr_targets; the tier, standing and pod-state
         -- gauges exclude it. Every count is in memory: a restart starts the
         -- counters at 0, and the per-Deployment gauges carry no series until
-        -- the first discovery cycle in which both LISTs succeed rebuilds
+        -- the first discovery cycle in which every LIST of it succeeds
+        -- rebuilds
         -- them.
     @invariant LaterRows
         -- These invariants are the conventions every later metric follows.

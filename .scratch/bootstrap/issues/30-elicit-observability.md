@@ -14,6 +14,8 @@ Ticket 22 fixed the conflict Event's content and message in the `Event` clause o
 
 **From 24:** budget emits a patch-rate counter, a gauge of the pending changes the budget holds, a 429 counter and the pause state (paused or not, and its length), the poll queue depth and a counter of polls skipped under `NoOverlap`. The names are this ticket's.
 
+**From 19:** config raises one Event on a Deployment per invalid override key, on entry, whose message config's `message` renders; this ticket names its reason. An unknown key under the `knarr.io/` prefix raises no Event and is logged once per discovery cycle it is present in; this ticket names the log line and confirms the cadence.
+
 **MVP critical path:** no. The MVP runs without named metrics; operators need them to trust it.
 
 **Status:** done. See [the hand-back notes](#hand-back-notes).

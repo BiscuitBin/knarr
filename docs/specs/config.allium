@@ -2,20 +2,324 @@
 
 -- Module: config.
 -- Scope: every label and annotation knarr reads on a Deployment, its type,
--- default, validation and the behaviour on an invalid value; refusal of
--- unsupported workload kinds (§3 non-goals); and the target set that discovery
--- derives from it inside knarr's one namespace (§4, §9.1, §9.18).
--- Owner: ticket 19. Override defaults come from 18, 20, 21, 23 and 24. The
--- decided discovery LIST and one install per namespace are built by the round-2
--- spec-then-build ticket 31.
+-- default, validation and the behaviour on an invalid value; the fixed key
+-- prefix; how a Deployment opts in and what the discovery LISTs select on;
+-- the target set discovery derives from the owner chain inside knarr's one
+-- namespace; and that unsupported workload kinds are documented, not
+-- detected (§3 non-goals, §4, §9.1, §9.18). What each override means is its
+-- owning module's: the port and path are worker_contract's (§9.4a), the
+-- thresholds and margin cost_mapping's (§9.5), the poll and patch intervals
+-- budget's (§9.8); what the safe-to-evict gate writes is safe_to_evict's
+-- (§9.9). When the LISTs run and what a 429 on one does is budget's
+-- ListCadence and PauseScope; the LIST requests and their Role verbs are
+-- k8s_client's (ticket 41); the Event reason and the log line are
+-- observability's (ticket 30); what happens to the annotations of a pod that
+-- leaves the target set is lifecycle's (ticket 23).
+-- Owner: ticket 19 settled every §9.1 question here with the maintainer on
+-- 2026-10-12. Override defaults and ranges come from 18, 20 and 24; the
+-- overrides 21, 23 and 25 may add stay as the open questions below. Ticket 31
+-- builds discovery and the parse.
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+-- One pair of a Deployment's metadata.labels map, as k8s_client lists it.
+value Label {
+    key: String
+    value: String
+}
+
+-- One pair of a Deployment's metadata.annotations map, as k8s_client lists
+-- it. A signature that takes List<Annotation>? takes null for a Deployment
+-- whose response carries no annotations map, as ownership's does for a pod.
+value Annotation {
+    key: String
+    value: String
+}
+
+-- The install-wide values the parse fills in and checks against: the five
+-- defaults a Deployment may override and the timeout a poll-interval
+-- override must exceed. Each is the config.<key> of its owning module, read
+-- once by the caller (Installed).
+value Defaults {
+    status_port: Integer
+    status_path: String
+    thresholds: List<Integer>
+    threshold_margin: Integer
+    poll_interval: Duration
+    patch_interval: Duration
+    poll_timeout: Duration
+}
+
+-- One Deployment's effective settings: every overridable value after the
+-- overrides are applied and the invalid ones ignored, and whether the
+-- Deployment has opted into safe-to-evict.
+value Settings {
+    status_port: Integer
+    status_path: String
+    thresholds: List<Integer>
+    threshold_margin: Integer
+    poll_interval: Duration
+    patch_interval: Duration
+    safe_to_evict: Boolean
+}
+
+-- One annotation under the prefix whose value the parse ignored: its full
+-- key, the value text found, and why, as the Event's message renders it.
+value Invalid {
+    key: String
+    value: String
+    reason: String
+}
+
+-- A Deployment as discovery reads it: its name and uid, its labels, and its
+-- annotations, null when the response carries no annotations map.
+value Deployment {
+    name: String
+    uid: String
+    labels: List<Label>
+    annotations: List<Annotation>?
+}
+
+-- A ReplicaSet as discovery reads it: its uid and the uid of its controller
+-- owner reference, null when it has none or none is marked controller. Its
+-- name is read by nothing here.
+value ReplicaSet {
+    uid: String
+    controller_uid: String?
+}
+
+-- A pod as discovery reads it: its name and the uid of its controller owner
+-- reference, null when it has none or none is marked controller. The pod's
+-- IP, annotations and deletion timestamp are k8s_client's Pod; discovery
+-- reads only the owner here.
+value Pod {
+    name: String
+    controller_uid: String?
+}
+
+-- One member of the target set: a pod, the Deployment it was matched to, by
+-- name and uid, which the invalid-key Event's involvedObject names, and that
+-- Deployment's effective settings.
+value Target {
+    pod_name: String
+    deployment_name: String
+    deployment_uid: String
+    settings: Settings
+}
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract Configuration {
+    opted_in: (labels: List<Label>) -> Boolean
+    parse: (annotations: List<Annotation>?, defaults: Defaults) -> Settings
+    invalid: (annotations: List<Annotation>?, defaults: Defaults) -> List<Invalid>
+    unknown: (labels: List<Label>, annotations: List<Annotation>?) -> List<String>
+    message: (invalid: Invalid) -> String
+    targets: (deployments: List<Deployment>, replicasets: List<ReplicaSet>, pods: List<Pod>, defaults: Defaults) -> List<Target>
+    leaving: (previous: List<Target>, current: List<Target>, pods: List<Pod>) -> List<String>
+
+    @invariant Prefix
+        -- Every key knarr reads on a Deployment, and the one key of its own
+        -- it writes on a pod, are under the fixed prefix knarr.io/: the
+        -- opt-in label, the override annotations and the safe-to-evict
+        -- opt-in here, and the marker knarr.io/applied ownership's Recorded
+        -- names; the two owned annotations ownership's Owned names carry
+        -- their own keys. The prefix is not configurable: no install-wide value and
+        -- no annotation changes it, so the marker key is the same on every
+        -- install and the matching of keys here is by exact string.
+    @invariant OptIn
+        -- A Deployment is opted in exactly when its metadata.labels carries
+        -- knarr.io/enabled with the value "true": opted_in is true for that
+        -- pair and false for any other value, "True", "yes" or "" included,
+        -- and for the label absent. The Deployment LIST of a discovery
+        -- cycle selects on knarr.io/enabled=true, so a Deployment with
+        -- another value is never seen and nothing is emitted for it; the
+        -- operations guide (ticket 34) names the exact value. A Deployment
+        -- opts out by removing the label or changing its value, which takes
+        -- effect at the next cycle as Effective says. The opt-in is on the
+        -- Deployment object and not on its pod template, so opting in,
+        -- opting out and every override here change no pod template and
+        -- trigger no rollout. knarr.io/enabled is the only label knarr
+        -- reads.
+    @invariant Discovery
+        -- One discovery cycle, on budget's ListCadence, is three LISTs in
+        -- knarr's namespace: the Deployments selected on the opt-in label,
+        -- every ReplicaSet and every pod, the last two unselected because a
+        -- label selector cannot express an owner. targets returns one
+        -- Target per pod whose controller owner reference names, by uid, a
+        -- listed ReplicaSet whose controller owner reference names, by uid,
+        -- a listed Deployment for which opted_in is true, so the selector
+        -- is an optimisation and never the rule; the match is by uid and
+        -- never by name, so a
+        -- Deployment deleted and recreated under the same name claims no
+        -- pod of the old one until the new one's ReplicaSets own it. The
+        -- target set's pod names are the listed pods budget's on_list
+        -- receives and the pods worker_contract polls: a listed pod that is
+        -- no target is neither scheduled nor polled. Every
+        -- ReplicaSet the Deployment controls is followed, so during a
+        -- rollout the pods of the old and the new ReplicaSet are both in the
+        -- target set (§9.13, no special handling). A pod with no controller
+        -- owner, a pod of a ReplicaSet with none, and a pod of any other
+        -- owner kind are not targets and are not polled. Each Target
+        -- carries parse of its Deployment's annotations against defaults.
+        -- A cycle in which any of the three LISTs fails or is refused is
+        -- retried or skipped whole, as budget's ListCadence and PauseScope
+        -- say of every LIST of the cycle, and the previous target set stands
+        -- meanwhile.
+    @invariant Keys
+        -- Six override annotations exist, one per value, each under the
+        -- prefix and hyphenated after the config.<key> it overrides:
+        -- knarr.io/status-port (Integer, 1 to 65535, default
+        -- config.status_port), knarr.io/status-path (String, absolute,
+        -- starting with /, no query or fragment, default
+        -- config.status_path), knarr.io/thresholds (List<Integer>,
+        -- strictly increasing positive integers with at least one member,
+        -- default config.thresholds), knarr.io/threshold-margin (Integer,
+        -- 0 or more and below the first effective threshold, default
+        -- config.threshold_margin), knarr.io/poll-interval (Duration, whole
+        -- seconds from 5 to 300, greater than the install-wide
+        -- config.poll_timeout, default config.poll_interval) and
+        -- knarr.io/patch-interval (Duration, whole seconds from 0 to 3600,
+        -- 0 valid, default config.patch_interval). The ranges are the
+        -- owning modules' (worker_contract Discovery, cost_mapping Tiers,
+        -- budget Interval and PerPod) and are restated here so the parse is
+        -- complete. No other install-wide value has an override: not the
+        -- timeout, jitter, concurrency, LIST interval, bucket, back-off or
+        -- max_body_bytes. Overrides are read from metadata.annotations
+        -- only; a label under the prefix other than knarr.io/enabled is
+        -- never read as an override and is an unknown key under Unknown.
+    @invariant Syntax
+        -- Every value is parsed from its annotation string after leading
+        -- and trailing whitespace, ASCII space, tab, carriage return and
+        -- line feed, is trimmed. An integer is decimal digits
+        -- only: no sign, no leading zero except the single digit 0, no
+        -- fraction, exponent or unit, so "30" is thirty seconds and "30s",
+        -- "+30", "030" and "1m" are invalid. A duration is such an integer
+        -- read as whole seconds. The threshold list is integers separated
+        -- by commas, each trimmed, so "300, 900" and "300,900" are equal; an
+        -- empty string, an empty member, a trailing comma, a duplicate, a
+        -- member that is not an integer as above, a 0, a member above
+        -- 2147483647, which cost_mapping's Clamp makes unreachable, and a
+        -- member not
+        -- greater than the one before it are invalid. The path is taken as
+        -- written after trimming. A Boolean is the string "true" exactly.
+    @invariant Effective
+        -- parse returns the effective settings: for each of the six keys
+        -- the override when it is present and valid, else the default; and
+        -- safe_to_evict as SafeToEvict says. Validity is decided after the
+        -- defaults are filled in, so the two cross-value rules read
+        -- effective values: knarr.io/poll-interval is valid only when
+        -- greater than defaults.poll_timeout, which no Deployment
+        -- overrides; knarr.io/threshold-margin, and the default margin when
+        -- that key is absent, must be below the first effective threshold.
+        -- A thresholds override that is itself valid and drops the first
+        -- threshold to or below the effective margin therefore makes the
+        -- margin invalid: the override is ignored when present and the
+        -- default when not, and the effective margin is 0, which satisfies
+        -- cost_mapping's Tiers for any first threshold, and invalid names
+        -- knarr.io/threshold-margin with that reason, carrying as value the
+        -- text found or, when the key is absent, the default rendered as
+        -- its decimal digits, so InvalidValue's memory has a text to key
+        -- on. The overrides and the
+        -- opt-in are read on the discovery cycle, so an override added,
+        -- changed or removed, and an opt-in or opt-out, take effect at the
+        -- next cycle and not before: a changed poll interval applies from
+        -- each pod's next rung on budget's ladder, with no rephase and no
+        -- pod re-added to the schedule; a changed patch interval from the
+        -- pod's next attempt; changed thresholds or margin from the pod's
+        -- next reading. The pods of a Deployment that opted out, or that
+        -- was deleted, leave the target set at that cycle: leaving returns
+        -- the pod names in previous and not in current that the cycle's
+        -- pod LIST still shows, so a pod that is simply gone is not named,
+        -- and lifecycle's cleanup reads the list (ticket 23); nothing here
+        -- writes to them, and a named pod whose deletionTimestamp is set is
+        -- still not patched, under k8s_client's NoPatchWhileTerminating. On
+        -- the first cycle previous is empty and leaving returns nothing.
+    @invariant InvalidValue
+        -- A key whose value does not parse under Syntax or is outside its
+        -- range or cross-value rule under Keys and Effective is invalid:
+        -- that key alone is ignored and its fallback stands, which is its
+        -- default, or 0 for knarr.io/threshold-margin under Effective's
+        -- cross-value rule; every other key
+        -- keeps its own result, and the Deployment stays opted in with its
+        -- pods polled and patched. invalid returns one entry per invalid
+        -- key, with the full key, the value text found and a reason, and
+        -- parse and invalid agree: a key invalid returns is one parse read
+        -- as its fallback. One Event is raised on the Deployment, named by
+        -- the Target's deployment_name and deployment_uid, per invalid
+        -- key, on entry: when the key first reads invalid, and again when
+        -- its invalid value text changes; none while it reads the same
+        -- invalid text cycle after cycle, and none when it becomes valid or
+        -- is removed. The remembered text is keyed by Deployment uid and
+        -- key, is forgotten when the key reads valid or is absent or the
+        -- Deployment leaves the target set, so the same typo made again
+        -- after a fix raises again, and is kept in process only, so the
+        -- first cycle after a restart raises each Event once more. message
+        -- renders "<key>: <value> is invalid, <reason>; <fallback> stands",
+        -- with the trimmed value text in quotes and "the default" or "0"
+        -- for the fallback; the Event's reason and the
+        -- create are observability's and k8s_client's (tickets 30 and 41).
+    @invariant SafeToEvict
+        -- A Deployment opts into the safe-to-evict policy with the
+        -- annotation knarr.io/safe-to-evict whose value, trimmed as
+        -- Syntax says, is "true"; Settings.safe_to_evict is true for that
+        -- and false when the
+        -- annotation is absent. Any other value is an invalid key under
+        -- InvalidValue: the default, off, stands and one Event names it.
+        -- This module owns the key and its parse; what knarr writes while
+        -- the opt-in is on, and the threshold it writes at, are
+        -- safe_to_evict's (ticket 25), and what an opt-out leaves on a pod
+        -- is lifecycle's (ticket 23) under ownership's Adoption.
+    @invariant Unknown
+        -- A label under the prefix other than knarr.io/enabled, and an
+        -- annotation under the prefix other than the six override keys and
+        -- knarr.io/safe-to-evict, are unknown keys, so an annotation
+        -- knarr.io/enabled and a label knarr.io/status-port are both
+        -- reported: unknown returns each as "label <key>" or
+        -- "annotation <key>", naming the map, it changes no
+        -- setting and raises no Event, and knarr logs it once per discovery
+        -- cycle in which it is present, at the cadence observability
+        -- settles (ticket 30), so a mistyped key is findable. A key outside
+        -- the prefix is not knarr's and is not reported.
+    @invariant UnsupportedKinds
+        -- knarr performs no detection of a StatefulSet, Job, DaemonSet or
+        -- any other workload kind: it lists no resource but Deployments,
+        -- ReplicaSets and pods, so an object of another kind carrying the
+        -- opt-in label is never seen, and a pod of one, a bare pod or an
+        -- orphan ReplicaSet is not matched by Discovery and is not polled.
+        -- That those kinds are unsupported is documented (§3 non-goals, the
+        -- operations guide of ticket 34), not refused or warned about; the
+        -- Role reaches no resource beyond pods, replicasets, deployments
+        -- and events.
+    @invariant Installed
+        -- Every config.<key> any module declares is install-wide OTP
+        -- application configuration, the mechanism knarr's Listening uses
+        -- for the bind address, with the default and valid range its
+        -- owning module states: worker_contract's status_path, status_port
+        -- and max_body_bytes, cost_mapping's thresholds and
+        -- threshold_margin, and budget's ten. The caller reads them once
+        -- into Defaults; this module declares no config of its own, since
+        -- the prefix is fixed by Prefix and every overridable value already
+        -- lives in its owning module's block.
+    @invariant Pure
+        -- Every signature is a function of its arguments alone: the
+        -- install-wide values arrive in defaults and the LIST results in
+        -- deployments, replicasets and pods, and nothing here reads the
+        -- cluster, a clock, application configuration or state, or sends.
+        -- The LISTs are k8s_client's injected effects on budget's timer,
+        -- the Event create is k8s_client's, and the discovery process that
+        -- keeps the target set and the invalid-key memory is ticket 31's,
+        -- under supervision.
+}
 
 ------------------------------------------------------------
 -- Open Questions
 ------------------------------------------------------------
 
-open question "§9.1 Schema: the label and annotation key prefix knarr owns, and which keys are labels and which are annotations."
-open question "§9.1 Opt-in: how a Deployment opts in, and what the discovery LIST selects on (§4)."
-open question "§9.1 Overrides: which tuning values a Deployment may override (endpoint, the thresholds and margin, unreachable windows, staleness, poll and write limits) and the valid range of each, taken from the owning ticket. From budget (ticket 24): poll_interval, whole seconds from 5 to 300, default config.poll_interval (30), valid only when greater than the install-wide poll_timeout; patch_interval, whole seconds from 0 to 3600, default config.patch_interval (60). The timeout has no override."
-open question "§9.1 Opt-in for safe-to-evict: how a workload enables the per-workload safe-to-evict policy, which is off by default (§6)."
-open question "§9.1 Invalid values: what knarr does with an unparsable or out-of-range value (ignore the key, ignore the workload, Event)."
-open question "§9.1 Unsupported kinds: whether knarr refuses or warns when pointed at a StatefulSet, Job or DaemonSet, and how (§3 non-goals)."
+open question "§9.1 Overrides from 21: whether the unreachable windows reconcile settles (ticket 21) gain a per-Deployment override, with its default and range; any such key is an annotation under knarr.io/, hyphenated after its config.<key>, parsed and invalidated under this module's Syntax, Effective and InvalidValue."
+open question "§9.1 Overrides from 23: whether the staleness and expiry values lifecycle settles (ticket 23) gain a per-Deployment override, with its default and range, under the same rule as the override from 21."
+open question "§9.1 Overrides from 25: whether the safe-to-evict threshold safe_to_evict settles (ticket 25) gains a per-Deployment override, with its default and range, under the same rule as the override from 21."

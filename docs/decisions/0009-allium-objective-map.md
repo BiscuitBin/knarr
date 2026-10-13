@@ -21,7 +21,7 @@ requires: []
 | Module | Scope | Owner |
 | --- | --- | --- |
 | `worker_contract` | What a worker pod exposes and what each field means: endpoint shape, discovery, auth, NetworkPolicy compatibility, drain-state meaning, readiness guidance | 18 |
-| `config` | Every label and annotation knarr reads, its type, default, validation and invalid-value behaviour; unsupported kinds; the target set in one namespace | 19 |
+| `config` | Every label and annotation knarr reads, its type, default, validation and invalid-value behaviour, under the fixed `knarr.io/` prefix; the opt-in label and the owner-chain target set in one namespace; unsupported kinds documented, not detected | 19 |
 | `cost_mapping` | The pure mapping from cost and `accepting` to the emitted `pod-deletion-cost` value: sign convention, absent, drained, clamp, canonical int32, thresholds and margin. Named `banding` until ticket 20 settled that there are no bands | 20 |
 | `reconcile` | The per-pod loop: poll outcome to pod state, desired state against last applied, patch on meaningful change, pending changes, no patches after `deletionTimestamp`, rollouts untouched | 21, then 31 |
 | `ownership` | What knarr may write and how: owned annotations only, live Pods, `metadata.annotations` only, never the pod template, never replicas; the `knarr.io/applied` marker, the JSON Patch write mode with its `test` preconditions, the standing of each owned annotation, the yield for the pod's life and the Event it raises, rejected patches | 22, then 32 |
@@ -61,7 +61,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 
 | Behaviour | § | Module | Class | Owner |
 | --- | --- | --- | --- | --- |
-| Discover opted-in pods by a periodic LIST scoped to one namespace and selector | §4.1 | `config` | decided | 31 |
+| Discover opted-in pods by a periodic discovery cycle scoped to one namespace: the Deployment LIST on the opt-in label, pods matched by owner chain (settled by 19) | §4.1 | `config` | decided | 31 |
 | The LIST runs on its own cadence, slower than polling | §4.1 | `budget` | decided | 24 |
 | Poll with jitter, no overlapping polls of one pod, and bounded concurrency | §4.2 | `budget` | decided | 24 |
 | The per-poll timeout, shorter than the poll interval | §4.2, §9.8 | `budget` | open | 24 |
@@ -115,7 +115,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 | JSON Patch with `test` preconditions on `deletionTimestamp`, the marker and the applied value | §6, §9.10 | `ownership` | open | 22 |
 | Sign convention and what an absent annotation means | §6, §9.5 | `cost_mapping` | open | 20 |
 | No values reserved for knarr's own states | §6, §9.5 | `cost_mapping` | open | 20 |
-| `safe-to-evict` is off by default, enabled per workload | §6 | `config` | decided | 19 |
+| `safe-to-evict` is off by default, enabled per workload (the key and its parse are 19's; the gate's behaviour is 25's) | §6 | `config` | decided | 19 |
 | knarr manages only `"false"` or removes the annotation | §6, §9.9 | `safe_to_evict` | open | 25 |
 | `"false"` above a threshold, removal below; local-storage pods | §6, §9.9 | `safe_to_evict` | open | 25 |
 | Mark only high-cost pods so nodes still scale down | §6, §9.9 | `safe_to_evict` | open | 25 |
@@ -135,7 +135,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 
 | Behaviour | § | Module | Class | Owner |
 | --- | --- | --- | --- | --- |
-| A small client module: get, list, patch on pods; get, list on Deployments and ReplicaSets | §8, §9.2 | `k8s_client` | blocked on S1 | 14 |
+| A small client module: list, patch on pods; list on Deployments and ReplicaSets; create on Events (`get` dropped by 19 with 22's `Verbs`) | §8, §9.2 | `k8s_client` | blocked on S1 | 14 |
 | Explicit ssl options, the service-account CA, a hostname check, OTP 26 or later; IP-SAN verification unverified | §8 | `k8s_client` | blocked on S1 | 14 |
 | Re-read the token periodically; never cache it for the process lifetime | §8 | `k8s_client` | blocked on S1 | 14 |
 | The verbs the minimum Role grants | §8 | `k8s_client` | blocked on S1 | 14 |
@@ -201,7 +201,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 - Every elicitation ticket starts from a module the gate accepts and deletes open questions as it settles them. A module whose questions are all gone and whose clauses are all in is done.
 - Ticket 30 is a new elicitation ticket, and 31 to 34 are round 2. The bootstrap README's graph and waves table carry them, and the longest chain grows from nine tickets to eleven.
 - Tickets 14, 15, 16 and 28, Decision 0007 and DEFERRED.md own rows that 17's definition of an owner does not cover. If any is reshaped, the rows here move with it.
-- The class of a row is a reading of the overview on 2026-10-08. A ticket that finds the overview wrong amends the overview, and this map follows. Ticket 20 did so on 2026-10-10: it renamed `banding` to `cost_mapping`, settled quantization and reserved bands as none and hysteresis as a margin below each threshold, and amended OVERVIEW §4, §5 and §6 to match; the rows above keep their 2026-10-08 class and follow the amended text, as 18's rows do. Ticket 22 did so on 2026-10-12: it settled the marker as `knarr.io/applied`, the write mode as a JSON Patch with `test` preconditions and the back-off as a yield for the pod's life, and amended OVERVIEW §6, §8 and §9.10 to match; its rows keep their class the same way, and tickets 32 and 41 are amended rather than a new follow-up drafted. Ticket 24 did so on 2026-10-12: it settled the feature-gate prerequisite as documented only, with no startup or periodic check, and the schedule, concurrency and write budget with their defaults, and amended OVERVIEW §4, §6, §8 and §9 to match; its rows likewise keep their class.
+- The class of a row is a reading of the overview on 2026-10-08. A ticket that finds the overview wrong amends the overview, and this map follows. Ticket 20 did so on 2026-10-10: it renamed `banding` to `cost_mapping`, settled quantization and reserved bands as none and hysteresis as a margin below each threshold, and amended OVERVIEW §4, §5 and §6 to match; the rows above keep their 2026-10-08 class and follow the amended text, as 18's rows do. Ticket 22 did so on 2026-10-12: it settled the marker as `knarr.io/applied`, the write mode as a JSON Patch with `test` preconditions and the back-off as a yield for the pod's life, and amended OVERVIEW §6, §8 and §9.10 to match; its rows keep their class the same way, and tickets 32 and 41 are amended rather than a new follow-up drafted. Ticket 24 did so on 2026-10-12: it settled the feature-gate prerequisite as documented only, with no startup or periodic check, and the schedule, concurrency and write budget with their defaults, and amended OVERVIEW §4, §6, §8 and §9 to match; its rows likewise keep their class. Ticket 19 did so on 2026-10-12, recorded on 2026-10-13: it settled the schema as one opt-in label and hyphenated override annotations under a fixed `knarr.io/` prefix, discovery as three LISTs matched by owner chain, an invalid value as ignored per key with one Event, and the §3 non-goal as documented rather than refused or warned about, and amended OVERVIEW §3, §4, §6, §8 and §9.1 to match; the `safe-to-evict` opt-in key moved to 19 with the gate staying 25's, and its rows keep their class.
 
 ## What would reopen this
 

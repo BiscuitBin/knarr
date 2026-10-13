@@ -124,7 +124,7 @@ Knarr's primary mechanism covers **Path A**. In the MVP, `safe-to-evict` is the 
 
 - **A hard guarantee that busy pods are never killed.** If every pod is busy, or costs are stale, a busy pod can still be removed. The real safety net is `terminationGracePeriodSeconds` plus graceful drain in the worker. Users who need a hard guarantee should look at pod-per-job designs (KEDA ScaledJob) or at workload APIs that let you name the victim (for example OpenKruise CloneSet `podsToDelete`).
 - **Deciding how many replicas run** (option (a)). The MVP influences which pod is removed, not how many. Scale-in on busy workers caused by backlog-only metrics is outside the MVP. The planned option (b) follow-up could help with a suitable aggregate metric (§7). HPA scale-down tuning only delays it.
-- **StatefulSets, Jobs and DaemonSets.** Their controllers ignore `pod-deletion-cost` (StatefulSet removes pods by descending ordinal). Knarr should refuse or warn when pointed at them.
+- **StatefulSets, Jobs and DaemonSets.** Their controllers ignore `pod-deletion-cost` (StatefulSet removes pods by descending ordinal). Knarr documents that they are unsupported rather than detecting them: it lists only Deployments, ReplicaSets and pods, so a labelled object of another kind is never seen and its pods are never matched (the `UnsupportedKinds` clause of [config.allium](specs/config.allium)).
 - **Karpenter.** Not a target; details in [DEFERRED.md §7](DEFERRED.md#7-karpenter).
 - **Steering which ReplicaSet loses pods during a rollout.** The API does not allow this.
 - **Managing PodDisruptionBudgets.** Possible later work, for example a label-selected PDB on busy pods.
@@ -156,13 +156,13 @@ flowchart LR
     O["Replica owner: HPA / KEDA"] -- sets replicas --> API
 ```
 
-1. **Discover.** Find the worker pods of Deployments opted in through labels and annotations, in Knarr's one namespace (§9.1, §9.18). Use a periodic LIST scoped by namespace and selector, on its own cadence and slower than polling. Watch deferred ([DEFERRED.md §6](DEFERRED.md#6-watch-based-discovery)).
-2. **Poll.** Send an HTTP GET to each pod's status endpoint (§5). Keep the per-poll timeout shorter than the interval, jitter the schedule, never overlap two polls of the same pod, and bound concurrency. By default the interval is 30 s and the timeout 5 s. Each pod joins the schedule at a random phase within one interval, and each later poll is due one interval after the previous due time plus a jitter of up to 10% by default. At most 64 polls by default are in flight per install; a due poll waits in a queue beyond that, and a poll that falls due while one of the same pod is outstanding is skipped. The LIST of pods and Deployments runs on its own timer, every 60 s by default. Every value is install-wide configuration with a valid range, and the poll interval may be overridden per Deployment. Settled in [budget.allium](specs/budget.allium).
+1. **Discover.** Find the worker pods of Deployments opted in with the label `knarr.io/enabled: "true"`, in Knarr's one namespace (§9.1, §9.18). Each discovery cycle lists the namespace's Deployments selected on that label, and its ReplicaSets and pods unselected, and matches each pod to its Deployment by the owner chain Pod → ReplicaSet → Deployment, by uid. Overrides are annotations on the Deployment object, so tuning never touches the pod template. The cycle runs on its own cadence, slower than polling. Settled in [config.allium](specs/config.allium). Watch deferred ([DEFERRED.md §6](DEFERRED.md#6-watch-based-discovery)).
+2. **Poll.** Send an HTTP GET to each pod's status endpoint (§5). Keep the per-poll timeout shorter than the interval, jitter the schedule, never overlap two polls of the same pod, and bound concurrency. By default the interval is 30 s and the timeout 5 s. Each pod joins the schedule at a random phase within one interval, and each later poll is due one interval after the previous due time plus a jitter of up to 10% by default. At most 64 polls by default are in flight per install; a due poll waits in a queue beyond that, and a poll that falls due while one of the same pod is outstanding is skipped. The LISTs of pods, ReplicaSets and Deployments run as one discovery cycle on its own timer, every 60 s by default. Every value is install-wide configuration with a valid range, and the poll interval may be overridden per Deployment. Settled in [budget.allium](specs/budget.allium).
 3. **Map.** Treat the worker-supplied cost as untrusted input. Clamp it and combine it with the accepting state. The annotation carries that value itself, with no bands: the cost is written when it crosses a configured threshold and is absent below the first, and a draining pod below the first threshold carries `-1`, entered and left on the reading that says so; [cost_mapping.allium](specs/cost_mapping.allium) settles this. From it, derive the pod's full **desired annotation state**: the cost value, the opt-in `safe-to-evict` value, and Knarr's ownership marker.
 4. **Patch only on meaningful change.** Compare the desired state with the last successfully applied state. That covers threshold crossings, a drain-state change, first annotation, startup repair, cleanup and `safe-to-evict` flips. Every annotation write goes through one rate-limited patcher, with a per-pod minimum interval (60 s by default from the pod's last patch attempt, whatever its outcome, overridable per Deployment) and a global token bucket (5 patches per second with a burst of 10 by default). Changes that are throttled stay pending and are not dropped. Settled in [budget.allium](specs/budget.allium).
 5. **Skip terminating pods.** Once a pod has `deletionTimestamp` set, the ReplicaSet no longer counts it, so Knarr stops patching it. Knarr may keep polling it for observability.
 
-Knarr annotates **live Pod objects**, never the Deployment's pod template. Changing the template would trigger a rollout. Changing annotations on a running pod does not restart it.
+Knarr annotates **live Pod objects**, never the Deployment's pod template. Changing the template would trigger a rollout. Changing annotations on a running pod does not restart it, and the opt-in label and every override sit on the Deployment object rather than its template for the same reason.
 
 ### End-to-end scale-down
 
@@ -389,7 +389,7 @@ Whether this matters **depends on cluster configuration**: it only has an effect
 
 - `"false"` stops CA from removing the pod's node. `"true"` overrides CA's default blockers for kube-system pods, pods without a controller, and pods with local storage. It does not override scheduling constraints, and the Eviction API still enforces PDBs when the eviction is carried out. Knarr only manages `"false"` or removes the annotation (plus `"true"` if §9.9 calls for it). CA also recognizes other values (see [DEFERRED.md §8](DEFERRED.md#8-other-future-targets)). Check CA semantics against the CA version the cluster runs.
 - **Unverified (spike S2):** whether CA re-checks pod annotations just before evicting. If it does, a flip to `"false"` that reaches CA's informer in time can save the node. A pod that picks up work just after a poll is unprotected until the next poll and patch. This is best-effort.
-- **Decided:** off by default and enabled per workload. **Recommended (§9.9):** set `"false"` while the cost is above a threshold and remove the annotation when it drops below. For Deployment pods without local storage, removing it is enough. Pods with `emptyDir` or `hostPath` volumes may need `"true"` (or `safe-to-evict-local-volumes`) to be evictable when idle.
+- **Decided:** off by default and enabled per workload with the annotation `knarr.io/safe-to-evict: "true"` on the Deployment (the `SafeToEvict` clause of [config.allium](specs/config.allium)). **Recommended (§9.9):** set `"false"` while the cost is above a threshold and remove the annotation when it drops below. For Deployment pods without local storage, removing it is enough. Pods with `emptyDir` or `hostPath` volumes may need `"true"` (or `safe-to-evict-local-volumes`) to be evictable when idle.
 - **Risk: nodes may never scale down.** If `"false"` markers are spread across all nodes, CA never sees a node as unneeded, and CA does not cordon nodes because of such pods (kubernetes/autoscaler #3183). Mitigation: mark only high-cost pods, not every busy pod.
 - **Unverified:** whether flipping a pod from busy to idle resets CA's per-node "unneeded" timer (default 10 min). See spike S2.
 - **GKE:** the MVP targets GKE Standard, so spike S2 must run against GKE's managed Cluster Autoscaler. Other GKE modes are in [DEFERRED.md §8](DEFERRED.md#8-other-future-targets).
@@ -428,8 +428,8 @@ This is concept level only. Module boundaries and process layout will be refined
 
 ```text
 knarr_sup (one_for_one)
-├── config          : target workloads and settings from labels/annotations, one namespace (§9.1)
-├── k8s_client      : in-cluster auth, list/get/patch; pure Gleam + Erlang FFI (§9.2)
+├── config          : target workloads and settings from the opt-in label and override annotations, one namespace (§9.1, settled in config.allium)
+├── k8s_client      : in-cluster auth, list/patch; pure Gleam + Erlang FFI (§9.2)
 ├── pod_discovery   : periodic LIST of target pods (watch deferred)
 ├── poller_pool     : bounded-concurrency HTTP polling of pod status endpoints
 ├── reconciler      : clamp → map at thresholds → decide patch
@@ -452,7 +452,7 @@ flowchart TB
     PD -- "target pods" --> PP
     PP -- "poll results" --> RC
     RC -- "desired annotations" --> PT
-    CFG -- "GET, LIST Deployments" --> KC
+    CFG -- "LIST Deployments, ReplicaSets" --> KC
     PD -- "LIST pods" --> KC
     PT -- "PATCH, rate-limited" --> KC
     KC -- "HTTPS, verified TLS,<br/>SA token" --> API[(kube-apiserver)]
@@ -461,14 +461,14 @@ flowchart TB
 ```
 
 - **Supervision (recommended):** `gleam_otp` (static and factory supervisors, actors). Its docs say it does not cover all of OTP, so fall back to raw Erlang OTP where needed.
-- **Kubernetes client boundary:** keep it behind a small Gleam module so the client choice stays reversible ([DEFERRED.md §3](DEFERRED.md#3-kubernetes-client-alternatives)). No mature Gleam-native Kubernetes client was found. Knarr needs little from the API: get, list and patch on pods; get and list on Deployments and ReplicaSets.
+- **Kubernetes client boundary:** keep it behind a small Gleam module so the client choice stays reversible ([DEFERRED.md §3](DEFERRED.md#3-kubernetes-client-alternatives)). No mature Gleam-native Kubernetes client was found. Knarr needs little from the API: list and patch on pods; list on Deployments and ReplicaSets; create on Events (the `Verbs` clause of [k8s_client.allium](specs/k8s_client.allium)).
 - **In-cluster TLS** is the hard part of option (A). The cluster CA is not in the OS trust store, so a small Erlang FFI step is likely needed. Do not rely on `httpc` defaults. `gleam_httpc` passes no ssl options when verification is on, so it inherits `httpc`'s defaults, and those only became verifying in OTP 26 (Inets 9.0). Pass explicit ssl options instead: `verify_peer`, the service-account `ca.crt` as `cacertfile`, and a hostname check. Require OTP 26 or later. Spike S1 verified that the hostname check passes against the IP literal in `KUBERNETES_SERVICE_HOST` ([Decision 0013](decisions/0013-in-cluster-client.md)).
 - **Tokens:** projected service-account tokens rotate on disk. Re-read the token periodically and never cache it for the life of the process.
 - **Single replica, `Recreate` strategy:** no leader election. `Recreate` avoids two replicas writing at once, but leaves a short gap with no updates during upgrades. HA notes are in [DEFERRED.md §4](DEFERRED.md#4-ha-and-leader-election).
 - **Restart safety and staleness:** derive state from the current poll, the current annotations, and Knarr's marker annotation `knarr.io/applied`, which holds, per owned annotation, what Knarr applied or that it yielded, and the time of Knarr's last write to the pod; its shape is settled in the `Recorded` clause of [ownership.allium](specs/ownership.allium). Do not rely on in-memory counters. On startup, reconcile every pod that carries the marker. **Open tension:** writes are sparse, so after a restart a last-written timestamp cannot tell "the same cost reported for hours" from "hours of failed polls". Freshness semantics and conservative restart behavior go in §9.12. Document uninstall and manual recovery, for example `kubectl annotate pod <p> cluster-autoscaler.kubernetes.io/safe-to-evict-`, and the release of a yield, which removes the marker together with every owned annotation: `kubectl annotate pod <p> knarr.io/applied- controller.kubernetes.io/pod-deletion-cost- cluster-autoscaler.kubernetes.io/safe-to-evict-`.
 - **Minimum RBAC (one namespaced Role; inferred from the standard RBAC model, to be confirmed):**
-  - core `pods`: get, list, patch (watch later, if watch-based discovery is adopted)
-  - `apps` `deployments`, `replicasets`: get, list (watch later)
+  - core `pods`: list, patch (watch later, if watch-based discovery is adopted)
+  - `apps` `deployments`, `replicasets`: list (watch later)
   - core or `events.k8s.io` `events`: create, for the Events Knarr raises (§5, §8); the at most one per yield is fixed in the `Event` clause of [ownership.allium](specs/ownership.allium) and ticket 41 builds the create
 
 ### Failure modes (proposed v1 defaults, all to be confirmed in tickets)
@@ -510,7 +510,7 @@ flowchart LR
 - **S1:** pure-Gleam in-cluster list and patch on kind, on OTP 26 or later with explicit ssl options. Pass requires verified TLS (including IP-SAN verification against `KUBERNETES_SERVICE_HOST`), a negative test showing that a wrong CA is rejected, and working token reload. The result validates §9.2. Settled in [Decision 0013](decisions/0013-in-cluster-client.md).
 - **S2:** how CA behaves when `safe-to-evict` flips, on GKE Standard's managed Cluster Autoscaler, including whether flips reset the per-node unneeded timer. The result decides §9.9.
 
-1. **Decided:** a controller configured through labels and annotations on Deployments (see §4, [DEFERRED.md §5](DEFERRED.md#5-install-scope-and-configuration-alternatives)). **Open:** the label/annotation schema.
+1. **Decided:** a controller configured through labels and annotations on Deployments (see §4, [DEFERRED.md §5](DEFERRED.md#5-install-scope-and-configuration-alternatives)). The schema is settled in [config.allium](specs/config.allium): one opt-in label, `knarr.io/enabled: "true"`, which the Deployment LIST selects on; six override annotations under the fixed `knarr.io/` prefix (`status-port`, `status-path`, `thresholds`, `threshold-margin`, `poll-interval`, `patch-interval`), plus `knarr.io/safe-to-evict: "true"` for the opt-in policy; an invalid value falls to its default (or to 0 for the margin when an overriding threshold list undercuts it) with one Event on the Deployment and the Deployment stays opted in; unsupported kinds are documented, not detected. Overrides 21, 23 and 25 may add stay open there.
 2. **Decided:** k8s client option (A), pure Gleam plus Erlang FFI, until complexity pushes us elsewhere (see §8, [DEFERRED.md §3](DEFERRED.md#3-kubernetes-client-alternatives)).
 3. **Decided:** scaling ownership option (a), annotations only (see §7). (b) is a planned quick follow ([DEFERRED.md §1](DEFERRED.md#1-scaling-option-b-quick-follow)).
 4. **Worker contract details**, split in two and settled in [worker_contract.allium](specs/worker_contract.allium), except the per-poll timeout, which is §9.8's:
