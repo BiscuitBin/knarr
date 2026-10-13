@@ -22,6 +22,7 @@ WORKFLOWS = sorted(
     [*GITHUB.glob("workflows/*.y*ml"), *GITHUB.glob("actions/*/action.y*ml")],
 )
 RELEASE = GITHUB / "workflows/release.yml"
+AUDIT = GITHUB / "workflows/audit.yml"
 PINNED_USES = re.compile(r"[^@\s]+@[0-9a-f]{40} # v\d+\.\d+\.\d+")
 VERSION_TAGS = [
     "on:",
@@ -338,3 +339,16 @@ def test_release_builds_only_the_commit_verify_checked() -> None:
     assert 'for t in $(tags_for "$TAG" "$COMMIT"); do set -- "$@" --tag "$IMAGE:$t"; done' in steps
     assert '--label "org.opencontainers.image.revision=$COMMIT" \\' in steps
     assert not any("git rev-parse" in line for line in steps[steps.index(MOVED_TAG_GUARD[-1]) :])
+
+
+def test_audit_scans_the_runtime_environment_after_a_red_image_scan_but_not_without_an_image() -> (
+    None
+):
+    # The OS-package scan is red until Ubuntu republishes libssl3t64 (Decision
+    # 0014), and a step after a failed one is skipped unless its `if:` says so.
+    steps = [line.strip() for line in jobs(AUDIT.read_text())["image-scan"]]
+    build = steps.index("- id: build")
+    assert steps[build + 1] == "run: just image-build"
+    guard = steps.index("- if: ${{ !cancelled() && steps.build.outcome == 'success' }}")
+    assert steps[guard + 1] == "run: just runtime-scan"
+    assert build < steps.index("- run: just image-scan") < guard

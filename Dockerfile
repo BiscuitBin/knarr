@@ -10,6 +10,12 @@ RUN gleam deps download
 COPY src src
 RUN gleam export erlang-shipment \
     && erl -noshell -eval 'io:put_chars(erlang:system_info(otp_release)), halt().' > /opt/build-otp
+# conda-forge's perl 5.32.1 is in the runtime environment only as erlang's
+# dependency, and nothing the image runs uses it. Its fixable CVEs go with it
+# (ticket 45); just image-check reruns Decision 0003's TLS check in the pruned
+# image. Ubuntu's own perl-base stays.
+COPY scripts/prune_runtime.py scripts/
+RUN .pixi/envs/default/bin/python -I scripts/prune_runtime.py .pixi/envs/runtime perl
 
 FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55 AS runtime
 WORKDIR /opt/knarr

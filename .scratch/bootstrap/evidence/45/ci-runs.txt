@@ -1,0 +1,56 @@
+== audit.yml
+run: https://github.com/steven-cutting/knarr/actions/runs/38354220003
+event: workflow_dispatch on 45-scan-image-runtime-environment at 937c8d3, 2026-10-13T05:59:05Z
+status: completed, failure
+-- jobs
+External links: success, 2026-10-13T05:59:09Z to 2026-10-13T05:59:28Z
+Hex advisories: success, 2026-10-13T05:59:09Z to 2026-10-13T05:59:27Z
+Image scan: failure, 2026-10-13T05:59:09Z to 2026-10-13T06:00:58Z
+-- Image scan: steps
+Set up job: success
+Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1: success
+Run ./.github/actions/setup: success
+Run just image-build: success
+Run just image-scan: failure
+Run just runtime-scan: success
+Post Run ./.github/actions/setup: success
+Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1: success
+Complete job: success
+-- Image scan: just image-build (the perl prune), just image-scan, just runtime-scan
+#21 0.512 prune_runtime: removed perl (perl-5.32.1-10_h7cc23a3_perl5.json, 2458 files)
+grype "$1" --only-fixed --fail-on high
+NAME        INSTALLED           FIXED IN            TYPE  VULNERABILITY   SEVERITY  EPSS         RISK   
+libssl3t64  3.0.13-0ubuntu3.15  3.0.13-0ubuntu3.16  deb   CVE-2026-84782  High      0.4% (31st)  0.3    
+libssl3t64  3.0.13-0ubuntu3.15  3.0.13-0ubuntu3.16  deb   CVE-2026-75806  Low       0.4% (30th)  0.1    
+libssl3t64  3.0.13-0ubuntu3.15  3.0.13-0ubuntu3.16  deb   CVE-2026-35189  Low       0.3% (17th)  < 0.1  
+libssl3t64  3.0.13-0ubuntu3.15  3.0.13-0ubuntu3.16  deb   CVE-2026-54872  Low       0.3% (16th)  < 0.1  
+libssl3t64  3.0.13-0ubuntu3.15  3.0.13-0ubuntu3.16  deb   CVE-2026-77696  Low       0.2% (14th)  < 0.1  
+libssl3t64  3.0.13-0ubuntu3.15  3.0.13-0ubuntu3.16  deb   CVE-2026-75805  Low       0.2% (11th)  < 0.1
+error: recipe `image-scan` failed on line 210 with exit code 2
+No vulnerabilities found
+runtime-scan: grype catalogued 12 conda packages in /opt/knarr/.pixi/envs/runtime of knarr:knarr-12fc945d and found no fixable high or critical vulnerability in the copy
+== ci.yml
+run: https://github.com/steven-cutting/knarr/actions/runs/38354554080
+event: pull_request on 45-scan-image-runtime-environment at 937c8d3, 2026-10-13T06:02:41Z
+status: completed, success
+-- Kind smoke: conclusion
+success
+-- Kind smoke: just image-check (the TLS check in the pruned image)
+#21 0.761 prune_runtime: removed perl (perl-5.32.1-10_h7cc23a3_perl5.json, 2458 files)
+date: 2026-10-13T06:04Z
+host: Linux x86_64
+env: /opt/knarr/.pixi/envs/runtime
+openssl: OpenSSL 3.6.5 29 Sep 2026 (Library: OpenSSL 3.6.5 29 Sep 2026) (/opt/knarr/.pixi/envs/runtime/bin/openssl)
+escript: /opt/knarr/.pixi/envs/runtime/bin/escript
+server.pem: OK
+server-dns.pem: OK
+otp_release 29, erts 17.1
+ssl:versions() ['tlsv1.3','tlsv1.2']
+ok   right CA, by name localhost                  want ok         got {ok,[{protocol,'tlsv1.3'}, {selected_cipher_suite,#{prf => sha384,cipher => aes_256_gcm, key_exchange => any,mac => aead}}]}
+ok   right CA, by IP tuple (IP SAN)               want ok         got {ok,[{protocol,'tlsv1.3'}, {selected_cipher_suite,#{prf => sha384,cipher => aes_256_gcm, key_exchange => any,mac => aead}}]}
+ok   wrong CA (ca-b), by name                     want unknown_ca got {error,{tls_alert,{unknown_ca,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2304 generated CLIENT ALERT: Fatal - Unknown CA\n"}}}
+ok   wrong CA (ca-b), by IP tuple                 want unknown_ca got {error,{tls_alert,{unknown_ca,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2304 generated CLIENT ALERT: Fatal - Unknown CA\n"}}}
+ok   right CA, wrong name (SNI wrong.example)     want hostname   got {error,{tls_alert,{bad_certificate,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2312 generated CLIENT ALERT: Fatal - Bad Certificate\n {bad_cert,\n {hostname_check_failed,\n {requested,\"wrong.example\"},\n {received,[{dNSName,\"localhost\"},{iPAddress,<<127,0,0,1>>}]}}}"}}}
+ok   right CA, IP tuple, cert has no IP SAN       want hostname   got {error,{tls_alert,{bad_certificate,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2312 generated CLIENT ALERT: Fatal - Bad Certificate\n {bad_cert,{hostname_check_failed,{requested,{127,0,0,1}},\n {received,[{dNSName,\"localhost\"}]}}}"}}}
+tls_check: all 6 cases matched
+image: OTP 29, numeric user and read-only runtime verified

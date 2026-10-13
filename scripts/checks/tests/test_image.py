@@ -175,6 +175,8 @@ def test_fake_worker_session_runs_a_collector_on_a_private_network(monkeypatch):
         ["docker", "rm", "--force", collector],
         ["docker", "network", "rm", network],
     ]
+    # The runtime environment checks are knarr's: the fixture does not ship.
+    assert not any("/opt/tls-check" in " ".join(command) for command in commands)
 
 
 def test_the_knarr_entrypoint_does_not_pass_as_the_fake_workers(monkeypatch):
@@ -186,3 +188,48 @@ def test_the_knarr_entrypoint_does_not_pass_as_the_fake_workers(monkeypatch):
     monkeypatch.setattr(image.sys, "argv", ["image.py", "--fake-worker", "fake-worker:test"])
     with pytest.raises(RuntimeError, match="descriptor-bounding entrypoint"):
         image.main()
+
+
+COMMON = ["docker", "run", "--read-only", "--tmpfs=/tmp:rw,noexec,nosuid,size=16m"]
+RUNTIME_ENV = "/opt/knarr/.pixi/envs/runtime"
+
+
+def test_knarr_profile_proves_perl_pruned_and_reruns_the_tls_check(monkeypatch):
+    commands = []
+
+    def output(*arguments):
+        commands.append(list(arguments))
+        return "tls_check: all 6 cases matched"
+
+    monkeypatch.setattr(image, "output", output)
+    image.prepare_knarr("knarr:test", COMMON)
+    pruned, tls = commands
+    assert pruned[: len(COMMON)] == COMMON
+    assert pruned[len(COMMON) :][:3] == ["--rm", "--entrypoint=sh", "knarr:test"]
+    assert f"{RUNTIME_ENV}/bin/perl" in pruned[-1]
+    assert f"{RUNTIME_ENV}/conda-meta/perl-*.json" in pruned[-1]
+    assert tls[: len(COMMON)] == COMMON
+    evidence = image.ROOT / ".scratch/bootstrap/evidence/01/tls"
+    assert (evidence / "tls_check.escript").is_file()
+    assert f"--volume={evidence}:/opt/tls-check:ro" in tls
+    assert "--entrypoint=sh" in tls
+    assert tls[-4:] == ["knarr:test", "/opt/tls-check/run.sh", RUNTIME_ENV, "/tmp/tls"]
+
+
+@pytest.mark.parametrize(
+    ("failing", "message"),
+    [
+        pytest.param("bin/perl", "perl is still in the runtime environment", id="perl left"),
+        pytest.param("/opt/tls-check/run.sh", "TLS check failed", id="TLS mismatch"),
+    ],
+)
+def test_knarr_profile_fails_on_a_runtime_environment_check(monkeypatch, capsys, failing, message):
+    def output(*arguments):
+        if any(failing in argument for argument in arguments):
+            raise subprocess.CalledProcessError(1, arguments, output="what the check printed")
+        return ""
+
+    monkeypatch.setattr(image, "output", output)
+    with pytest.raises(RuntimeError, match=message):
+        image.prepare_knarr("knarr:test", COMMON)
+    assert "what the check printed" in capsys.readouterr().out
