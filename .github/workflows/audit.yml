@@ -46,9 +46,10 @@ jobs:
       - run: just hex-audit
 
   # grype over the image the Dockerfile builds, the same linux/amd64 build the
-  # kind smoke job runs. It never pushes the image. It reads the image's OS
-  # packages only, so a pass does not cover the runtime environment's conda
-  # packages: erlang, its openssl and perl (Decision 0014, ticket 45).
+  # kind smoke job runs. It never pushes the image. The image scan reads the
+  # image's OS packages only, so a second scan copies the runtime environment
+  # out of the image and reads its conda packages as a directory: erlang, its
+  # openssl and zlib (Decision 0014, ticket 45).
   image-scan:
     name: Image scan
     runs-on: ubuntu-24.04
@@ -62,5 +63,9 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           audit: "true"
-      - run: just image-build
+      - id: build
+        run: just image-build
       - run: just image-scan
+      # Runs after a red OS-package scan too, but not without an image.
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: just runtime-scan

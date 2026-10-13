@@ -4,10 +4,11 @@
 -- Scope: the in-cluster API boundary (§8, §9.2). Verified TLS with the
 -- service-account CA and an IP-SAN hostname check, token reload from disk,
 -- the operations the reconciler makes and the Role verbs each implies (list
--- and patch on pods, list on ReplicaSets and Deployments, create on core
--- events), the JSON Patch write mode with the preconditions ownership's
--- WriteMode states, the pagination of a LIST and the failures callers
--- branch on, with the status and Retry-After budget reads.
+-- and patch on pods, list on ReplicaSets and on the Deployments config's
+-- Discovery selects, create on core events), the JSON Patch write mode with
+-- the preconditions ownership's WriteMode states, the pagination of a LIST
+-- and the failures callers branch on, with the status and Retry-After
+-- budget reads.
 -- Owner: spike S1 (ticket 14) settled the TLS, token and verb questions in
 -- Decision 0013; ticket 22 amended Verbs, NoPatchWhileTerminating and the
 -- Pod and patch shapes with what the write mode needs (ownership, §9.10);
@@ -144,15 +145,18 @@ contract Client {
         -- There is no get, no watch, no delete and no other resource; the
         -- next LIST, not a GET, is how a caller learns what a pod is now
         -- (ownership Precondition). The Role grants exactly these verbs on
-        -- these resources. A patch is a JSON Patch, content type
-        -- application/json-patch+json, whose body is the document ownership
-        -- renders, sent as given; patch_pod returns the patched pod as the
-        -- newest view ownership's Adoption reads from. The creates are the
-        -- Events observability's Events names, each of type Warning: on a
-        -- Pod by name and uid for AnnotationYielded (ownership's Event),
-        -- PatchRejected and CleanupRejected, and on a Deployment by name and
-        -- uid for ContractAbsent, so the Deployment LIST returns each
-        -- Deployment's uid.
+        -- these resources. The Deployment LIST selects on
+        -- knarr.io/enabled=true, and the pod and ReplicaSet LISTs carry no
+        -- selector, as config's Discovery needs (ticket 19). A patch is a
+        -- JSON Patch, content type application/json-patch+json, whose body
+        -- is the document ownership renders, sent as given; patch_pod
+        -- returns the patched pod as the newest view ownership's Adoption
+        -- reads from. The creates are the Events observability's Events
+        -- names, each of type Warning: on a Pod by name and uid for
+        -- AnnotationYielded (ownership's Event), PatchRejected and
+        -- CleanupRejected, and on a Deployment by name and uid for
+        -- ContractAbsent, so the Deployment LIST returns each Deployment's
+        -- uid.
     @invariant NoPatchWhileTerminating
         -- A pod is not patched when the most recent list shows its
         -- deletion_timestamp set, and every patch tests that

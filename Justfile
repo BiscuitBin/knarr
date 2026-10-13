@@ -202,12 +202,21 @@ hex-audit:
 
 # Fails on a high or critical vulnerability that has a fix. grype downloads its
 # vulnerability database on first use. It reads the image's OS packages only,
-# not the conda records of the runtime environment the image ships, so a pass
-# says nothing about erlang, its openssl or perl (Decision 0014, ticket 45).
+# not the conda records of the runtime environment the image ships; just
+# runtime-scan reads those (Decision 0014, ticket 45).
 [group('audit')]
 [doc('Scan the OS packages of an image for fixable high and critical vulnerabilities with grype (needs network)')]
 image-scan image=cluster_image: audit-tools
     grype "$1" --only-fixed --fail-on high
+
+# grype catalogues conda records in a directory, never in an image, so this
+# copies the runtime environment out of the image into build/runtime-scan and
+# scans the copy with image-scan's thresholds. Exit 2 is a finding; exit 1,
+# including a scan that catalogued no conda package, cannot decide (ticket 45).
+[group('audit')]
+[doc('Scan the conda runtime environment an image ships for fixable high and critical vulnerabilities with grype (needs network)')]
+runtime-scan image=cluster_image: audit-tools
+    python3 scripts/checks/runtime_scan.py "$1"
 
 [private]
 audit-tools:

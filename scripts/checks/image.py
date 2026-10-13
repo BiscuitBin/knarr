@@ -23,6 +23,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 ROOT = Path(__file__).resolve().parents[2]
+RUNTIME_ENV = "/opt/knarr/.pixi/envs/runtime"
+# Decision 0003's Verify 1: Erlang ssl against the openssl CLI's certificates.
+TLS_CHECK = ROOT / ".scratch/bootstrap/evidence/01/tls"
 
 
 @dataclass(frozen=True)
@@ -99,7 +102,49 @@ def verify_knarr(container):
     report_memory(container)
 
 
-def prepare_knarr(_image, _common):
+def checked(failure, *arguments):
+    """`output`, printing what the command printed and raising `failure` if it fails."""
+    try:
+        return output(*arguments)
+    except subprocess.CalledProcessError as error:
+        print(error.output)
+        raise RuntimeError(failure) from error
+
+
+def verify_runtime_environment(image, common):
+    """The Dockerfile prunes perl from the runtime environment (ticket 45). Pruning
+    breaks the lock's guarantee that what was tested is what ships, so the TLS
+    check Decision 0003 names runs again here, with the pruned environment's own
+    erlang and openssl, writing only to the /tmp tmpfs."""
+    checked(
+        "perl is still in the runtime environment",
+        *common,
+        "--rm",
+        "--entrypoint=sh",
+        image,
+        "-c",
+        f"""set -eu
+test -d {RUNTIME_ENV}/conda-meta || {{ echo 'no conda-meta in {RUNTIME_ENV}'; exit 1; }}
+test ! -e {RUNTIME_ENV}/bin/perl || {{ echo '{RUNTIME_ENV}/bin/perl'; exit 1; }}
+for record in {RUNTIME_ENV}/conda-meta/perl-*.json; do test ! -e "$record" || {{ echo "$record"; exit 1; }}; done""",
+    )
+    print(
+        checked(
+            "TLS check failed in the pruned runtime environment",
+            *common,
+            "--rm",
+            f"--volume={TLS_CHECK}:/opt/tls-check:ro",
+            "--entrypoint=sh",
+            image,
+            "/opt/tls-check/run.sh",
+            RUNTIME_ENV,
+            "/tmp/tls",  # noqa: S108 - the container's own tmpfs
+        )
+    )
+
+
+def prepare_knarr(image, common):
+    verify_runtime_environment(image, common)
     return Session(arguments=(), verify=verify_knarr, cleanup=lambda: None)
 
 
