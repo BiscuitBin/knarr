@@ -6,7 +6,7 @@
 
 **Non-goals:** Any open question 19, 20 or 21 owns. The ownership and lifecycle invariants (32). Rate limits and back-off (24, built by [46](46-spec-then-build-poll-schedule-and-patcher.md)).
 
-**Blocked by:** 19, 20, 21, 22, 30, 43
+**Blocked by:** 19, 20, 21, 22, 30, 41, 43
 
 **From 17:** [Decision 0009](../../../docs/decisions/0009-allium-objective-map.md), map rows for §4, §5 and §6.
 
@@ -31,4 +31,5 @@
 - [ ] The emitted `pod-deletion-cost` is a canonical signed decimal int32 string, never a form such as `"+5"` or `"007"` (§6).
 - [ ] A pod that has just started stays unannotated until its first valid poll (§5).
 - [ ] A Deployment rollout gets no special handling (§8 failure modes, §9.13).
+- [ ] The S1 probe is removed in the change that gives the client its first real caller, which 41 handed here: `src/knarr/s1_probe.gleam`, `s1_probe_ffi.erl` and their test, the `-knarr s1_probe true` in the Deployment's `ERL_FLAGS` and the application callback that reads it, the probe wording in `knarr.allium`'s `NoPodEffects`, and `.scratch/bootstrap/evidence/14/s1-kind.sh` with the `s1-proof.yml` job that runs it, or their replacement by a proof of the reconciler. A pod maps to its Deployment through the controller owners 41's values carry, Pod → ReplicaSet → Deployment, read from one discovery cycle's three LISTs (budget `ListCadence`).
 - [ ] Each clause has a test that traces to it, `just check` passes, and the hand-back gives the `plan-spec` obligation count of each module touched.

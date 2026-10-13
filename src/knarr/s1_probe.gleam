@@ -1,15 +1,16 @@
 //// Spike S1's probe (ticket 14): a supervised loop that, every tick, reads
 //// the projected token from disk, lists the pods in its own namespace and
-//// merge-patches the `knarr.io/s1-probe` annotation on its own pod, through
-//// the k8s_client contract. It is the scaffolding that proved VerifiedTls,
-//// TokenReload and Verbs on a cluster, and ticket 41 removes it when the
-//// reconciler takes over. Every outcome is a logged value; nothing here
+//// sets the `knarr.io/s1-probe` annotation on its own pod with a JSON Patch,
+//// through the k8s_client contract. It is the scaffolding that proved
+//// VerifiedTls, TokenReload and Verbs on a cluster, and ticket 31 removes it
+//// when the reconciler takes over. Every outcome is a logged value; nothing here
 //// panics on a `Result`.
 
 import gleam/erlang/process.{type Subject}
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
@@ -148,9 +149,10 @@ fn cycle(
     Error(error) -> log("list_pods_failed", [#("error", describe(error))])
     Ok(pods) -> {
       log("list_pods", [#("count", int.to_string(list.length(pods)))])
-      case should_patch(pods:, pod_name: config.pod_name) {
-        False -> log("patch_skipped", [#("pod", config.pod_name)])
-        True -> patch(config:, namespace:, token:)
+      let value = int.to_string(unix_seconds())
+      case probe_patch(pods:, pod_name: config.pod_name, value:) {
+        None -> log("patch_skipped", [#("pod", config.pod_name)])
+        Some(document) -> patch(config:, namespace:, token:, document:, value:)
       }
     }
   }
@@ -160,16 +162,16 @@ fn patch(
   config config: Config,
   namespace namespace: String,
   token token: String,
+  document document: String,
+  value value: String,
 ) -> Nil {
-  let value = int.to_string(unix_seconds())
   case
-    k8s_client.patch_annotation(
+    k8s_client.patch_pod(
       target: config.target,
       namespace:,
       pod: config.pod_name,
       token:,
-      key: annotation_key,
-      value:,
+      document:,
       send: config.send,
     )
   {
@@ -180,14 +182,63 @@ fn patch(
   }
 }
 
-/// NoPatchWhileTerminating: the pod is patched only when the most recent
-/// list shows it and shows no deletionTimestamp on it. The patch that follows
-/// is unconditional, so a deletionTimestamp set between that list and the
-/// patch is not seen; closing that window is the §9.10 open question.
-pub fn should_patch(pods pods: List(Pod), pod_name pod_name: String) -> Bool {
-  list.any(pods, fn(pod) {
-    pod.name == pod_name && pod.deletion_timestamp == None
-  })
+/// The JSON Patch that sets the probe's annotation on `pod_name`, or `None`
+/// when the most recent list does not show the pod or shows it terminating
+/// (NoPatchWhileTerminating). The patch first tests that
+/// /metadata/deletionTimestamp is still null, so a deletion in the window
+/// after the list fails it with 422. A test under a missing parent fails, so
+/// when the pod has no annotations map the patch tests the map for null and
+/// adds it whole, as ownership's WriteMode does.
+pub fn probe_patch(
+  pods pods: List(Pod),
+  pod_name pod_name: String,
+  value value: String,
+) -> Option(String) {
+  case list.find(pods, fn(pod) { pod.name == pod_name }) {
+    Ok(k8s_client.Pod(deletion_timestamp: None, annotations:, ..)) -> {
+      let live = test_null("/metadata/deletionTimestamp")
+      let operations = case annotations {
+        Some(_) -> [
+          live,
+          add(
+            "/metadata/annotations/" <> pointer(annotation_key),
+            json.string(value),
+          ),
+        ]
+        None -> [
+          live,
+          test_null("/metadata/annotations"),
+          add(
+            "/metadata/annotations",
+            json.object([#(annotation_key, json.string(value))]),
+          ),
+        ]
+      }
+      Some(json.to_string(json.preprocessed_array(operations)))
+    }
+    _ -> None
+  }
+}
+
+fn test_null(path: String) -> json.Json {
+  json.object([
+    #("op", json.string("test")),
+    #("path", json.string(path)),
+    #("value", json.null()),
+  ])
+}
+
+fn add(path: String, value: json.Json) -> json.Json {
+  json.object([
+    #("op", json.string("add")),
+    #("path", json.string(path)),
+    #("value", value),
+  ])
+}
+
+/// A key as a JSON Pointer segment: ~ as ~0, then / as ~1.
+fn pointer(key: String) -> String {
+  key |> string.replace("~", "~0") |> string.replace("/", "~1")
 }
 
 fn jwt_exp(token: String) -> String {
@@ -201,18 +252,41 @@ fn jwt_exp(token: String) -> String {
   }
 }
 
-/// A bounded rendering of a client error. A refused status keeps the start
-/// of the apiserver's reason; no error value carries the token.
+/// A bounded rendering of a client error. A refusal keeps its reason, its
+/// Retry-After and the start of the apiserver's body; no error value carries
+/// the token.
 fn describe(error: k8s_client.ClientError(SendError)) -> String {
   case error {
-    k8s_client.UnexpectedStatus(status, body) ->
-      "status " <> int.to_string(status) <> ": " <> string.slice(body, 0, 200)
+    k8s_client.Refused(failure) ->
+      "status "
+      <> int.to_string(failure.status)
+      <> " "
+      <> reason(failure.reason)
+      <> retry_after(failure.retry_after)
     k8s_client.UndecodableBody(_) -> "undecodable_body"
     k8s_client.SendFailed(k8s_http.TlsAlert(alert)) -> "tls_alert " <> alert
     k8s_client.SendFailed(k8s_http.ConnectFailed(reason)) ->
       "connect_failed " <> reason
     k8s_client.SendFailed(k8s_http.Timeout) -> "timeout"
     k8s_client.SendFailed(k8s_http.Other(reason)) -> "other " <> reason
+  }
+}
+
+fn reason(reason: k8s_client.Reason) -> String {
+  case reason {
+    k8s_client.Forbidden -> "forbidden"
+    k8s_client.NotFound -> "not_found"
+    k8s_client.Conflict -> "conflict"
+    k8s_client.PreconditionFailed -> "precondition_failed"
+    k8s_client.Throttled -> "throttled"
+    k8s_client.Other -> "other"
+  }
+}
+
+fn retry_after(seconds: Option(Int)) -> String {
+  case seconds {
+    Some(seconds) -> " retry_after=" <> int.to_string(seconds)
+    None -> ""
   }
 }
 

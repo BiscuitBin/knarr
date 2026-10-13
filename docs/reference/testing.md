@@ -193,6 +193,10 @@ The FFI does not read the list by position. It walks it and matches each entry b
 
 On a direct connection the first element is the socket family, `inet` here and `inet6` for IPv6. In inets 9.8, httpc's proxy-tunnel path reports `{tls, TLSOptions, Reason}`, which the same clauses match. So a reordered list or another first element still maps, and fails none of the three tests; [tls/run.sh](../../.scratch/bootstrap/evidence/14/tls/run.sh) prints the raw terms. A new entry shape inside the list is a value, and the named test then fails with the term in its output. Two shapes still raise in the FFI instead: a `failed_connect` reason that is not a list, and an alert that is not an atom. Neither has been seen. No test exercises `timeout`, `inet6` or the tunnel path.
 
+### httpc retries
+
+httpc sends a request again once after a 503 whose Retry-After it can read, unless `autoretry` is 0, and `k8s_http_ffi` sets it to 0. `send_returns_a_503_with_retry_after_without_retrying_test` POSTs to the responder's `/unavailable` path, which answers its first request with a 503 carrying `retry-after: 0` and any later one with 200, and counts the requests that arrive. It expects the 503, its header and one request. If it gets a 200 after a pin move, httpc has renamed or ignored the option; the httpc autoretry row of [Decision 0013](../decisions/0013-in-cluster-client.md#findings) says why one attempt matters.
+
 ### The poller's httpc terms
 
 [poller_http_test.gleam](../../test/poller_http_test.gleam) runs `poller_http.send` over plain HTTP against a `gen_tcp` responder on 127.0.0.1 and ::1, in [poller_http_test_ffi.erl](../../test/poller_http_test_ffi.erl). `poller_http_ffi` turns httpc's error term into a `Transport`. On OTP 29:

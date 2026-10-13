@@ -73,8 +73,10 @@ emulation.
 `just image-check` and `just smoke` verify the Docker and kind paths separately. The image runs as UID/GID 10001. The Deployment
 uses a read-only root filesystem, a writable temporary volume, dropped
 capabilities, no privilege escalation and RuntimeDefault seccomp. The Role
-grants `list` and `patch` on pods, bound to the `knarr` ServiceAccount by a
-RoleBinding; token automount stays disabled, and a projected volume supplies a
+grants `list` and `patch` on pods, `list` on Deployments and ReplicaSets and
+`create` on events, the verbs the `Verbs` clause of
+[k8s_client.allium](../specs/k8s_client.allium) names, bound to the `knarr`
+ServiceAccount by a RoleBinding; token automount stays disabled, and a projected volume supplies a
 600-second token, the cluster CA and the namespace to the S1 probe
 ([Decision 0013](../decisions/0013-in-cluster-client.md)). The Deployment
 turns that probe on with `ERL_FLAGS=-knarr s1_probe true`; the gate's test

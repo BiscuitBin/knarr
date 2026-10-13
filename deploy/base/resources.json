@@ -28,6 +28,29 @@
             "list",
             "patch"
           ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "events"
+          ],
+          "verbs": [
+            "create"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "deployments",
+            "replicasets"
+          ],
+          "verbs": [
+            "list"
+          ]
         }
       ]
     },

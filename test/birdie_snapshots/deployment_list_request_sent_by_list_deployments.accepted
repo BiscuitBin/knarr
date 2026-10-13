@@ -1,0 +1,9 @@
+---
+version: 2.0.2
+title: deployment list request sent by list_deployments
+file: ./test/k8s_client_test.gleam
+test_name: snapshot_list_deployments_request_test
+---
+GET https://10.96.0.1:443/apis/apps/v1/namespaces/default/deployments?labelSelector=knarr.io%2Fenabled%3Dtrue&limit=500
+accept: application/json
+authorization: Bearer test-token

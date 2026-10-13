@@ -1,0 +1,12 @@
+---
+version: 2.0.2
+title: event create request sent by create_event
+file: ./test/k8s_client_test.gleam
+test_name: snapshot_create_event_request_test
+---
+POST https://10.96.0.1:443/api/v1/namespaces/default/events
+accept: application/json
+authorization: Bearer test-token
+content-type: application/json
+
+{"metadata":{"generateName":"knarr-7d4b9c-abcde."},"involvedObject":{"apiVersion":"v1","kind":"Pod","namespace":"default","name":"knarr-7d4b9c-abcde","uid":"6f1c"},"reason":"AnnotationYielded","message":"controller.kubernetes.io/pod-deletion-cost: knarr applied 5 and found 9; another writer owns it now and knarr will not write it again on this pod","type":"Warning","source":{"component":"knarr"},"count":1,"firstTimestamp":"2026-10-12T05:00:00Z","lastTimestamp":"2026-10-12T05:00:00Z"}
