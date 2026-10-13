@@ -6,7 +6,10 @@
 -- threshold and its hysteresis against Cluster Autoscaler's blackout, pods
 -- with local storage, caps that avoid pinning nodes, and the best-effort limits
 -- (§6, §9.9). Grounded in Decision 0008 (spike S2a, ticket 15); GKE
--- confirmation is spike S2b (ticket 16).
+-- confirmation is spike S2b (ticket 16). safe-to-evict is the second owned
+-- annotation under ownership's Adoption, Applied and Yield: standing is asked
+-- for it only on a Deployment that opted in, its last-applied value is the
+-- marker's applied record, and a yield of it leaves pod-deletion-cost owned.
 -- Owner: ticket 25.
 
 ------------------------------------------------------------

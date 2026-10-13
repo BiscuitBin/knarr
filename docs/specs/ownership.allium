@@ -3,18 +3,259 @@
 -- Module: ownership.
 -- Scope: what knarr may write and how. Only the annotations it owns, on live
 -- Pod objects, in metadata.annotations only, never the Deployment's pod
--- template and never a replica count (§4, §6, §7, §9.3). The marker annotation,
--- the write mode, conflict detection with other writers, the Event and the
--- back-off (§8, §9.10). The handling of a rejected patch is decided (§8
--- failure modes).
--- Owner: ticket 22 for §9.10. The decided invariants, including the rejected
--- patch, are built by the round-2 spec-then-build ticket 32.
+-- template and never a replica count (§4, §6, §7, §9.3). The marker that
+-- records what knarr applied, the write mode and its preconditions, how a
+-- change by another writer is recognised, and the Event and the yield by
+-- which the other writer wins (§8, §9.10). The handling of a rejected patch
+-- is decided (§8 failure modes) and the 422 a failed precondition returns
+-- is told apart from it here.
+-- Owner: ticket 22 settled every §9.10 question here with the maintainer on
+-- 2026-10-12. The decided invariants, including the rejected patch, are built
+-- by the round-2 spec-then-build ticket 32; the patch content type, its
+-- preconditions and the Event create are the client's (ticket 41). The key
+-- prefix is config's (ticket 19); what the write times mean over time is
+-- lifecycle's (ticket 23); the Event reason, the gauge and the log line are
+-- observability's (ticket 30); safe-to-evict as the second owned annotation
+-- is safe_to_evict's (ticket 25); whether a due write may go now is budget's
+-- (ticket 24).
 
 ------------------------------------------------------------
--- Open Questions
+-- Value Types
 ------------------------------------------------------------
 
-open question "§9.10 Marker: the design of knarr's marker annotation, including its key, the last-written value and the timestamp it holds (§8)."
-open question "§9.10 Write mode: an unconditional merge patch, a resourceVersion precondition or a JSON Patch test op, and what the client must support for it (§6)."
-open question "§9.10 Conflict detection: how knarr notices that a user, the lablabs or zepellin controllers, or Karpenter with PodDeletionCostManagement changed a value it owns."
-open question "§9.10 Conflict response: the Event knarr emits and how long it backs off so the other writer wins (§8 failure modes)."
+-- One pair of the pod's metadata.annotations map, as k8s_client lists it.
+-- A signature that takes List<Annotation>? takes null for a pod whose
+-- response carries no annotations map and a list, possibly empty, otherwise.
+value Annotation {
+    key: String
+    value: String
+}
+
+-- An annotation knarr owns: its short name, which names its member in the
+-- marker, and the full key it is written under. Exactly two exist:
+-- pod-deletion-cost is controller.kubernetes.io/pod-deletion-cost and
+-- safe-to-evict is cluster-autoscaler.kubernetes.io/safe-to-evict.
+value Owned {
+    name: String
+    key: String
+}
+
+-- What the marker records for one owned annotation: applied, with the value
+-- knarr last wrote (null for a removal), or yielded, with the value knarr
+-- found when it gave the annotation up (null for an absent one). at is the
+-- time of the write that made the record.
+value Record {
+    kind: applied | yielded
+    value: String?
+    at: Timestamp
+}
+
+value Entry {
+    owned: Owned
+    record: Record
+}
+
+-- knarr's marker as read from the pod: the raw string of the marker
+-- annotation (null when absent), the time of knarr's last write to the pod
+-- (null when the marker is absent or unusable) and one entry per owned
+-- annotation knarr has written on this pod (none when unusable).
+value Marker {
+    raw: String?
+    at: Timestamp?
+    entries: List<Entry>
+}
+
+-- Where one owned annotation on one pod stands with respect to knarr.
+value Standing {
+    state: unowned | owned | conflict | yielded | foreign
+}
+
+-- A write knarr wants to make: the string for the owned annotation, or null
+-- to remove it.
+value Write {
+    owned: Owned
+    value: String?
+}
+
+-- One JSON Patch operation. path is the JSON Pointer; value is the JSON text
+-- of the operand and is absent for a remove: "null" for a test of absence,
+-- the quoted and escaped string for an annotation (an add of 300 carries
+-- the text "300" with its quotes), and for the marker its rendered object as
+-- one escaped JSON string.
+value Operation {
+    op: test | add | remove
+    path: String
+    value: String?
+}
+
+-- The content of the Event a yield raises, on the Pod.
+value ConflictEvent {
+    pod_name: String
+    pod_uid: String
+    owned: Owned
+    applied: String?
+    found: String?
+}
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract Ownership {
+    read: (annotations: List<Annotation>?) -> Marker
+    standing: (marker: Marker, annotations: List<Annotation>?, owned: Owned) -> Standing
+    may_write: (standing: Standing) -> Boolean
+    patch: (marker: Marker, annotations: List<Annotation>?, writes: List<Write>, at: Timestamp) -> List<Operation>
+    yield: (marker: Marker, annotations: List<Annotation>?, owned: Owned, at: Timestamp) -> List<Operation>
+    document: (operations: List<Operation>) -> String
+    rejected: (operations: List<Operation>, annotations: List<Annotation>?, deletion_timestamp: Timestamp?) -> Boolean
+    event: (pod_name: String, pod_uid: String, marker: Marker, annotations: List<Annotation>?, owned: Owned) -> ConflictEvent
+    message: (event: ConflictEvent) -> String
+    render: (marker: Marker) -> String
+
+    @invariant Recorded
+        -- The marker is one annotation, knarr.io/applied under the prefix
+        -- config settles (ticket 19). Its value is a JSON object with one
+        -- member per owned annotation knarr has written on this pod, named
+        -- by Owned.name, each {"applied": string or null, "at": time} or
+        -- {"yielded": string or null, "at": time}, plus a top-level "at"
+        -- holding the time of knarr's last write to the pod. Every time is
+        -- RFC 3339 UTC to the second, taken from knarr's clock when the
+        -- patch is built and passed in as at. render is canonical: members
+        -- in lexicographic order of their names at every level, no
+        -- whitespace, so equal markers render equal. A string is usable
+        -- when it parses as a JSON object whose top-level at parses as such
+        -- a time and whose every known member is an object with exactly one
+        -- of applied or yielded, a string or null, and an at that parses,
+        -- and which has no member of any other name. read returns raw as
+        -- the string found and, for a string that is not usable or that
+        -- differs from render of what it reads, which is how a hand edit
+        -- that keeps the shape but not the form shows, no entries and no
+        -- at; an edit that keeps the canonical form reads as what it says.
+        -- What the times mean over time is lifecycle's (ticket 23).
+    @invariant Adoption
+        -- standing is a function of the newest API-returned view of the
+        -- pod, the last LIST or knarr's own last accepted patch response,
+        -- later by the order the responses were received, with no memory
+        -- of earlier views; a LIST that was served before a patch it
+        -- follows costs at most one 422, which the next LIST clears.
+        -- standing is defined for both owned annotations whatever the
+        -- Deployment enables; reconcile asks it for an annotation the
+        -- Deployment has not enabled (the safe-to-evict opt-in is ticket
+        -- 25's) only while the marker holds a record for it, so a value
+        -- left by an opt-out falls to cleanup (ticket 23). With no record
+        -- for owned: unowned when the annotation is absent and foreign when
+        -- it is present. With an applied record: owned when the annotation
+        -- equals the recorded value, or is absent and the record is null;
+        -- conflict otherwise, a removal by another writer included, and
+        -- conflict too when the record does not parse as the annotation's
+        -- value (Applied). With a yielded record: yielded. may_write is true for unowned and owned
+        -- only. A marker that is absent, or that read finds unusable or
+        -- edited, reads as no record for every owned annotation, so the
+        -- pod is adoptable while the annotation is absent and foreign while
+        -- it is present, and the next write overwrites the marker under
+        -- the test on its raw string. A foreign annotation is never
+        -- written: a log line, at the cadence observability settles, and a
+        -- gauge, no Event (ticket 30). The user releases a foreign
+        -- annotation by removing it. The operator releases a yield by
+        -- removing the marker together with every owned annotation on the
+        -- pod, after which each stands unowned; removing the marker alone
+        -- leaves every present value foreign.
+    @invariant Applied
+        -- The last-applied value cost_mapping's map and safe_to_evict take
+        -- is the applied record's value: absent for a null record and
+        -- absent when there is no record. The parse of that string to
+        -- cost_mapping's Mapped or to safe-to-evict's value is reconcile's
+        -- (ticket 31); a record that does not parse as its annotation's
+        -- value stands as a conflict under Adoption, so it is yielded and
+        -- never fed to map. A conflict, yielded or foreign annotation
+        -- feeds neither. The first patch on an unowned annotation writes
+        -- the value and the marker together, so an idle pod knarr never had
+        -- to write carries no marker, and the removal that spells 0 keeps
+        -- the marker with a null applied record.
+    @invariant WriteMode
+        -- patch is defined for writes whose standing may_write allows; a
+        -- write it does not allow is dropped, as is a write of null for an
+        -- annotation whose record is null or missing, since there is
+        -- nothing to remove; a patch left with no writes returns no
+        -- operations and nothing is sent. Every write that remains is one
+        -- JSON Patch, content type application/json-patch+json, whose
+        -- operations are in this order: a test that
+        -- /metadata/deletionTimestamp is null; a test that the marker's
+        -- annotation equals its raw string, or is null when the marker is
+        -- absent; per write, a test that the owned annotation equals the
+        -- applied record's value, or is null when the record is null or
+        -- missing; then per write an add of the string or a remove for
+        -- null; then an add of the marker, rendered with every other entry
+        -- kept, each write recorded applied at at and the marker's at set
+        -- to at. When annotations is null the marker test, the per-key
+        -- tests and the adds are replaced by a test that
+        -- /metadata/annotations is null and one add of
+        -- /metadata/annotations whose value is the map of every write and
+        -- the rendered marker, after the deletionTimestamp test. A key is a
+        -- pointer segment with ~ as ~0 and / as ~1. No operation names a
+        -- path outside /metadata/annotations except the deletionTimestamp
+        -- test. A value and the marker always travel in one patch;
+        -- document encodes the operations as the body the client sends.
+    @invariant Precondition
+        -- A failed test rejects the whole patch with 422 and changes
+        -- nothing. knarr makes no GET and no retry in that cycle; the next
+        -- LIST decides what the pod is now (terminating, conflict or
+        -- foreign), and a 404 or 409 from the patch is the client's to
+        -- report (ticket 41) and is likewise left to the next LIST. The
+        -- deletionTimestamp test closes k8s_client's
+        -- NoPatchWhileTerminating window; the value and marker tests make a
+        -- lost update impossible, since a patch is accepted only against
+        -- the view it was built from. Two writers of the same string are
+        -- indistinguishable and harmless. The Role needs no verb beyond
+        -- list and patch on pods for this.
+    @invariant Rejected
+        -- A 422 is first a precondition failure. rejected is true when
+        -- every test operation of the failed patch passes against the view
+        -- it is given; a 422 is a rejection when rejected is true for the
+        -- next LIST's view of the pod, because the tests would have passed
+        -- and the patch was refused for its content. Reconcile keeps the
+        -- failed patch's operations until that LIST and no longer (ticket
+        -- 31); a restart in between forgets them and the write is simply
+        -- rebuilt. A rejection is handled as the decided §8 row says
+        -- (ticket 32: log, Event, metric, no rapid retries, the previous
+        -- annotations stay). A 400 or 403 is a rejection at once. knarr
+        -- never reads the Status body to tell the two apart.
+    @invariant Yield
+        -- On conflict, yield builds a patch under the same preconditions
+        -- (deletionTimestamp null, the marker's raw string, the owned
+        -- annotation equal to the value found, or null when absent) that
+        -- rewrites only the marker: the record becomes yielded with the
+        -- found value at at, the marker's at becomes at, and the
+        -- annotation stays as the other writer left it. From then on knarr
+        -- writes that annotation no more for the pod's life, whatever the
+        -- worker reports; the yield is per annotation, so yielding
+        -- pod-deletion-cost leaves safe-to-evict owned and the other way
+        -- round. No duration releases it; the operator does as Adoption
+        -- says, and a replaced pod starts unowned. A controller that
+        -- writes every pod, Karpenter with PodDeletionCostManagement,
+        -- lablabs or zepellin, therefore disables knarr for every pod it
+        -- reaches, once each.
+    @invariant Event
+        -- One Event per yield. event is built from the marker and the
+        -- annotations the yield patch was built from, before that patch,
+        -- so applied is the record the yield replaced and found is the
+        -- value the other writer left; it is sent only after patch_pod
+        -- returns the yield accepted, never before, and a 422 on the yield
+        -- patch raises nothing, the conflict being seen again from the
+        -- next LIST. Its involvedObject is the Pod by name and uid, its
+        -- content is ConflictEvent, and message renders "<key>: knarr
+        -- applied <applied> and found <found>; another writer owns it now
+        -- and knarr will not write it again on this pod", with Owned.key
+        -- for <key> and "absent" for a null applied or found. Nothing
+        -- repeats while the annotation stays yielded, restarts included,
+        -- because the record is on the pod. The reason, the gauge and the
+        -- log line are observability's (ticket 30); the create and its
+        -- Role rule are the client's (ticket 41).
+    @invariant Pure
+        -- Every signature is a function of its arguments alone: at is
+        -- passed in, nothing here reads a clock, the pod, config or state,
+        -- and nothing sends. Sending the patch and creating the Event are
+        -- k8s_client's; whether a due write may go now is budget's;
+        -- startup order and what the times mean are lifecycle's.
+}

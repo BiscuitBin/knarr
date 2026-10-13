@@ -8,6 +8,8 @@
 
 S2a (15) supplies the upstream CA evidence. S2b (16) may amend the clauses once GKE access exists.
 
+Ticket 22 settled in [ownership.allium](../../../docs/specs/ownership.allium) that `safe-to-evict` is the second owned annotation under its `Adoption`, `Applied` and `Yield` clauses: `standing` is defined for it whatever the Deployment enables, and reconcile asks it on a Deployment that has not opted in only while the marker holds a record for it, so the value an opt-out leaves behind falls to cleanup (23); the opt-in and opt-out gates are this ticket's; its last-applied value is the marker's applied record; and its yield is independent of `pod-deletion-cost`'s.
+
 **What to build:** Allium clauses for when knarr sets, flips and removes `safe-to-evict`, settled with the maintainer, grounded in S2a's findings.
 
 **Non-goals:** Expiry and cleanup of the annotation (23). GKE confirmation (16).

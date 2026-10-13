@@ -363,7 +363,7 @@ The KEP recommends updating the cost "only before scale down" and keeping update
 - **Write the cost itself, at threshold crossings.** The annotation carries the worker's clamped cost, written when the cost crosses one of the configured thresholds (300, 900, 1800 and 3600 by default, in the seconds the worker is expected to report, overridable per workload) and absent below the first; `-1` marks a draining pod below the first threshold. Between crossings the applied value stands. Settled in [cost_mapping.allium](specs/cost_mapping.allium).
 - **Patch only when the desired annotation state changes** (§4), with a **margin below each threshold on the way down** in place of hysteresis: a downward crossing counts only once the cost is below the threshold minus the margin (60 by default), so a cost that wobbles at an edge does not write.
 - Enforce a **minimum interval per pod** between patches, plus a **global patch QPS budget** and a documented expected write rate.
-- Patch only `metadata.annotations`. An unconditional merge patch is idempotent, but it can overwrite a value another writer set after Knarr read the pod. Lost-update detection needs a conditional write, either a `resourceVersion` precondition or a JSON Patch `test` op. The choice is OPEN (§9.10).
+- Patch only `metadata.annotations`. Every write is a JSON Patch whose `test` operations check that `deletionTimestamp` is null, that the marker still carries the raw string Knarr last read and that each owned annotation still carries the value Knarr last applied, so a patch is accepted only against the view it was built from and a lost update is impossible. A failed test is a 422 that changes nothing, handled from the next LIST. Settled in [ownership.allium](specs/ownership.allium).
 - Every pod patch is an etcd write and a MODIFIED watch event for every watcher of that pod. Those watchers are the cluster-wide pod informers (controller-manager, scheduler, CA, KEDA and others) plus the kubelet on the pod's node. Cluster operators can throttle Knarr with API Priority and Fairness.
 
 ```mermaid
@@ -433,7 +433,7 @@ knarr_sup (one_for_one)
 ├── pod_discovery   : periodic LIST of target pods (watch deferred)
 ├── poller_pool     : bounded-concurrency HTTP polling of pod status endpoints
 ├── reconciler      : clamp → map at thresholds → decide patch
-├── patcher         : rate-limited merge-patch writer (per-pod interval + global QPS)
+├── patcher         : rate-limited JSON Patch writer (per-pod interval + global QPS)
 └── health_metrics  : liveness/readiness for Knarr itself; metrics export
 ```
 
@@ -465,11 +465,11 @@ flowchart TB
 - **In-cluster TLS** is the hard part of option (A). The cluster CA is not in the OS trust store, so a small Erlang FFI step is likely needed. Do not rely on `httpc` defaults. `gleam_httpc` passes no ssl options when verification is on, so it inherits `httpc`'s defaults, and those only became verifying in OTP 26 (Inets 9.0). Pass explicit ssl options instead: `verify_peer`, the service-account `ca.crt` as `cacertfile`, and a hostname check. Require OTP 26 or later. Spike S1 verified that the hostname check passes against the IP literal in `KUBERNETES_SERVICE_HOST` ([Decision 0013](decisions/0013-in-cluster-client.md)).
 - **Tokens:** projected service-account tokens rotate on disk. Re-read the token periodically and never cache it for the life of the process.
 - **Single replica, `Recreate` strategy:** no leader election. `Recreate` avoids two replicas writing at once, but leaves a short gap with no updates during upgrades. HA notes are in [DEFERRED.md §4](DEFERRED.md#4-ha-and-leader-election).
-- **Restart safety and staleness:** derive state from the current poll, the current annotations, and a Knarr marker annotation (for example `knarr.io/...` holding the last-written value and a timestamp). Do not rely on in-memory counters. On startup, reconcile every pod that carries the marker. **Open tension:** writes are sparse, so after a restart a last-written timestamp cannot tell "the same cost reported for hours" from "hours of failed polls". Freshness semantics and conservative restart behavior go in §9.12. Document uninstall and manual recovery, for example `kubectl annotate pod <p> cluster-autoscaler.kubernetes.io/safe-to-evict-`.
+- **Restart safety and staleness:** derive state from the current poll, the current annotations, and Knarr's marker annotation `knarr.io/applied`, which holds, per owned annotation, what Knarr applied or that it yielded, and the time of Knarr's last write to the pod; its shape is settled in the `Recorded` clause of [ownership.allium](specs/ownership.allium). Do not rely on in-memory counters. On startup, reconcile every pod that carries the marker. **Open tension:** writes are sparse, so after a restart a last-written timestamp cannot tell "the same cost reported for hours" from "hours of failed polls". Freshness semantics and conservative restart behavior go in §9.12. Document uninstall and manual recovery, for example `kubectl annotate pod <p> cluster-autoscaler.kubernetes.io/safe-to-evict-`, and the release of a yield, which removes the marker together with every owned annotation: `kubectl annotate pod <p> knarr.io/applied- controller.kubernetes.io/pod-deletion-cost- cluster-autoscaler.kubernetes.io/safe-to-evict-`.
 - **Minimum RBAC (one namespaced Role; inferred from the standard RBAC model, to be confirmed):**
   - core `pods`: get, list, patch (watch later, if watch-based discovery is adopted)
   - `apps` `deployments`, `replicasets`: get, list (watch later)
-  - core or `events.k8s.io` `events`: create, patch (if Events are emitted)
+  - core or `events.k8s.io` `events`: create, for the Events Knarr raises (§5, §8); the one per yield is fixed in the `Event` clause of [ownership.allium](specs/ownership.allium) and ticket 41 builds the create
 
 ### Failure modes (proposed v1 defaults, all to be confirmed in tickets)
 
@@ -485,7 +485,7 @@ flowchart TB
 | API throttling (APF / 429) | Back off and respect the budget | Costs lag | §9.8 |
 | Patch rejected (400/403, admission webhook) | Log, Event, metric; no rapid retries | The previous annotations stay, so the old bias and any `safe-to-evict: "false"` persist | §9.14, §9.12 |
 | Many pods (poll fan-out) | Bounded concurrency, jitter, no overlapping polls | Costs refresh more slowly | §9.8 |
-| Another writer changed the value | Detect it (needs conditional writes, §6); Event and back off | Goal: the other writer wins | §9.10 |
+| Another writer changed the value | The patch's `test` operations detect it; Knarr yields that annotation for the pod's life, records the yield in the marker, and raises one Event on the Pod | The other writer wins | §9.10, settled in [ownership.allium](specs/ownership.allium) |
 | Deployment rollout | No special handling | Cost still biases victims within the old ReplicaSet, but cannot keep that ReplicaSet alive through the rollout | §9.13 |
 | `PodDeletionCost` gate disabled | Documented prerequisite; optional self-test | Annotations ignored | §9.11 |
 | NetworkPolicy blocks polling | Looks like an absent contract; Event | No bias | §9.4b |
@@ -499,7 +499,7 @@ flowchart LR
     S1[Spike S1]:::open -- "validates" --> D2["9.2 k8s client<br/>decided"]
     S2[Spike S2]:::open -- "decides" --> D9["9.9 safe-to-evict policy"]:::open
     D5["9.5 cost mapping<br/>decided"] -- "before" --> D6["9.6 unknown/unreachable policy"]:::open
-    D10["9.10 ownership, conflicts"]:::open -- "before" --> D12["9.12 cleanup, staleness"]:::open
+    D10["9.10 ownership, conflicts<br/>decided"] -- "before" --> D12["9.12 cleanup, staleness"]:::open
     D5 -. "sign convention: what<br/>removing an annotation means" .- D12
     D16["9.16 testing strategy"]:::open -- "sets thresholds" --> SC["§3 success criteria"]
     classDef open stroke:#d97706,stroke-width:2px,stroke-dasharray:5 5
@@ -521,7 +521,7 @@ flowchart LR
 7. **Readiness interaction:** how to document it, and whether Knarr warns on "high cost while NotReady". Settled in [worker_contract.allium](specs/worker_contract.allium).
 8. **Poll interval, concurrency and write budget:** numeric defaults and a v1 scale target (pods, Deployments, interval), LIST cadence, limits per Deployment and per cluster, and the expected API write rate.
 9. **`safe-to-evict` policy:** the threshold; removing the annotation vs writing `"true"` (matters for local-storage pods); how to avoid pinning nodes. Depends on S2.
-10. **Ownership and conflicts with other writers:** design of the marker annotation; the write mode (unconditional merge patch, `resourceVersion` precondition, or JSON Patch `test`); and emitting an Event and backing off when someone else changes the value. Other writers include user-set values, the lablabs and zepellin controllers, and Karpenter with `PodDeletionCostManagement` enabled.
+10. **Ownership and conflicts with other writers:** the marker annotation, the write mode, and what Knarr does when someone else changes the value. Other writers include user-set values, the lablabs and zepellin controllers, and Karpenter with `PodDeletionCostManagement` enabled. Settled in [ownership.allium](specs/ownership.allium): the marker is one annotation, `knarr.io/applied`, recording per owned annotation what Knarr applied or that it yielded, plus the time of the last write; every write is a JSON Patch whose `test` operations check `deletionTimestamp`, the marker and the last-applied value, and a failed test is a 422 handled from the next LIST; a value another writer changed is yielded for the pod's life, recorded in the marker, with one Event on the Pod.
 11. **Feature-gate prerequisite.** Options: (i) document only; (ii) a startup self-test; (iii) a periodic check.
 12. **Cleanup, staleness and freshness.** Options: (i) never clean up; (ii) clean up when a pod or workload leaves scope; (iii) also clean up on graceful shutdown. Also covers: separate expiry for deletion cost and for `safe-to-evict`; what the marker timestamp means; conservative behavior on restart when freshness is unknown; startup reconciliation of marked pods; annotations left after a crash; and an uninstall procedure.
 13. **Rollouts:** guidance on `maxUnavailable` / `maxSurge` plus graceful drain. Cost biases victims within an old ReplicaSet but cannot stop that ReplicaSet from scaling to zero.
@@ -539,6 +539,8 @@ flowchart LR
 - **Cost:** a number the worker supplies; higher means it would be more expensive to kill the pod now.
 - **Mapped value:** the int32 the annotation carries: the worker's cost as of its last threshold crossing, `-1` for a draining pod below the first threshold, or absent below the first threshold. A crossing is one of the triggers for a patch (§4).
 - **Threshold:** a configured cost at which a crossing writes the cost; a margin below it damps the way down (§6).
+- **Marker:** Knarr's `knarr.io/applied` annotation, recording per owned annotation what Knarr applied or that it yielded, plus the time of the last write (§8).
+- **Yielded:** an owned annotation another writer changed, which Knarr records in the marker and never writes again for the pod's life; the operator releases it by removing the marker together with every owned annotation on the pod, since removing the marker alone leaves every present value foreign (§6, §8).
 - **Accepting / draining:** the worker's statement that it is or is not taking new work.
 - **Path A / B / C:** ReplicaSet scale-down; node removal through the Eviction API; other ways a pod can be killed (§2).
 
