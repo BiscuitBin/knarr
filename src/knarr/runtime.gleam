@@ -9,6 +9,7 @@ import gleam/otp/static_supervisor as supervisor
 import gleam/otp/supervision
 import knarr/diagnostics
 import knarr/metrics
+import knarr/poller_http
 import knarr/s1_probe
 import mist
 
@@ -30,12 +31,17 @@ fn mark_ready(state: State) -> Nil
 @external(erlang, "runtime_ffi", "set_port")
 fn set_port(state: State, port: Int) -> Nil
 
-/// Starts the root supervisor: the listener first, then, with `probe`, the
-/// S1 probe under its own supervisor (child id 1). Without it the root has
-/// the one child the skeleton had.
+/// Starts the root supervisor: the listener first, then, with `poller`, the
+/// poller's httpc profile, then, with `probe`, the S1 probe, each of those
+/// two under its own supervisor. Child ids count the children present from 0, so the
+/// application, which turns `poller` on, has the profile at id 1 and any
+/// probe at id 2. The profile is one per VM, since httpc names its tables
+/// after it, so a second root in the same VM, as the tests start beside the
+/// application, runs without it.
 pub fn start(
   port port: Int,
   bind bind: String,
+  poller poller: Bool,
   probe probe: Option(s1_probe.Config),
 ) -> actor.StartResult(Runtime) {
   let state = new_state()
@@ -57,6 +63,10 @@ pub fn start(
     supervisor.new(supervisor.OneForOne)
     |> supervisor.restart_tolerance(intensity: 2, period: 5)
     |> supervisor.add(child)
+  let root = case poller {
+    True -> supervisor.add(root, poller_http.supervised())
+    False -> root
+  }
   let root = case probe {
     Some(config) -> supervisor.add(root, s1_probe.supervised(config))
     None -> root
