@@ -42,8 +42,9 @@ def catalogued(log: str) -> int:
     return int(found[1]) if found else 0
 
 
-def cannot_decide(reason: str) -> int:
-    print(f"runtime-scan: cannot decide: {reason}", file=sys.stderr)
+def cannot_decide(reason: str, shown: list[str] | None = None) -> int:
+    """Exit 1, after the log lines that explain it, since CI keeps no copy of the log."""
+    print("\n".join([*(shown or []), f"runtime-scan: cannot decide: {reason}"]), file=sys.stderr)
     return 1
 
 
@@ -59,7 +60,8 @@ def main(
     image = arguments[0]
     copy = target / "runtime"
     log = target / "grype.log"
-    shutil.rmtree(target, ignore_errors=True)
+    if target.exists():
+        shutil.rmtree(target)
     target.mkdir(parents=True)
     created = run(
         ["docker", "create", "--pull=never", image], capture_output=True, text=True, check=False
@@ -79,15 +81,20 @@ def main(
             stderr=stderr,
             check=False,
         )
-    packages = catalogued(log.read_text(encoding="utf-8"))
-    if packages == 0:
-        return cannot_decide(f"grype catalogued no conda package in {copy}; see {log}")
+    text = log.read_text(encoding="utf-8")
+    lines = text.splitlines()
     if scanned.returncode not in {0, 2}:
-        return cannot_decide(f"grype exited {scanned.returncode}; see {log}")
+        return cannot_decide(f"grype exited {scanned.returncode}; see {log}", lines[-40:])
+    packages = catalogued(text)
+    if packages == 0:
+        counts = [line for line in lines if " packages cataloger=" in line]
+        return cannot_decide(f"grype catalogued no conda package in {copy}; see {log}", counts)
+    # grype runs every directory cataloger, so a finding may be in a binary or an
+    # OTP application rather than a conda record; the table's TYPE column says.
     verdict = "a fixable high or critical" if scanned.returncode else "no fixable high or critical"
     print(
-        f"runtime-scan: grype catalogued {packages} conda packages in {RUNTIME} of {image}, "
-        f"with {verdict} vulnerability"
+        f"runtime-scan: grype catalogued {packages} conda packages in {RUNTIME} of {image} "
+        f"and found {verdict} vulnerability in the copy"
     )
     return scanned.returncode
 

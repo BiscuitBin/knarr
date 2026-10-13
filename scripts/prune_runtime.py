@@ -8,8 +8,9 @@ ticket 45). `just image-check` reruns 0003's TLS check in the pruned image.
 For each package it finds the one conda-meta/<name>-<version>-<build>.json
 record whose "name" is the package, deletes every path the record's "files"
 lists, and then the record. A listed path already gone is fine. It refuses a
-package with no record or several, and a listed path that leaves the
-environment, and it checks every package before it deletes anything.
+package with no record or several, a listed path that leaves the environment,
+directly or through a symlinked directory, and a file another record also
+lists. It checks every package before it deletes anything.
 
 Usage: prune_runtime.py <env-dir> <package>...
 
@@ -25,20 +26,30 @@ from pathlib import Path, PurePosixPath
 
 def owned(env: Path, package: str) -> tuple[Path, list[Path]]:
     """The package's one conda-meta record and the paths it lists, or SystemExit."""
-    records = [
-        path
-        for path in sorted((env / "conda-meta").glob(f"{package}-*.json"))
-        if json.loads(path.read_text(encoding="utf-8")).get("name") == package
-    ]
-    if len(records) != 1:
-        sys.exit(f"prune_runtime: {len(records)} conda-meta records for {package} in {env}")
-    files = json.loads(records[0].read_text(encoding="utf-8"))["files"]
+    records = {
+        path: json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted((env / "conda-meta").glob("*.json"))
+    }
+    mine = [path for path, data in records.items() if data.get("name") == package]
+    if len(mine) != 1:
+        sys.exit(f"prune_runtime: {len(mine)} conda-meta records for {package} in {env}")
+    record = mine[0]
+    files = records[record]["files"]
+    inside = env.resolve()
     for listed in files:
         relative = PurePosixPath(listed)
-        # Lexical, so an in-environment symlink is never followed out of it.
-        if relative.is_absolute() or ".." in relative.parts:
-            sys.exit(f"prune_runtime: {records[0].name} lists {listed}, outside {env}")
-    return records[0], [env / listed for listed in files]
+        if (
+            relative.is_absolute()
+            or not relative.parts
+            or ".." in relative.parts
+            or not (env / listed).parent.resolve().is_relative_to(inside)
+        ):
+            sys.exit(f"prune_runtime: {record.name} lists {listed}, outside {env}")
+    for other, data in records.items():
+        shared = sorted(set(files) & set(data.get("files", []))) if other != record else []
+        if shared:
+            sys.exit(f"prune_runtime: {other.name} also lists {', '.join(shared)}")
+    return record, [env / listed for listed in files]
 
 
 def main(arguments: list[str]) -> None:

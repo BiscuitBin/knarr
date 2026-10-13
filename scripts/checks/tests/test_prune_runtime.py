@@ -92,6 +92,40 @@ def test_a_listed_path_outside_the_environment_is_refused_before_anything_is_del
     assert (env / "bin/perl").exists()
 
 
+def test_a_listed_path_under_a_symlink_out_of_the_environment_is_refused(env: Path) -> None:
+    outside = env.parent / "elsewhere"
+    outside.mkdir()
+    (outside / "keep").write_text("keep")
+    (env / "lib/linked").symlink_to(outside)
+    record(env, PERL, "perl", ["bin/perl", "lib/linked/keep"])
+    result = prune(env, "perl")
+    assert result.returncode != 0
+    assert "lib/linked/keep" in result.stderr
+    assert (outside / "keep").exists()
+    assert (env / "bin/perl").exists()
+
+
+@pytest.mark.parametrize("listed", ["", "."])
+def test_a_listed_path_that_names_the_environment_itself_is_refused(
+    env: Path, listed: str
+) -> None:
+    record(env, PERL, "perl", ["bin/perl", listed])
+    result = prune(env, "perl")
+    assert result.returncode != 0
+    assert (env / "bin/perl").exists()
+
+
+def test_a_file_another_package_also_lists_is_refused_before_anything_is_deleted(
+    env: Path,
+) -> None:
+    record(env, ERLANG, "erlang", ["bin/erl", "lib/perl5/5.32/core_perl/strict.pm"])
+    result = prune(env, "perl")
+    assert result.returncode != 0
+    assert "erlang" in result.stderr
+    assert "lib/perl5/5.32/core_perl/strict.pm" in result.stderr
+    assert (env / "bin/perl").exists()
+
+
 def test_every_package_is_checked_before_any_is_pruned(env: Path) -> None:
     result = prune(env, "perl", "zlib")
     assert result.returncode != 0

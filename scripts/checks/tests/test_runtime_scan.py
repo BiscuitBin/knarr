@@ -100,13 +100,18 @@ def test_a_scan_that_catalogued_no_conda_package_cannot_decide(
     code, out, err = scan(tmp_path, Docker(conda=conda, grype=grype), capsys)
     assert code == 1
     assert "catalogued no conda package" in err
+    assert "cataloger=erlang-otp-application-cataloger" in err
     assert "conda packages" not in out
 
 
-def test_a_grype_error_cannot_decide(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    code, _, err = scan(tmp_path, Docker(grype=1), capsys)
+@pytest.mark.parametrize("conda", [12, None], ids=["after cataloguing", "before cataloguing"])
+def test_a_grype_error_cannot_decide_and_shows_the_log(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], conda: int | None
+) -> None:
+    code, _, err = scan(tmp_path, Docker(grype=1, conda=conda), capsys)
     assert code == 1
     assert "grype exited 1" in err
+    assert "INFO grype version: 0.120.1" in err
 
 
 def test_the_runtime_environment_is_copied_out_and_scanned_with_image_scans_thresholds(
