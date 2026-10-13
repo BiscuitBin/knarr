@@ -114,8 +114,8 @@ contract Ownership {
     render: (marker: Marker) -> String
 
     @invariant Recorded
-        -- The marker is one annotation, knarr.io/applied under the prefix
-        -- config settles (ticket 19). Its value is a JSON object with one
+        -- The marker is one annotation, knarr.io/applied under the fixed
+        -- prefix config's Prefix states (ticket 19). Its value is a JSON object with one
         -- member per owned annotation knarr has written on this pod, named
         -- by Owned.name, each {"applied": string or null, "at": time} or
         -- {"yielded": string or null, "at": time}, plus a top-level "at"
@@ -141,8 +141,9 @@ contract Ownership {
         -- follows costs at most one 422, which the next LIST clears.
         -- standing is defined for both owned annotations whatever the
         -- Deployment enables; reconcile asks it for an annotation the
-        -- Deployment has not enabled (the safe-to-evict opt-in is ticket
-        -- 25's) only while the marker holds a record for it, so a value
+        -- Deployment has not enabled (the safe-to-evict opt-in key is
+        -- config's SafeToEvict, ticket 19; the gate is ticket 25's) only
+        -- while the marker holds a record for it, so a value
         -- left by an opt-out falls to cleanup (ticket 23). With no record
         -- for owned: unowned when the annotation is absent and foreign when
         -- it is present. With an applied record: owned when the annotation

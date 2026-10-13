@@ -1,6 +1,6 @@
 # 41: Spec-then-build: the k8s_client module
 
-**Context:** Spike S1 ([14](14-spike-s1-in-cluster-client.md)) settled TLS, token reload and the verbs in [Decision 0013](../../../docs/decisions/0013-in-cluster-client.md) and left `docs/specs/k8s_client.allium` with a `Client` contract covering list and patch on pods. OVERVIEW §8 also needs get on pods and get and list on Deployments and ReplicaSets, and ticket 22 settled the write mode whose patch preconditions §9.10 asked about in [ownership.allium](../../../docs/specs/ownership.allium): one JSON Patch per write with `test` preconditions, a 422 as a precondition failure and at most one Event per yield. The S1 probe loop in `src/knarr/s1_probe.gleam` is scaffolding that proved the path; the reconciler ([31](31-spec-then-build-reconcile-core.md)) is its real caller.
+**Context:** Spike S1 ([14](14-spike-s1-in-cluster-client.md)) settled TLS, token reload and the verbs in [Decision 0013](../../../docs/decisions/0013-in-cluster-client.md) and left `docs/specs/k8s_client.allium` with a `Client` contract covering list and patch on pods. OVERVIEW §8 also needs list on Deployments and ReplicaSets, and ticket 22 settled the write mode whose patch preconditions §9.10 asked about in [ownership.allium](../../../docs/specs/ownership.allium): one JSON Patch per write with `test` preconditions, a 422 as a precondition failure and at most one Event per yield. The S1 probe loop in `src/knarr/s1_probe.gleam` is scaffolding that proved the path; the reconciler ([31](31-spec-then-build-reconcile-core.md)) is its real caller.
 
 **What to build:** The full `k8s_client` module, specification first: the remaining operations and their Role verbs, pagination of a LIST, the error vocabulary callers branch on (RBAC refusal, conflict, not found, transport; a 404 and a 409 from the patch are reported as values and are not precondition failures), and the patch content type and preconditions 22 settled. Then the code, keeping the sans-IO shape 14 established, and the removal of `s1_probe` once 31 has a caller for the client, with the `NoPodEffects` clause and the Deployment's `ERL_FLAGS` updated in the same change.
 
@@ -8,13 +8,16 @@
 
 **Blocked by:** 14, 22
 
+**From 19:** config's `Discovery` needs two LISTs beside the pod LIST, both in knarr's namespace: Deployments selected on the label `knarr.io/enabled=true`, and ReplicaSets unselected. `list` on `deployments` and `replicasets` in `apps` is all config needs, and `Verbs` names the complete set with no `get`; OVERVIEW §8 was amended to match. Each listed Deployment carries name and uid so the invalid-key Event can name it. Each listed Deployment carries its name, uid, labels and annotations (null when the response has no map), each ReplicaSet its name, uid and the uid of its controller owner reference, and each pod the uid of its controller owner reference, which config matches by uid, never by name.
+
 **From 24:** budget's `BackOff` and `PauseScope` read the response status and the Retry-After header, in seconds, of a failed patch and a failed list; this ticket shapes the values that carry them, and [46](46-spec-then-build-poll-schedule-and-patcher.md) consumes them.
 
 **MVP critical path:** yes. Every read and write the reconciler makes goes through this module.
 
 **Status:** ready-for-agent
 
-- [ ] `k8s_client.allium` states every operation the reconciler needs, with the Role verbs each one implies, and `Verbs` names the complete set. `just check-specs` and `just analyse-specs` report nothing.
+- [ ] `k8s_client.allium` states every operation the reconciler needs, with the Role verbs each one implies, and `Verbs` names the complete set: list and patch on pods, list on deployments and replicasets, create on events. `just check-specs` and `just analyse-specs` report nothing.
+- [ ] The Deployment LIST selected on `knarr.io/enabled=true` and the unselected ReplicaSet LIST, with the values config's `Discovery` reads: uid and controller owner reference uid on pods and ReplicaSets, uid, labels and annotations on Deployments.
 - [ ] The `Pod` value carries the pod's primary IP (`status.podIP`) and whether its Ready condition is true, which the status poller ([43](43-status-poller.md)) reads.
 - [ ] The patch content type is `application/json-patch+json`, and `patch_pod` takes the document ownership's `document` renders and returns the patched pod as the newest view (ownership `WriteMode`, k8s_client `Verbs`).
 - [ ] A 422 is a named error value the reconciler branches on as a precondition failure (ownership `Precondition`), beside RBAC refusal, not found and transport.

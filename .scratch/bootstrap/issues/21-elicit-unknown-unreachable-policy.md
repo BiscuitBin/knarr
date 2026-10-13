@@ -8,6 +8,8 @@
 
 **Blocked by:** 20
 
+**From 19:** [config.allium](../../../docs/specs/config.allium) leaves one open question for this ticket: whether the unreachable windows gain a per-Deployment override. If you add one, it is an annotation under `knarr.io/`, hyphenated after its `config.<key>`, parsed and invalidated under config's `Syntax`, `Effective` and `InvalidValue`, with a member added to `Settings` and `Defaults`; either way, close that question.
+
 **MVP critical path:** yes. Unreachable and invalid pods are routine in production.
 
 **Status:** needs-human

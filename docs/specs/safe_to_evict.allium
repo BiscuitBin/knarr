@@ -12,6 +12,9 @@
 -- the marker holds a record for it, so an opt-out's leftover falls to cleanup
 -- (ticket 23); its last-applied value is the marker's applied record, and a
 -- yield of it leaves pod-deletion-cost owned.
+-- The opt-in key, the annotation knarr.io/safe-to-evict on the Deployment
+-- with the value "true", and its parse are config's SafeToEvict (ticket 19);
+-- this module says what knarr writes while the opt-in is on.
 -- Owner: ticket 25.
 
 ------------------------------------------------------------
