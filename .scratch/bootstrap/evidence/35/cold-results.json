@@ -1,0 +1,46 @@
+{
+  "observed_at": "2026-10-10",
+  "commit": "e548efa66770317dd78cd9209b60998ee15d4ee7",
+  "host": "Linux x86_64, Ubuntu 24.04.5 LTS, 4 x Intel(R) Xeon(R) Processor @ 2.10GHz, 15.7 GiB, uid 0",
+  "bootstrap": {
+    "pixi": "pixi 0.81.0",
+    "just": "just 1.58.0"
+  },
+  "caches": "every default pixi, rattler, Gleam, hex, prek and rebar3 cache path absent before initialize; no relocating variable set",
+  "steps": [
+    {
+      "label": "initialize",
+      "command": [
+        "just",
+        "initialize"
+      ],
+      "exit": 0,
+      "seconds": 16.676
+    },
+    {
+      "label": "check",
+      "command": [
+        "just",
+        "check"
+      ],
+      "exit": 0,
+      "seconds": 183.112
+    },
+    {
+      "label": "offline-check",
+      "command": [
+        "unshare",
+        "-rn",
+        "<lo up>",
+        "just",
+        "check"
+      ],
+      "exit": 0,
+      "seconds": 200.367
+    }
+  ],
+  "notes": [
+    "initialize and check come from cold.sh's first version, whose own offline step failed to start (cold.txt)",
+    "offline-check comes from offline.sh, run on the same clone at 19:13Z, about 36 minutes after the networked check ended and across a session restart; nothing touched the clone in between (offline.txt)"
+  ]
+}

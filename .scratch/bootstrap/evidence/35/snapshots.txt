@@ -1,0 +1,46 @@
+date: 2026-10-10T19:22Z
+host: Linux x86_64
+commit: e548efa66770317dd78cd9209b60998ee15d4ee7 (35-bootstrap-verification-gaps)
+
+== setup: the clone borrows this checkout's tools
+ok   .pixi and .tools symlinked, build/packages copied; the worktree is clean
+ok   curl https://github.com fails inside the namespace every just command runs in
+ok   committed test/birdie_snapshots/version_request_sent_by_fetch_version.accepted: sha256 142749510a170f4cdd4d3eff980cda8552daf6349fe4f9b1f1199dd9d292d079
+
+== just snapshots-review, answered "a" at the interactive prompt
+ok   one character of the accepted file changed: sha256 b6f0c12e45bf58364b746d7cda6a5417b96b0dac321f468030e8e9eb2849756f
+     review_pty: answered 1 prompt(s) with 'a'; exit 0
+ok   the session as the terminal showed it, from the recipe's test run to the review:
+       title: version request sent by fetch_version
+      2     - accept: application/jsom
+          2 + accept: application/json
+     error: recipe `test` failed on line 62 with exit code 1
+     Reviewing 1st out of 1
+       title: version request sent by fetch_version
+      2     - accept: application/jsom
+          2 + accept: application/json
+       a accept     accept the new snapshot
+     > a
+     Reviewed one snapshot
+ok   accepting wrote the committed bytes back (sha256 142749510a170f4cdd4d3eff980cda8552daf6349fe4f9b1f1199dd9d292d079), removed the .new and left the worktree clean
+
+== just birdie reject, on a pending change
+ok   just test exit 1 left test/birdie_snapshots/version_request_sent_by_fetch_version.new, sha256 626e09c9425af2d74ce98c146ccb24b44349e5d4a80808d4f9f7abd70805815e:
+     the committed file without its file: and test_name: lines, which accepting adds
+     Rejecting one new snapshot.
+ok   the .new is gone; the accepted file keeps the edited bytes (sha256 b6f0c12e45bf58364b746d7cda6a5417b96b0dac321f468030e8e9eb2849756f); Git sees only the edit
+
+== just birdie stale delete, on an orphan
+ok   just test passes with the orphan present
+     Checking stale snapshots...
+     🐦‍⬛ Done!
+ok   the orphan is gone; the other 3 accepted snapshots hash as before; the worktree is clean
+ok   just snapshots-check passes: nothing pending, nothing stale
+
+== isolation
+ok   birdie kept its referenced list in this clone, build/birdie/knarr_referenced.txt
+ok   neither the source checkout's build/birdie list nor the one in the system TMPDIR changed
+ok   the source checkout's status and accepted snapshots are unchanged
+
+snapshots.sh: all cases passed
+exit 0

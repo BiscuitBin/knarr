@@ -1,0 +1,142 @@
+date: 2026-10-13T05:03:11Z
+host: Darwin arm64
+git: git version 2.50.1 (Apple Git-155)
+checkout: <checkout> at c2f04491b89e95a016f4e655ab6d2acf7e305580
+primary-hook.sh sha256: 9c9e3c6bcee4b3f742de57f6998ad3451df5260fb22217470406bca8d38d41a9
+primary-hook-stubs.sh sha256: 7b9b915e5540cc4b55d02338c56558f47cb7167b9771dad7fa5e844b006c4035
+
+== 1. the hook refuses the probe, by gleam format
+     date: 2026-10-13T05:03:11Z
+     host: Darwin arm64
+     bare git: git version 2.50.1 (Apple Git-155)
+     checkout: <checkout> at a62cebff8693d652ac736b9fb999a01def336efb
+
+     ok   <checkout> is a primary checkout
+     ok   the hook <checkout>/.git/hooks/pre-commit is executable
+     ok   the hook runs PREK="<checkout>/.pixi/envs/default/bin/prek", which is executable
+     ok   the index and the tracked files are clean, and src/hook_probe.gleam does not exist
+
+     == commit an unformatted src/hook_probe.gleam with a bare environment
+          gleam format check.......................................................Failed
+          - hook id: gleam-format
+          - exit code: 1
+
+            src/hook_probe.gleam
+            Error: These files have not been formatted
+     ok   HEAD is a62cebff8693d652ac736b9fb999a01def336efb, as it was
+     ok   the index is clean
+     ok   src/hook_probe.gleam is gone
+     ok   git status is as it was
+     ok   gleam format refused the commit, naming src/hook_probe.gleam
+
+     primary-hook.sh: the hook refused the probe
+ok   exit 0
+ok   the output has "ok   gleam format refused the commit, naming src/hook_probe.gleam"
+ok   the output has "primary-hook.sh: the hook refused the probe"
+ok   HEAD, the index and the status are as they were, and no probe file is left
+
+== 2. the hook accepts the probe
+     date: 2026-10-13T05:03:12Z
+     host: Darwin arm64
+     bare git: git version 2.50.1 (Apple Git-155)
+     checkout: <checkout> at 00b5dde7bcfcb9f62c38422d4a8db4ad31454e91
+
+     ok   <checkout> is a primary checkout
+     ok   the hook <checkout>/.git/hooks/pre-commit is executable
+     ok   the hook runs PREK="<checkout>/.pixi/envs/default/bin/prek", which is executable
+     ok   the index and the tracked files are clean, and src/hook_probe.gleam does not exist
+
+     == commit an unformatted src/hook_probe.gleam with a bare environment
+          [main addf77c] hook probe (must be refused)
+           1 file changed, 1 insertion(+)
+           create mode 100644 src/hook_probe.gleam
+     FAIL: the hook accepted the probe; undoing its commit
+     ok   undid the probe commit addf77cd0bbdbb3e669651f34d5c84893f5b3da3
+     ok   HEAD is 00b5dde7bcfcb9f62c38422d4a8db4ad31454e91, as it was
+     ok   the index is clean
+     ok   src/hook_probe.gleam is gone
+     ok   git status is as it was
+ok   exit 1
+ok   the output has "FAIL: the hook accepted the probe; undoing its commit"
+ok   the output has "ok   git status is as it was"
+ok   HEAD, the index and the status are as they were, and no probe file is left
+ok   the trap reports the probe commit it undid
+
+== 3. the hook refuses the probe for another reason
+     date: 2026-10-13T05:03:13Z
+     host: Darwin arm64
+     bare git: git version 2.50.1 (Apple Git-155)
+     checkout: <checkout> at 9b358d6cbe9eae0099dba80c345cfc4607813163
+
+     ok   <checkout> is a primary checkout
+     ok   the hook <checkout>/.git/hooks/pre-commit is executable
+     ok   the hook runs PREK="<checkout>/.pixi/envs/default/bin/prek", which is executable
+     ok   the index and the tracked files are clean, and src/hook_probe.gleam does not exist
+
+     == commit an unformatted src/hook_probe.gleam with a bare environment
+          (no output)
+     ok   HEAD is 9b358d6cbe9eae0099dba80c345cfc4607813163, as it was
+     ok   the index is clean
+     ok   src/hook_probe.gleam is gone
+     ok   git status is as it was
+     FAIL: the commit was refused, but not by gleam format
+ok   exit 1
+ok   the output has "FAIL: the commit was refused, but not by gleam format"
+ok   HEAD, the index and the status are as they were, and no probe file is left
+
+== 4. no pre-commit hook is installed
+     date: 2026-10-13T05:03:13Z
+     host: Darwin arm64
+     bare git: git version 2.50.1 (Apple Git-155)
+     checkout: <checkout> at 9b358d6cbe9eae0099dba80c345cfc4607813163
+
+     ok   <checkout> is a primary checkout
+     FAIL: no executable hook at <checkout>/.git/hooks/pre-commit; nothing was touched
+ok   exit 2
+ok   the output has "FAIL: no executable hook at <checkout>/.git/hooks/pre-commit; nothing was touched"
+ok   HEAD, the index and the status are as they were, and no probe file is left
+
+== 5. the hook runs another checkout's prek
+     date: 2026-10-13T05:03:14Z
+     host: Darwin arm64
+     bare git: git version 2.50.1 (Apple Git-155)
+     checkout: <checkout> at 1050a4150b94038111113f541bf612537d1c1555
+
+     ok   <checkout> is a primary checkout
+     ok   the hook <checkout>/.git/hooks/pre-commit is executable
+     FAIL: the hook runs PREK=<work>/other-checkout/.pixi/envs/default/bin/prek, not <checkout>/.pixi/envs/default/bin/prek; nothing was touched
+ok   exit 2
+ok   the output has "FAIL: the hook runs PREK=<work>/other-checkout/.pixi/envs/default/bin/prek, not <checkout>/.pixi/envs/default/bin/prek; nothing was touched"
+ok   HEAD, the index and the status are as they were, and no probe file is left
+
+== 6. run from a linked worktree
+     date: 2026-10-13T05:03:14Z
+     host: Darwin arm64
+     bare git: git version 2.50.1 (Apple Git-155)
+     checkout: <checkout> at 1050a4150b94038111113f541bf612537d1c1555
+
+     FAIL: this is a linked worktree; run from the primary checkout; nothing was touched
+ok   exit 2
+ok   the output has "FAIL: this is a linked worktree; run from the primary checkout; nothing was touched"
+ok   HEAD, the index and the status are as they were, and no probe file is left
+ok   the primary checkout is untouched
+
+== 7. the hook moves HEAD to a commit that is not the probe's
+     date: 2026-10-13T05:03:14Z
+     host: Darwin arm64
+     bare git: git version 2.50.1 (Apple Git-155)
+     checkout: <checkout> at 1050a4150b94038111113f541bf612537d1c1555
+
+     ok   <checkout> is a primary checkout
+     ok   the hook <checkout>/.git/hooks/pre-commit is executable
+     ok   the hook runs PREK="<checkout>/.pixi/envs/default/bin/prek", which is executable
+     ok   the index and the tracked files are clean, and src/hook_probe.gleam does not exist
+
+     == commit an unformatted src/hook_probe.gleam with a bare environment
+          (no output)
+     FAIL: HEAD moved to 756799fc96451356a453b52f2cea7baddd9a5271, which is not the probe commit; HEAD, the index and src/hook_probe.gleam were left as they are
+ok   exit 1
+ok   the output has "FAIL: HEAD moved to 756799fc96451356a453b52f2cea7baddd9a5271, which is not the probe commit; HEAD, the index and src/hook_probe.gleam were left as they are"
+ok   HEAD is still the stub commit, and src/hook_probe.gleam is still staged
+
+all 7 cases passed

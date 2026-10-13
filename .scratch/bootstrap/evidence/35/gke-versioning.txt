@@ -1,0 +1,17 @@
+date: 2026-10-13T05:36:52Z
+host: Darwin arm64
+checkout: <checkout> at 7c5e1faff2df2821b762323d1f9de295774df7a4
+gke-versioning.sh sha256: 1b58f5a893034046ef50b56b34357db7ee9fc543984dc33957754f450d117c1c
+kubernetes-source.sh sha256: 0c40d6be1ade0176e00b46df5984d617e297f040a50395377f56e42025a87d40
+example: 1.35.6-gke.1638000, from kubernetes-source.sh
+
+== https://docs.cloud.google.com/kubernetes-engine/versioning
+http 200  182161 bytes  sha256 b8b075aabb98bbd6071a93affafac70f564a64eec2a88481623a94de7d20b5c5
+Last updated 2026-10-09 UTC
+
+== the page's text
+ok   it says "GKE appends a GKE patch version number to the Kubernetes version (X.Y.Z-gke.N)"
+ok   it gives 1.35.6-gke.1638000 as a version
+17 distinct X.Y.Z-gke.N versions on the page
+
+gke-versioning.sh: done
