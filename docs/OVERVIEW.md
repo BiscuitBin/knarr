@@ -469,7 +469,7 @@ flowchart TB
 - **Minimum RBAC (one namespaced Role; settled in the `Verbs` clause of [k8s_client.allium](specs/k8s_client.allium)):**
   - core `pods`: list, patch (watch later, if watch-based discovery is adopted). No get: the next LIST is how Knarr learns what a pod is now
   - `apps` `deployments`, `replicasets`: list (watch later)
-  - core `events`: create, for the Events Knarr raises (§5, §8); the at most one per yield is fixed in the `Event` clause of [ownership.allium](specs/ownership.allium), and the create is the `ConflictEvent` clause of k8s_client
+  - core `events`: create, for the Events Knarr raises (§5, §8); the at most one per yield is fixed in the `Event` clause of [ownership.allium](specs/ownership.allium), and the create is the `EventCreate` clause of k8s_client
 
 ### Failure modes (proposed v1 defaults, all to be confirmed in tickets)
 

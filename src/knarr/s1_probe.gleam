@@ -263,8 +263,6 @@ fn describe(error: k8s_client.ClientError(SendError)) -> String {
       <> " "
       <> reason(failure.reason)
       <> retry_after(failure.retry_after)
-      <> ": "
-      <> string.slice(failure.body, 0, 200)
     k8s_client.UndecodableBody(_) -> "undecodable_body"
     k8s_client.SendFailed(k8s_http.TlsAlert(alert)) -> "tls_alert " <> alert
     k8s_client.SendFailed(k8s_http.ConnectFailed(reason)) ->

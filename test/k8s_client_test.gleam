@@ -14,9 +14,9 @@ import gleam/string
 import gleeunit/should
 import http_picture
 import knarr/k8s_client.{
-  Conflict, CreateOperation, Deployment, Event, Failure, Forbidden,
-  ListOperation, NotFound, Other, Owner, Page, PatchOperation, Pod,
-  PreconditionFailed, Refused, ReplicaSet, Target, Throttled,
+  Conflict, CreateOperation, Deployment, DeploymentObject, Event, Failure,
+  Forbidden, ListOperation, NotFound, Other, Owner, Page, PatchOperation, Pod,
+  PodObject, PreconditionFailed, Refused, ReplicaSet, Target, Throttled,
 }
 import qcheck
 
@@ -128,8 +128,7 @@ const forbidden_body =
 
 const event =
   Event(
-    pod_name: "knarr-7d4b9c-abcde",
-    pod_uid: "6f1c",
+    involved: PodObject(name: "knarr-7d4b9c-abcde", uid: "6f1c"),
     reason: "AnnotationYielded",
     message: "controller.kubernetes.io/pod-deletion-cost: knarr applied 5 and found 9; another writer owns it now and knarr will not write it again on this pod",
     at: "2026-10-12T05:00:00Z",
@@ -296,6 +295,51 @@ pub fn create_event_request_posts_a_warning_on_the_pod_test() -> Nil {
           ]),
         ),
         #("reason", json.string("AnnotationYielded")),
+        #("message", json.string(event.message)),
+        #("type", json.string("Warning")),
+        #("source", json.object([#("component", json.string("knarr"))])),
+        #("count", json.int(1)),
+        #("firstTimestamp", json.string("2026-10-12T05:00:00Z")),
+        #("lastTimestamp", json.string("2026-10-12T05:00:00Z")),
+      ]),
+    )
+}
+
+pub fn create_event_request_posts_a_warning_on_the_deployment_test() -> Nil {
+  // ContractAbsent is raised on the pod's Deployment (observability
+  // ContractAbsent), so its involvedObject is an apps/v1 Deployment.
+  let event =
+    Event(
+      involved: DeploymentObject(name: "web", uid: "dep-1"),
+      reason: "ContractAbsent",
+      message: "pod web-7d4b9c-abcde: no knarr status contract at port 9090 path /knarr/status; last reading not_found",
+      at: "2026-10-12T05:00:00Z",
+    )
+  let request =
+    k8s_client.create_event_request(
+      target:,
+      namespace: "default",
+      token: "test-token",
+      event:,
+    )
+
+  assert request.method == http.Post
+  assert request.path == "/api/v1/namespaces/default/events"
+  assert request.body
+    == json.to_string(
+      json.object([
+        #("metadata", json.object([#("generateName", json.string("web."))])),
+        #(
+          "involvedObject",
+          json.object([
+            #("apiVersion", json.string("apps/v1")),
+            #("kind", json.string("Deployment")),
+            #("namespace", json.string("default")),
+            #("name", json.string("web")),
+            #("uid", json.string("dep-1")),
+          ]),
+        ),
+        #("reason", json.string("ContractAbsent")),
         #("message", json.string(event.message)),
         #("type", json.string("Warning")),
         #("source", json.object([#("component", json.string("knarr"))])),
@@ -482,9 +526,7 @@ pub fn decode_patched_pod_reads_the_pod_the_apiserver_returns_test() -> Nil {
 pub fn decode_created_event_accepts_201_only_test() -> Nil {
   assert k8s_client.decode_created_event(ok(201, "{}")) == Ok(Nil)
   assert k8s_client.decode_created_event(ok(200, "{}"))
-    == Error(
-      Refused(Failure(reason: Other, status: 200, retry_after: None, body: "{}")),
-    )
+    == Error(Refused(Failure(reason: Other, status: 200, retry_after: None)))
 }
 
 // Failures.
@@ -509,17 +551,12 @@ pub fn failures_are_classified_by_status_alone_test() -> Nil {
   assert reason(500, ListOperation) == Other
 }
 
-pub fn a_failure_keeps_its_status_and_body_test() -> Nil {
+pub fn a_failure_keeps_its_status_and_drops_the_body_test() -> Nil {
   assert k8s_client.failure(
       response: ok(403, forbidden_body),
       operation: ListOperation,
     )
-    == Failure(
-      reason: Forbidden,
-      status: 403,
-      retry_after: None,
-      body: forbidden_body,
-    )
+    == Failure(reason: Forbidden, status: 403, retry_after: None)
 }
 
 pub fn retry_after_is_read_in_whole_seconds_only_test() -> Nil {
@@ -552,12 +589,7 @@ pub fn only_a_precondition_failure_is_one_test() -> Nil {
 pub fn decoders_report_a_refusal_with_its_retry_after_test() -> Nil {
   let throttled = with_retry_after(429, "7")
   let refused =
-    Refused(Failure(
-      reason: Throttled,
-      status: 429,
-      retry_after: Some(7),
-      body: "{}",
-    ))
+    Refused(Failure(reason: Throttled, status: 429, retry_after: Some(7)))
 
   assert k8s_client.decode_pod_page(throttled) == Error(refused)
   assert k8s_client.decode_replica_set_page(throttled) == Error(refused)
@@ -575,13 +607,10 @@ pub fn a_422_is_a_precondition_failure_from_a_patch_only_test() -> Nil {
         reason: PreconditionFailed,
         status: 422,
         retry_after: None,
-        body: "{}",
       )),
     )
   assert k8s_client.decode_pod_page(response)
-    == Error(
-      Refused(Failure(reason: Other, status: 422, retry_after: None, body: "{}")),
-    )
+    == Error(Refused(Failure(reason: Other, status: 422, retry_after: None)))
 }
 
 // Joins.
@@ -614,12 +643,7 @@ pub fn a_failing_page_fails_the_whole_list_test() -> Nil {
 
   assert k8s_client.list_pods(target:, namespace: "default", token: "t", send:)
     == Error(
-      Refused(Failure(
-        reason: Throttled,
-        status: 429,
-        retry_after: Some(3),
-        body: "{}",
-      )),
+      Refused(Failure(reason: Throttled, status: 429, retry_after: Some(3))),
     )
 }
 

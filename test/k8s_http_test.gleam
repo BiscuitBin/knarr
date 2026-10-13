@@ -166,7 +166,7 @@ fn count_lines(text: String, line: String) -> Int
 
 pub fn send_returns_a_503_with_retry_after_without_retrying_test() -> Nil {
   // httpc resends any request once after a 503 whose Retry-After it can
-  // read, unless autoretry is 0. A create is one attempt (ConflictEvent), and
+  // read, unless autoretry is 0. A create is one attempt (EventCreate), and
   // the 503 and its Retry-After are the caller's to read (Failures). The
   // responder answers a second request with 200, so a retry shows here.
   let responder = start_responder()

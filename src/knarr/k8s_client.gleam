@@ -59,16 +59,17 @@ pub type Deployment {
   )
 }
 
-/// The conflict Event ownership's Event raises on a pod. `at` is an RFC 3339
-/// time, written as both its first and last timestamp.
+/// The object an Event is on, by name and uid: a Pod, or the pod's
+/// Deployment for ContractAbsent (observability Events).
+pub type InvolvedObject {
+  PodObject(name: String, uid: String)
+  DeploymentObject(name: String, uid: String)
+}
+
+/// An Event knarr raises. `at` is an RFC 3339 time, written as both its first
+/// and last timestamp.
 pub type Event {
-  Event(
-    pod_name: String,
-    pod_uid: String,
-    reason: String,
-    message: String,
-    at: String,
-  )
+  Event(involved: InvolvedObject, reason: String, message: String, at: String)
 }
 
 /// One page of a LIST, and the token that asks for the next, if any.
@@ -94,10 +95,11 @@ pub type Reason {
   Other
 }
 
-/// A refused response: its reason, its status, its Retry-After in seconds and
-/// its body, which is kept for the log and never read to classify.
+/// A refused response: its reason, its status and its Retry-After in seconds.
+/// The body is neither read to classify nor kept, so no line can log it
+/// (observability NeverLogged).
 pub type Failure {
-  Failure(reason: Reason, status: Int, retry_after: Option(Int), body: String)
+  Failure(reason: Reason, status: Int, retry_after: Option(Int))
 }
 
 /// Why a call returned no value. `e` is the error type of the `send` it was
@@ -194,28 +196,34 @@ pub fn patch_pod_request(
   |> request.set_body(document)
 }
 
-/// `POST /api/v1/namespaces/{namespace}/events`: one Warning on the pod,
-/// named from the prefix `<pod>.` (ConflictEvent).
+/// `POST /api/v1/namespaces/{namespace}/events`: one Warning on the involved
+/// object, named from the prefix `<name>.` (EventCreate).
 pub fn create_event_request(
   target target: Target,
   namespace namespace: String,
   token token: String,
   event event: Event,
 ) -> Request(String) {
+  let #(api_version, kind) = case event.involved {
+    PodObject(..) -> #("v1", "Pod")
+    DeploymentObject(..) -> #("apps/v1", "Deployment")
+  }
   let body =
     json.object([
       #(
         "metadata",
-        json.object([#("generateName", json.string(event.pod_name <> "."))]),
+        json.object([
+          #("generateName", json.string(event.involved.name <> ".")),
+        ]),
       ),
       #(
         "involvedObject",
         json.object([
-          #("apiVersion", json.string("v1")),
-          #("kind", json.string("Pod")),
+          #("apiVersion", json.string(api_version)),
+          #("kind", json.string(kind)),
           #("namespace", json.string(namespace)),
-          #("name", json.string(event.pod_name)),
-          #("uid", json.string(event.pod_uid)),
+          #("name", json.string(event.involved.name)),
+          #("uid", json.string(event.involved.uid)),
         ]),
       ),
       #("reason", json.string(event.reason)),
@@ -334,7 +342,7 @@ pub fn failure(
     response.get_header(response, "retry-after")
     |> option.from_result
     |> option.then(seconds)
-  Failure(reason:, status: response.status, retry_after:, body: response.body)
+  Failure(reason:, status: response.status, retry_after:)
 }
 
 /// Whether a failure is the 422 a failed `test` in a patch returns, which

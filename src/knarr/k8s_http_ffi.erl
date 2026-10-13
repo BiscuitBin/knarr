@@ -10,12 +10,14 @@
 %% httpc's default profile connects over inet only, so an IPv6 literal host
 %% (the bracketed form ServiceAddress gives) goes through a profile of its
 %% own whose ipfamily is inet6. That profile is started under inets' own
-%% supervisor on first use; an IPv4 host never touches it. Request options
-%% cannot carry the family: {socket_opts, [inet6]} still resolves with inet.
+%% supervisor on first use; an IPv4 host never touches it. A bare inet6 in
+%% socket_opts still resolves with inet. The poller's later finding, that
+%% {socket_opts, [{ipfamily, inet6}]} sets the family per request, is not
+%% used here.
 %%
 %% autoretry is 0. httpc's default, infinity, sends any request again once
 %% after a 503 whose Retry-After it can read, after that delay: a create
-%% would be two attempts (ConflictEvent), and the caller would see the
+%% would be two attempts (EventCreate), and the caller would see the
 %% retry's answer, or a timeout past ten seconds, instead of the 503 and its
 %% Retry-After (Failures).
 request(Method, Url, Headers, ContentType, Body, CaFile) ->

@@ -77,12 +77,20 @@ value Deployment {
     annotations: List<Annotation>
 }
 
--- The conflict Event ownership's Event raises, on the Pod. The reason is
--- observability's (ticket 30) and is passed in; the message is ownership's
--- message.
+-- The object an Event is on, by name and uid: a Pod for AnnotationYielded,
+-- PatchRejected and CleanupRejected, the pod's Deployment for
+-- ContractAbsent (observability Events).
+value InvolvedObject {
+    kind: pod | deployment
+    name: String
+    uid: String
+}
+
+-- An Event knarr raises. The reason is observability's (ticket 30) and is
+-- passed in; the message is rendered by the clause that raises it,
+-- ownership's message for a yield and observability's for the rest.
 value Event {
-    pod_name: String
-    pod_uid: String
+    involved: InvolvedObject
     reason: String
     message: String
     at: Timestamp
@@ -189,12 +197,16 @@ contract Client {
         -- literal. An IPv6 host is bracketed in the request URL, and
         -- VerifiedTls checks it against the certificate's IPv6
         -- subjectAltName.
-    @invariant ConflictEvent
-        -- create_event makes one core v1 Event in the pod's namespace: its
-        -- name generated from the prefix "<pod_name>.", its involvedObject
-        -- the Pod by namespace, name and uid, type Warning, the reason and
-        -- message the Event carries, source.component knarr, count 1, and
-        -- firstTimestamp and lastTimestamp both at. It returns true on 201.
-        -- One call is one create attempt, which ownership's Event relies on:
-        -- the client never retries it.
+    @invariant EventCreate
+        -- create_event makes one core v1 Event in the client's namespace:
+        -- its name generated from the prefix "<name>." of the object it is
+        -- on, its involvedObject that object by namespace, name and uid,
+        -- with apiVersion v1 and kind Pod for a pod and apiVersion apps/v1
+        -- and kind Deployment for a deployment, type Warning, the reason and
+        -- message the Event carries, source.component knarr, the field core
+        -- v1 documents as the component reporting the Event (observability
+        -- Conventions), count 1, and firstTimestamp and lastTimestamp both
+        -- at. It returns true on 201. One call is one create attempt, which
+        -- observability's Conventions and ownership's Event rely on: the
+        -- client never retries it.
 }
