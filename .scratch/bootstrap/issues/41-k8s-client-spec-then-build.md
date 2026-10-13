@@ -12,18 +12,56 @@
 
 **MVP critical path:** yes. Every read and write the reconciler makes goes through this module.
 
-**Status:** ready-for-agent
+**Status:** done, except the probe removal, which waits for a caller and is [31](31-spec-then-build-reconcile-core.md)'s. See [the hand-back notes](#hand-back-notes).
 
-- [ ] `k8s_client.allium` states every operation the reconciler needs, with the Role verbs each one implies, and `Verbs` names the complete set. `just check-specs` and `just analyse-specs` report nothing.
-- [ ] The `Pod` value carries the pod's primary IP (`status.podIP`) and whether its Ready condition is true, which the status poller ([43](43-status-poller.md)) reads.
-- [ ] The patch content type is `application/json-patch+json`, and `patch_pod` takes the document ownership's `document` renders and returns the patched pod as the newest view (ownership `WriteMode`, k8s_client `Verbs`).
-- [ ] A 422 is a named error value the reconciler branches on as a precondition failure (ownership `Precondition`), beside RBAC refusal, not found and transport.
-- [ ] `Pod.uid` is read, and `Pod.annotations` is null when the response carries no annotations map, the case ownership `WriteMode` branches on; the apiserver omits an empty map, so a decoder test is the only place an empty list arises.
-- [ ] The create of the conflict Event on the Pod (ownership `Event`), with `create` on `events` in the Role and no other verb added. The AGENTS.md Controller invariant governs what knarr changes on Pod objects, and the conflict Event is knarr's own record; the hand-back says so, or widens the phrase through the agent-contract procedure.
-- [ ] A kind check shows that a JSON Patch `test` with value null passes for a missing key under an existing `metadata.annotations` map and for a missing `/metadata/deletionTimestamp`, recorded as evidence because it is a property of the apiserver's patch library, not a clause: `k8s.io/apiserver` applies the patch with `gopkg.in/evanphx/json-patch.v4`, whose `test` treats a key missing under an existing parent as null and fails under a missing parent, as ownership's `Precondition` states.
-- [ ] Builders and decoders for each operation are pure, tested by value and snapshot as in [the testing reference](../../../docs/reference/testing.md); `send` stays injected.
-- [ ] An IPv6 `KUBERNETES_SERVICE_HOST` is bracketed in the URL, or the clause states that only IPv4 service addresses are supported.
-- [ ] The S1 probe is removed once the reconciler calls the client, together with its `ERL_FLAGS` switch and the probe wording in `NoPodEffects`; the Role grants exactly what the client uses.
-- [ ] Decision 0013 is amended where the full module departs from the spike's findings.
-- [x] The `cluster-s1` CI job is narrowed to the paths it proves, or gated by a label, once its transcripts sit beside the evidence scripts. Done ahead of this ticket in pull request #25: the job moved to `.github/workflows/s1-proof.yml`, run on push to main, path-filtered, plus `workflow_dispatch`; not on pull requests.
-- [ ] A failed patch and a failed list are returned as values carrying the response status and the Retry-After header in seconds, which budget's `BackOff` and `PauseScope` read ([46](46-spec-then-build-poll-schedule-and-patcher.md)); the §9.10 open question names it.
+- [x] `k8s_client.allium` states every operation the reconciler needs, with the Role verbs each one implies, and `Verbs` names the complete set. `just check-specs` and `just analyse-specs` report nothing.
+- [x] The `Pod` value carries the pod's primary IP (`status.podIP`) and whether its Ready condition is true, which the status poller ([43](43-status-poller.md)) reads.
+- [x] The patch content type is `application/json-patch+json`, and `patch_pod` takes the document ownership's `document` renders and returns the patched pod as the newest view (ownership `WriteMode`, k8s_client `Verbs`).
+- [x] A 422 is a named error value the reconciler branches on as a precondition failure (ownership `Precondition`), beside RBAC refusal, not found and transport.
+- [x] `Pod.uid` is read, and `Pod.annotations` is null when the response carries no annotations map, the case ownership `WriteMode` branches on; the apiserver omits an empty map, so a decoder test is the only place an empty list arises.
+- [x] The create of the conflict Event on the Pod (ownership `Event`), with `create` on `events` in the Role and no other verb added. The AGENTS.md Controller invariant governs what knarr changes on Pod objects, and the conflict Event is knarr's own record; the hand-back says so, or widens the phrase through the agent-contract procedure.
+- [x] A kind check shows that a JSON Patch `test` with value null passes for a missing key under an existing `metadata.annotations` map and for a missing `/metadata/deletionTimestamp`, recorded as evidence because it is a property of the apiserver's patch library, not a clause: `k8s.io/apiserver` applies the patch with `gopkg.in/evanphx/json-patch.v4`, whose `test` treats a key missing under an existing parent as null and fails under a missing parent, as ownership's `Precondition` states.
+- [x] Builders and decoders for each operation are pure, tested by value and snapshot as in [the testing reference](../../../docs/reference/testing.md); `send` stays injected.
+- [x] An IPv6 `KUBERNETES_SERVICE_HOST` is bracketed in the URL, or the clause states that only IPv4 service addresses are supported.
+- [ ] The S1 probe is removed once the reconciler calls the client, together with its `ERL_FLAGS` switch and the probe wording in `NoPodEffects`; the Role grants exactly what the client uses. Open, handed to [31](31-spec-then-build-reconcile-core.md) as a box of its own: the probe moved onto `patch_pod` here and stays until the reconciler is a caller. The Role half is done: it grants exactly the `Verbs` set.
+- [x] Decision 0013 is amended where the full module departs from the spike's findings.
+- [x] The `cluster-s1` CI job is narrowed to the paths it proves, or gated by a label, once its transcripts sit beside the evidence scripts. Done ahead of this ticket in pull request #25: the job moved to `.github/workflows/s1-proof.yml`, run on push to main, path-filtered, plus `workflow_dispatch`; not on pull requests. Amended here: it also runs on a pull request carrying the `cluster-s1` label.
+- [x] A failed patch and a failed list are returned as values carrying the response status and the Retry-After header in seconds, which budget's `BackOff` and `PauseScope` read ([46](46-spec-then-build-poll-schedule-and-patcher.md)); the §9.10 open question names it.
+
+## Hand-back notes
+
+### What changed
+
+- `docs/specs/k8s_client.allium`: the full `Client` contract. Values `Label`, `Owner` (the controller ownerReference), `Pod` with `pod_ip`, `ready` and `owner`, `ReplicaSet`, `Deployment` (raw labels and annotations), `Event` and `Failure`. Signatures `list_pods`, `list_replica_sets`, `list_deployments`, `patch_pod(…, document)`, `create_event`, the pure classifier `failure` and the predicate `precondition_failed`, which gives `Failure` the parameter position the pinned checker needs (a bare return is flagged as unused). Invariants: `Verbs` rewritten to the complete set with no GET, `Failures`, `RetryAfter`, `Pagination`, `ServiceAddress` and `ConflictEvent` added, `VerifiedTls`, `TokenReload` and `NoPatchWhileTerminating` kept. The §9.10 open question is gone. `budget.allium`: the header's expected-load line, `ListCadence` and `PauseScope` speak of the cycle's three LISTs. `knarr.allium` is unchanged: the probe still writes only its annotation, through the contract.
+- `src/knarr/k8s_client.gleam`: pure builders for the three paginated LISTs (`limit=500`, the continue token encoded with `uri.query_to_string`, because `request.set_query` leaves `+` bare), the JSON Patch and the Event create; `base_request` brackets an IPv6 host. Pure decoders for each, a shared `failure(response:, operation:)` and `precondition_failed`. `ClientError` is `SendFailed`, `Refused(Failure)` or `UndecodableBody`; `Failure` carries `Reason`, the status, the Retry-After in seconds and the body. The joins keep `send` injected; the LIST joins run the page loop. `patch_annotation` and the merge patch are gone. The reason for a status outside the named ones is `Other`, matching the spec's `other`, where the plan said `Unexpected`.
+- `src/knarr/k8s_http_ffi.erl`: a request whose host is an IPv6 literal goes through an httpc profile of its own, `knarr_inet6`, with `ipfamily` `inet6`, started under inets' supervisor on first use. The default profile resolves with `inet` only and `{socket_opts, [inet6]}` does not change that. An IPv4 host is untouched.
+- `src/knarr/s1_probe.gleam`: `should_patch` became the pure `probe_patch(pods:, pod_name:, value:) -> Option(String)`, which returns the JSON Patch document (the `deletionTimestamp` null test, then an add of the key, or a null test of the map and an add of the map when the pod has none); `patch` calls `patch_pod`; `describe` renders a `Failure`. The log event names are unchanged, so `s1_logs.py` still reads them.
+- `deploy/base/resources.json`: the Role grants `list` and `patch` on pods, `create` on events, and `list` on `apps` deployments and replicasets. The checker test and its render fixture follow.
+- `.github/workflows/s1-proof.yml`: also runs on a pull request carrying the `cluster-s1` label, when it is added and on each push while it stays. Adding any other label does not run it. The plan put the gate in `ci.yml`; pull request #25 had already moved the job, so the gate went where the job is.
+- Docs: [Decision 0013](../../../docs/decisions/0013-in-cluster-client.md) amended inline (Verbs, NoPatchWhileTerminating, the probe, new bullets for failures, pagination and IPv6, the IPv6 loopback and kind JSON Patch rows under Findings, the label gate, the gate figures, the reopen rows); OVERVIEW §8's client-boundary and RBAC bullets; the local cluster guide's Role sentence; evidence 14's README names the label.
+- Evidence: [`.scratch/bootstrap/evidence/41/`](../evidence/41/README.md), the kind script and its transcript.
+- Tickets: [46](46-spec-then-build-poll-schedule-and-patcher.md)'s `ListCadence` and `PauseScope` boxes speak of three LISTs; [31](31-spec-then-build-reconcile-core.md) gains the probe removal box.
+
+### What was verified
+
+- Test first: the IPv6 tests failed with `ConnectFailed("nxdomain")` before the FFI change; the client tests failed to compile against the old module; the probe tests failed to compile before `probe_patch`.
+- `just format-check`, `just build`, `just lint-gleam`, `just test` (81 Gleam tests, no failures) and `just snapshots-check`.
+- `just check-specs` and `just analyse-specs`: no diagnostics and no findings. `just plan-spec`: `k8s_client.allium` 25 obligations (8 before), `budget.allium` 26 (unchanged).
+- `just test-checkers` (499 passed) and `just packaging-check`; `just docs-check`.
+- The kind check, [json-patch-null.txt](../evidence/41/json-patch-null.txt), on kind v1.35.8: all five cases as expected (200, 200, 422 under a missing parent, 422 on a mismatched value with the annotations unchanged, 422 on a terminating pod). `just cluster-down` afterwards.
+- Not run: the probe's own kind proof (`s1-kind.sh`), because the committed Dockerfile cannot build on this ARM host (Decision 0013's Emulation row). It runs when this pull request carries the `cluster-s1` label, or on the push to main.
+
+### Snapshots
+
+- `pod list request sent by list_pods`: gains `?limit=500`, because every LIST is paginated.
+- New: `replica set list request sent by list_replica_sets`, `deployment list request sent by list_deployments`, `json patch request sent by patch_pod` (content type `application/json-patch+json`, the probe's first-write document) and `event create request sent by create_event` (the full core v1 Event body).
+- Deleted: `merge patch request sent by patch_annotation`, with the function.
+
+### Notes for later tickets
+
+- **The conflict Event and AGENTS.md.** The Event is knarr's own record, a new core Event object, not a change to a Pod. The Controller invariant's "writes only the annotations it owns, on live Pod objects" governs what knarr changes on Pods, so it stands unchanged.
+- **31.** A pod maps to its Deployment through controller owners: `Pod.owner` names a ReplicaSet, and `ReplicaSet.owner` names the Deployment. The discovery cycle is three LISTs. A failure on any page fails that LIST. Remove the probe as 31's new box lists.
+- **43.** `Pod.pod_ip` (`status.podIP`, `None` before one is assigned) and `Pod.ready` (the Ready condition is "True") are read; worker_contract's `Discovery` polls every pod with a pod IP whatever `ready` says.
+- **46.** `Failure.status` and `Failure.retry_after` (whole seconds, `None` for an HTTP-date or no header) are what budget's `pause` reads; `Throttled` is the 429. The cycle is three LISTs.
+- **32.** `patch_pod` takes `document`'s string as given and sends it as `application/json-patch+json`; `precondition_failed` is the 422 a failed `test` returns. A 404 or 409 is `NotFound` or `Conflict`, not a precondition failure.
+- **30.** `create_event` takes the reason as a parameter; the reason string is still observability's.

@@ -16,8 +16,10 @@
 -- Scale target and expected write rate. The defaults are sized for 500
 -- polled pods across up to 50 opted-in Deployments in one namespace, one
 -- knarr replica. At that scale knarr sends about 17 status GETs per second
--- on the pod network (500 pods every 30 s), one pod LIST and one Deployment
--- LIST per minute, and in the common case well under 0.5 patches per second.
+-- on the pod network (500 pods every 30 s), one pod LIST, one ReplicaSet
+-- LIST and one Deployment LIST per minute, each paginated at 500 items
+-- (k8s_client Pagination), and in the common case well under 0.5 patches
+-- per second.
 -- The model behind that figure is a task that crosses the first threshold
 -- and no later one: it makes two writes, one at the crossing and one
 -- removal when the pod goes idle, since a non-draining pod below the first
@@ -133,18 +135,20 @@ contract PollSchedule {
         -- (§8: costs refresh more slowly). Nothing is dropped from the
         -- queue except as Leaving says.
     @invariant ListCadence
-        -- The LIST of the namespace's pods and the LIST of its Deployments
-        -- form one discovery cycle, run on its own timer every
+        -- The LISTs of the namespace's pods, its ReplicaSets and its
+        -- Deployments form one discovery cycle, run on its own timer every
         -- config.list_interval, 60 seconds by default, valid from 10 to 600
         -- seconds, configured on its own and derived from no poll interval,
         -- so the defaults coinciding as multiples is incidental. The cycle
         -- is where knarr learns a pod's deletionTimestamp, a pod that has
         -- gone, a Deployment's overrides and the applied value a drained pod
         -- carries, so it is not slowed to the lowest threshold. A cycle in
-        -- which either LIST fails is retried whole on the next tick that is
-        -- sent, which is the next tick outside the LIST pause of
-        -- WriteBudget's PauseScope; a cycle in which either LIST is refused
-        -- with 429 is that pause's.
+        -- which any of the three LISTs fails is retried whole on the next
+        -- tick that is sent, which is the next tick outside the LIST pause
+        -- of WriteBudget's PauseScope; a cycle in which any of them is
+        -- refused with 429 is that pause's. Amended by ticket 41: the
+        -- ReplicaSet LIST joined the cycle, since a pod names its
+        -- Deployment only through its ReplicaSet owner.
     @invariant Leaving
         -- A pod stays on the schedule, and is polled, while the LIST shows
         -- it, deletionTimestamp set or not; no patch is made once it is set,
@@ -238,11 +242,11 @@ contract WriteBudget {
     @invariant PauseScope
         -- The patch pause is install-wide: no pod is patched while it
         -- lasts, while polling and the LIST continue. The discovery cycle
-        -- keeps a Pause of its own under the same rule: a 429 on either
-        -- LIST of a cycle skips the whole cycle, keeps the previous target
+        -- keeps a Pause of its own under the same rule: a 429 on any of
+        -- the three LISTs of a cycle skips the whole cycle, keeps the previous target
         -- set and schedules, and lengthens the LIST pause as BackOff says; a
         -- cycle whose tick falls inside that pause is not sent; the run ends
-        -- when a cycle completes with both LISTs succeeding. Neither pause
+        -- when a cycle completes with all three LISTs succeeding. Neither pause
         -- touches the other, and polls are never paused by a 429: the
         -- apiserver is not what they reach.
     @invariant Restart

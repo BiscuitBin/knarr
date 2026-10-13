@@ -1,5 +1,5 @@
 -module(k8s_http_test_ffi).
--export([start_responder/0, stop_responder/1, closed_port/0, count_lines/2]).
+-export([start_responder/0, start_ipv6_responder/0, stop_responder/1, closed_port/0, count_lines/2]).
 -include_lib("public_key/include/public_key.hrl").
 
 %% A loopback TLS responder. Its CA and leaves come from
@@ -22,8 +22,27 @@ start_responder() ->
   Other = chain(public_key:generate_key({rsa, 2048, 65537}), {iPAddress, <<127, 0, 0, 1>>}),
   CaFile = write_ca(Dir, "ca.pem", Server),
   OtherCaFile = write_ca(Dir, "other-ca.pem", Other),
-  {Port, Acceptor} = listen(Server),
-  {WrongHostPort, WrongHostAcceptor} = listen(WrongHost),
+  {Port, Acceptor} = listen(Server, loopback),
+  {WrongHostPort, WrongHostAcceptor} = listen(WrongHost, loopback),
+  {responder, Port, WrongHostPort, unicode:characters_to_binary(CaFile),
+    unicode:characters_to_binary(OtherCaFile), Acceptor, WrongHostAcceptor}.
+
+%% The same responder on ::1. The main leaf's iPAddress subjectAltName is
+%% ::1; the wrong-host leaf, from the same CA, names only 127.0.0.1, so the
+%% hostname check is what refuses it when the client asks for ::1.
+start_ipv6_responder() ->
+  {ok, _} = application:ensure_all_started(ssl),
+  {ok, _} = application:ensure_all_started(inets),
+  Dir = filename:join(["build", "k8s_http_test", integer_to_list(erlang:unique_integer([positive]))]),
+  ok = filelib:ensure_path(Dir),
+  RootKey = public_key:generate_key({rsa, 2048, 65537}),
+  Server = chain(RootKey, {iPAddress, <<0:120, 1>>}),
+  WrongHost = chain(RootKey, {iPAddress, <<127, 0, 0, 1>>}),
+  Other = chain(public_key:generate_key({rsa, 2048, 65537}), {iPAddress, <<0:120, 1>>}),
+  CaFile = write_ca(Dir, "ca.pem", Server),
+  OtherCaFile = write_ca(Dir, "other-ca.pem", Other),
+  {Port, Acceptor} = listen(Server, ipv6_loopback),
+  {WrongHostPort, WrongHostAcceptor} = listen(WrongHost, ipv6_loopback),
   {responder, Port, WrongHostPort, unicode:characters_to_binary(CaFile),
     unicode:characters_to_binary(OtherCaFile), Acceptor, WrongHostAcceptor}.
 
@@ -40,8 +59,12 @@ chain(RootKey, San) ->
   public_key:pkix_test_data(#{root => [{key, RootKey}], intermediates => [],
     peer => [{key, {rsa, 2048, 65537}}, {extensions, [Extension]}]}).
 
-listen(Conf) ->
-  {ok, Listen} = ssl:listen(0, [{ip, {127, 0, 0, 1}}, {reuseaddr, true}, {active, false}, binary,
+listen(Conf, Address) ->
+  Ip = case Address of
+    loopback -> [{ip, {127, 0, 0, 1}}];
+    ipv6_loopback -> [inet6, {ip, {0, 0, 0, 0, 0, 0, 0, 1}}]
+  end,
+  {ok, Listen} = ssl:listen(0, Ip ++ [{reuseaddr, true}, {active, false}, binary,
                                 {cert, proplists:get_value(cert, Conf)},
                                 {key, proplists:get_value(key, Conf)}]),
   {ok, {_, Port}} = ssl:sockname(Listen),

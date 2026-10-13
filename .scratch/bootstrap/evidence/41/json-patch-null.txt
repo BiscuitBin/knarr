@@ -1,0 +1,49 @@
+date: 2026-10-13T07:07Z
+host: Darwin arm64
+commit: 69f8942
+docker 29.4.0 linux/arm64
+kind v0.33.0 go1.26.6 darwin/arm64
+Client Version: v1.34.3
+node 41-k8s-client-spec-then-1ee946b4-control-plane kubelet v1.35.8 Debian GNU/Linux 13 (trixie)
+apiserver v1.35.8
+pause image registry.k8s.io/pause:3.10 (preloaded on the node; imagePullPolicy Never)
+--- pods as created: annotations of each (empty means no map)
+bare: 
+mapped: 
+untouched: 
+mismatch: 
+terminating: 
+--- case 1: bare
+patch: [{"op":"test","path":"/metadata/deletionTimestamp","value":null},{"op":"test","path":"/metadata/annotations","value":null},{"op":"add","path":"/metadata/annotations","value":{"knarr.io/x":"1"}}]
+kubectl: pod/bare patched
+status: 200 OK
+annotations after: {"knarr.io/x":"1"}
+ok   case 1: 200
+--- case 2: mapped
+patch: [{"op":"test","path":"/metadata/deletionTimestamp","value":null},{"op":"test","path":"/metadata/annotations/knarr.io~1x","value":null},{"op":"add","path":"/metadata/annotations/knarr.io~1x","value":"1"}]
+kubectl: pod/mapped patched
+status: 200 OK
+annotations after: {"knarr.io/x":"1","other":"kept"}
+ok   case 2: 200
+--- case 3: untouched
+patch: [{"op":"test","path":"/metadata/annotations/knarr.io~1x","value":null}]
+kubectl: The request is invalid: the server rejected our request due to an error in our request
+status: 422 Unprocessable Entity
+annotations after: 
+ok   case 3: 422
+--- case 4: mismatch
+patch: [{"op":"test","path":"/metadata/annotations/knarr.io~1x","value":"2"},{"op":"add","path":"/metadata/annotations/knarr.io~1x","value":"3"}]
+kubectl: The request is invalid: the server rejected our request due to an error in our request
+status: 422 Unprocessable Entity
+annotations after: {"knarr.io/x":"1"}
+ok   case 4: 422
+ok   case 4: annotations unchanged, {"knarr.io/x":"1"}
+ok   case 5: deletionTimestamp set to 2026-10-13T07:07:41Z, held by the finalizer
+--- case 5: terminating
+patch: [{"op":"test","path":"/metadata/deletionTimestamp","value":null},{"op":"add","path":"/metadata/annotations","value":{"knarr.io/x":"1"}}]
+kubectl: The request is invalid: the server rejected our request due to an error in our request
+status: 422 Unprocessable Entity
+annotations after: 
+ok   case 5: 422
+ok   case 5: finalizer cleared and the pod is gone
+json-patch-null: all checks passed

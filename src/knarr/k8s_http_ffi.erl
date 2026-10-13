@@ -6,6 +6,12 @@
 %% {failed_connect, [{to_address, _}, {inet, _, {tls_alert, {Alert, _}}}]}
 %% and a refused connection as {inet, _, econnrefused}. Nothing returned here
 %% carries the request or its headers.
+%%
+%% httpc's default profile connects over inet only, so an IPv6 literal host
+%% (the bracketed form ServiceAddress gives) goes through a profile of its
+%% own whose ipfamily is inet6. That profile is started under inets' own
+%% supervisor on first use; an IPv4 host never touches it. Request options
+%% cannot carry the family: {socket_opts, [inet6]} still resolves with inet.
 request(Method, Url, Headers, ContentType, Body, CaFile) ->
   Ssl = [{verify, verify_peer},
     {cacertfile, unicode:characters_to_list(CaFile)},
@@ -18,7 +24,7 @@ request(Method, Url, Headers, ContentType, Body, CaFile) ->
     {<<>>, _} -> {error, {other, <<"body without content-type">>}};
     _ -> {UrlList, HeaderList, unicode:characters_to_list(ContentType), Body}
   end,
-  case request(method(Method), Request, Options) of
+  case request(method(Method), Request, Options, profile(UrlList)) of
     {ok, {{_, Status, _}, ResponseHeaders, ResponseBody}} ->
       {ok, {Status,
             [{unicode:characters_to_binary(K), unicode:characters_to_binary(V)} || {K, V} <- ResponseHeaders],
@@ -29,10 +35,34 @@ request(Method, Url, Headers, ContentType, Body, CaFile) ->
     {error, Reason} -> {error, {other, describe(Reason)}}
   end.
 
-request({error, Reason}, _Request, _Options) -> {error, Reason};
-request(_Method, {error, Reason}, _Options) -> {error, Reason};
-request(Method, Request, Options) ->
-  httpc:request(Method, Request, Options, [{body_format, binary}]).
+request({error, Reason}, _Request, _Options, _Profile) -> {error, Reason};
+request(_Method, {error, Reason}, _Options, _Profile) -> {error, Reason};
+request(_Method, _Request, _Options, {error, Reason}) -> {error, Reason};
+request(Method, Request, Options, Profile) ->
+  httpc:request(Method, Request, Options, [{body_format, binary}], Profile).
+
+%% The default profile, or the inet6 one when the URL's host is an IPv6
+%% literal. uri_string strips the brackets from the host it returns.
+profile(Url) ->
+  Host = case uri_string:parse(Url) of
+    #{host := H} -> H;
+    _ -> ""
+  end,
+  case inet:parse_ipv6strict_address(Host) of
+    {ok, _} -> inet6_profile();
+    {error, _} -> default
+  end.
+
+inet6_profile() ->
+  case inets:start(httpc, [{profile, knarr_inet6}]) of
+    {ok, _} -> set_inet6();
+    {error, {already_started, _}} -> set_inet6();
+    {error, Reason} -> {error, {other, describe(Reason)}}
+  end.
+
+set_inet6() ->
+  ok = httpc:set_options([{ipfamily, inet6}], knarr_inet6),
+  knarr_inet6.
 
 method(<<"GET">>) -> get;
 method(<<"PATCH">>) -> patch;

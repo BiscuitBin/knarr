@@ -1,0 +1,9 @@
+---
+version: 2.0.2
+title: replica set list request sent by list_replica_sets
+file: ./test/k8s_client_test.gleam
+test_name: snapshot_list_replica_sets_request_test
+---
+GET https://10.96.0.1:443/apis/apps/v1/namespaces/default/replicasets?limit=500
+accept: application/json
+authorization: Bearer test-token

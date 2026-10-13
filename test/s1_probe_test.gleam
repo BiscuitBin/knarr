@@ -8,7 +8,7 @@ import gleam/http
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleeunit/should
 import knarr/k8s_client.{type Pod, Pod, Target}
 import knarr/k8s_http
@@ -46,8 +46,10 @@ fn forwarding_send(
     process.send(requests, request)
     let body = case request.method {
       http.Get ->
-        "{\"items\":[{\"metadata\":{\"name\":\"" <> pod_name <> "\"}}]}"
-      _ -> "{\"metadata\":{\"name\":\"" <> pod_name <> "\"}}"
+        "{\"items\":[{\"metadata\":{\"name\":\""
+        <> pod_name
+        <> "\",\"uid\":\"u\"}}]}"
+      _ -> "{\"metadata\":{\"name\":\"" <> pod_name <> "\",\"uid\":\"u\"}}"
     }
     Ok(response.new(200) |> response.set_body(body))
   }
@@ -112,6 +114,8 @@ pub fn probe_rereads_the_token_file_on_every_tick_test() -> Nil {
   let second = next_request(requests)
   assert second.method == http.Patch
   assert second.path == "/api/v1/namespaces/default/pods/" <> pod_name
+  assert request.get_header(second, "content-type")
+    == Ok("application/json-patch+json")
   assert authorization(second) == "Bearer first-token"
 
   write_file(config.token_file, "second-token")
@@ -186,20 +190,76 @@ pub fn probe_supervisor_restarts_the_probe_and_leaves_the_listener_test() -> Nil
   stop_root(started.pid)
 }
 
-fn pod(name: String, deletion_timestamp: option.Option(String)) -> Pod {
-  Pod(name:, annotations: dict.new(), deletion_timestamp:)
+fn pod(
+  name name: String,
+  annotations annotations: Option(dict.Dict(String, String)),
+  deletion_timestamp deletion_timestamp: Option(String),
+) -> Pod {
+  Pod(
+    name:,
+    uid: "u-" <> name,
+    annotations:,
+    deletion_timestamp:,
+    pod_ip: None,
+    ready: True,
+    owner: None,
+  )
 }
 
-pub fn own_pod_is_patched_only_while_it_is_not_terminating_test() -> Nil {
-  let other = pod("other", None)
+const live_test =
+  "{\"op\":\"test\",\"path\":\"/metadata/deletionTimestamp\",\"value\":null}"
 
-  assert s1_probe.should_patch(pods: [other, pod(pod_name, None)], pod_name:)
-  assert !s1_probe.should_patch(
-    pods: [other, pod(pod_name, Some("2026-10-09T05:00:00Z"))],
-    pod_name:,
-  )
-  assert !s1_probe.should_patch(pods: [other], pod_name:)
-  assert !s1_probe.should_patch(pods: [], pod_name:)
+pub fn probe_adds_its_key_under_an_existing_annotations_map_test() -> Nil {
+  let own =
+    pod(
+      name: pod_name,
+      annotations: Some(dict.from_list([#("other", "x")])),
+      deletion_timestamp: None,
+    )
+
+  assert s1_probe.probe_patch(
+      pods: [
+        pod(name: "other", annotations: None, deletion_timestamp: None),
+        own,
+      ],
+      pod_name:,
+      value: "1760000060",
+    )
+    == Some(
+      "["
+      <> live_test
+      <> ",{\"op\":\"add\",\"path\":\"/metadata/annotations/knarr.io~1s1-probe\",\"value\":\"1760000060\"}]",
+    )
+}
+
+pub fn probe_adds_the_map_when_the_pod_has_none_test() -> Nil {
+  // A test under a missing parent fails, so the map itself is tested for
+  // null and added whole (ownership WriteMode).
+  assert s1_probe.probe_patch(
+      pods: [pod(name: pod_name, annotations: None, deletion_timestamp: None)],
+      pod_name:,
+      value: "1760000060",
+    )
+    == Some(
+      "["
+      <> live_test
+      <> ",{\"op\":\"test\",\"path\":\"/metadata/annotations\",\"value\":null},{\"op\":\"add\",\"path\":\"/metadata/annotations\",\"value\":{\"knarr.io/s1-probe\":\"1760000060\"}}]",
+    )
+}
+
+pub fn probe_does_not_patch_a_missing_or_terminating_pod_test() -> Nil {
+  let other = pod(name: "other", annotations: None, deletion_timestamp: None)
+  let terminating =
+    pod(
+      name: pod_name,
+      annotations: None,
+      deletion_timestamp: Some("2026-10-09T05:00:00Z"),
+    )
+
+  assert s1_probe.probe_patch(pods: [other, terminating], pod_name:, value: "1")
+    == None
+  assert s1_probe.probe_patch(pods: [other], pod_name:, value: "1") == None
+  assert s1_probe.probe_patch(pods: [], pod_name:, value: "1") == None
 }
 
 // The application callback builds the config by position, in Erlang, so a

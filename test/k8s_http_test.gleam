@@ -32,6 +32,9 @@ pub type Responder {
 @external(erlang, "k8s_http_test_ffi", "start_responder")
 fn start_responder() -> Responder
 
+@external(erlang, "k8s_http_test_ffi", "start_ipv6_responder")
+fn start_ipv6_responder() -> Responder
+
 @external(erlang, "k8s_http_test_ffi", "stop_responder")
 fn stop_responder(responder: Responder) -> Nil
 
@@ -56,6 +59,34 @@ pub fn send_completes_a_verified_handshake_with_the_right_ca_test() -> Nil {
   assert response.status == 200
   assert response.body == "{\"kind\":\"PodList\",\"items\":[]}"
   assert response.get_header(response, "content-type") == Ok("application/json")
+}
+
+pub fn send_completes_a_verified_handshake_with_an_ipv6_host_test() -> Nil {
+  // KUBERNETES_SERVICE_HOST may be an IPv6 literal; the client brackets it
+  // in the URL (ServiceAddress) and the peer's iPAddress SAN is ::1.
+  let responder = start_ipv6_responder()
+  let response =
+    get(responder.port)
+    |> request.set_host("[::1]")
+    |> k8s_http.send(Tls(responder.ca_file))
+    |> should.be_ok
+  stop_responder(responder)
+
+  assert response.status == 200
+  assert response.body == "{\"kind\":\"PodList\",\"items\":[]}"
+}
+
+pub fn send_refuses_an_ipv6_peer_whose_certificate_names_another_ip_test() -> Nil {
+  // Same CA, but the only subjectAltName is 127.0.0.1: the hostname check
+  // still runs for an IPv6 host.
+  let responder = start_ipv6_responder()
+  let result =
+    get(responder.wrong_host_port)
+    |> request.set_host("[::1]")
+    |> k8s_http.send(Tls(responder.ca_file))
+  stop_responder(responder)
+
+  assert result == Error(k8s_http.TlsAlert("bad_certificate"))
 }
 
 pub fn send_refuses_a_wrong_ca_with_no_fallback_test() -> Nil {
@@ -111,17 +142,14 @@ pub fn send_passes_content_type_as_httpc_own_argument_test() -> Nil {
     get(responder.port)
     |> request.set_method(http.Patch)
     |> request.set_path("/echo")
-    |> request.set_header("content-type", "application/merge-patch+json")
+    |> request.set_header("content-type", "application/json-patch+json")
     |> request.set_body("{}")
     |> k8s_http.send(Tls(responder.ca_file))
     |> should.be_ok
   stop_responder(responder)
 
   assert response.status == 200
-  assert count_lines(
-      response.body,
-      "content-type: application/merge-patch+json",
-    )
+  assert count_lines(response.body, "content-type: application/json-patch+json")
     == 1
   assert count_lines(response.body, "accept: application/json") == 1
 }

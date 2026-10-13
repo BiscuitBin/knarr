@@ -40,8 +40,15 @@ def test_restricted_skeleton():
 
 def test_role_grants_exactly_the_verbs_the_client_uses():
     by_kind = {item["kind"]: item for item in resources()}
+    # k8s_client Verbs: no get, no watch, and nothing on any other resource.
     assert by_kind["Role"]["rules"] == [
-        {"apiGroups": [""], "resources": ["pods"], "verbs": ["list", "patch"]}
+        {"apiGroups": [""], "resources": ["pods"], "verbs": ["list", "patch"]},
+        {"apiGroups": [""], "resources": ["events"], "verbs": ["create"]},
+        {
+            "apiGroups": ["apps"],
+            "resources": ["deployments", "replicasets"],
+            "verbs": ["list"],
+        },
     ]
     binding = by_kind["RoleBinding"]
     assert binding["roleRef"] == {
@@ -142,6 +149,19 @@ rules:
   verbs:
   - list
   - patch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - replicasets
+  verbs:
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

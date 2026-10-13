@@ -4,6 +4,6 @@ title: pod list request sent by list_pods
 file: ./test/k8s_client_test.gleam
 test_name: snapshot_list_pods_request_test
 ---
-GET https://10.96.0.1:443/api/v1/namespaces/default/pods
+GET https://10.96.0.1:443/api/v1/namespaces/default/pods?limit=500
 accept: application/json
 authorization: Bearer test-token

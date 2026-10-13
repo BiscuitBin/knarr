@@ -461,15 +461,15 @@ flowchart TB
 ```
 
 - **Supervision (recommended):** `gleam_otp` (static and factory supervisors, actors). Its docs say it does not cover all of OTP, so fall back to raw Erlang OTP where needed.
-- **Kubernetes client boundary:** keep it behind a small Gleam module so the client choice stays reversible ([DEFERRED.md §3](DEFERRED.md#3-kubernetes-client-alternatives)). No mature Gleam-native Kubernetes client was found. Knarr needs little from the API: get, list and patch on pods; get and list on Deployments and ReplicaSets.
+- **Kubernetes client boundary:** keep it behind a small Gleam module so the client choice stays reversible ([DEFERRED.md §3](DEFERRED.md#3-kubernetes-client-alternatives)). No mature Gleam-native Kubernetes client was found. Knarr needs little from the API: list and patch on pods, list on Deployments and ReplicaSets, and create on events, with no get; the `Verbs` clause of [k8s_client.allium](specs/k8s_client.allium) names the set.
 - **In-cluster TLS** is the hard part of option (A). The cluster CA is not in the OS trust store, so a small Erlang FFI step is likely needed. Do not rely on `httpc` defaults. `gleam_httpc` passes no ssl options when verification is on, so it inherits `httpc`'s defaults, and those only became verifying in OTP 26 (Inets 9.0). Pass explicit ssl options instead: `verify_peer`, the service-account `ca.crt` as `cacertfile`, and a hostname check. Require OTP 26 or later. Spike S1 verified that the hostname check passes against the IP literal in `KUBERNETES_SERVICE_HOST` ([Decision 0013](decisions/0013-in-cluster-client.md)).
 - **Tokens:** projected service-account tokens rotate on disk. Re-read the token periodically and never cache it for the life of the process.
 - **Single replica, `Recreate` strategy:** no leader election. `Recreate` avoids two replicas writing at once, but leaves a short gap with no updates during upgrades. HA notes are in [DEFERRED.md §4](DEFERRED.md#4-ha-and-leader-election).
 - **Restart safety and staleness:** derive state from the current poll, the current annotations, and Knarr's marker annotation `knarr.io/applied`, which holds, per owned annotation, what Knarr applied or that it yielded, and the time of Knarr's last write to the pod; its shape is settled in the `Recorded` clause of [ownership.allium](specs/ownership.allium). Do not rely on in-memory counters. On startup, reconcile every pod that carries the marker. **Open tension:** writes are sparse, so after a restart a last-written timestamp cannot tell "the same cost reported for hours" from "hours of failed polls". Freshness semantics and conservative restart behavior go in §9.12. Document uninstall and manual recovery, for example `kubectl annotate pod <p> cluster-autoscaler.kubernetes.io/safe-to-evict-`, and the release of a yield, which removes the marker together with every owned annotation: `kubectl annotate pod <p> knarr.io/applied- controller.kubernetes.io/pod-deletion-cost- cluster-autoscaler.kubernetes.io/safe-to-evict-`.
-- **Minimum RBAC (one namespaced Role; inferred from the standard RBAC model, to be confirmed):**
-  - core `pods`: get, list, patch (watch later, if watch-based discovery is adopted)
-  - `apps` `deployments`, `replicasets`: get, list (watch later)
-  - core or `events.k8s.io` `events`: create, for the Events Knarr raises (§5, §8); the at most one per yield is fixed in the `Event` clause of [ownership.allium](specs/ownership.allium) and ticket 41 builds the create
+- **Minimum RBAC (one namespaced Role; settled in the `Verbs` clause of [k8s_client.allium](specs/k8s_client.allium)):**
+  - core `pods`: list, patch (watch later, if watch-based discovery is adopted). No get: the next LIST is how Knarr learns what a pod is now
+  - `apps` `deployments`, `replicasets`: list (watch later)
+  - core `events`: create, for the Events Knarr raises (§5, §8); the at most one per yield is fixed in the `Event` clause of [ownership.allium](specs/ownership.allium), and the create is the `ConflictEvent` clause of k8s_client
 
 ### Failure modes (proposed v1 defaults, all to be confirmed in tickets)
 
