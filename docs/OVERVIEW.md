@@ -469,7 +469,7 @@ flowchart TB
 - **Minimum RBAC (one namespaced Role; inferred from the standard RBAC model, to be confirmed):**
   - core `pods`: get, list, patch (watch later, if watch-based discovery is adopted)
   - `apps` `deployments`, `replicasets`: get, list (watch later)
-  - core or `events.k8s.io` `events`: create, for the Events Knarr raises (§5, §8); the one per yield is fixed in the `Event` clause of [ownership.allium](specs/ownership.allium) and ticket 41 builds the create
+  - core or `events.k8s.io` `events`: create, for the Events Knarr raises (§5, §8); the at most one per yield is fixed in the `Event` clause of [ownership.allium](specs/ownership.allium) and ticket 41 builds the create
 
 ### Failure modes (proposed v1 defaults, all to be confirmed in tickets)
 
@@ -485,7 +485,7 @@ flowchart TB
 | API throttling (APF / 429) | Back off and respect the budget | Costs lag | §9.8 |
 | Patch rejected (400/403, admission webhook) | Log, Event, metric; no rapid retries | The previous annotations stay, so the old bias and any `safe-to-evict: "false"` persist | §9.14, §9.12 |
 | Many pods (poll fan-out) | Bounded concurrency, jitter, no overlapping polls | Costs refresh more slowly | §9.8 |
-| Another writer changed the value | The patch's `test` operations detect it; Knarr yields that annotation for the pod's life, records the yield in the marker, and raises one Event on the Pod | The other writer wins | §9.10, settled in [ownership.allium](specs/ownership.allium) |
+| Another writer changed the value | The patch's `test` operations detect it; Knarr yields that annotation for the pod's life, records the yield in the marker, and raises at most one Event on the Pod | The other writer wins | §9.10, settled in [ownership.allium](specs/ownership.allium) |
 | Deployment rollout | No special handling | Cost still biases victims within the old ReplicaSet, but cannot keep that ReplicaSet alive through the rollout | §9.13 |
 | `PodDeletionCost` gate disabled | Documented prerequisite; optional self-test | Annotations ignored | §9.11 |
 | NetworkPolicy blocks polling | Looks like an absent contract; Event | No bias | §9.4b |
@@ -521,7 +521,7 @@ flowchart LR
 7. **Readiness interaction:** how to document it, and whether Knarr warns on "high cost while NotReady". Settled in [worker_contract.allium](specs/worker_contract.allium).
 8. **Poll interval, concurrency and write budget:** numeric defaults and a v1 scale target (pods, Deployments, interval), LIST cadence, limits per Deployment and per cluster, and the expected API write rate.
 9. **`safe-to-evict` policy:** the threshold; removing the annotation vs writing `"true"` (matters for local-storage pods); how to avoid pinning nodes. Depends on S2.
-10. **Ownership and conflicts with other writers:** the marker annotation, the write mode, and what Knarr does when someone else changes the value. Other writers include user-set values, the lablabs and zepellin controllers, and Karpenter with `PodDeletionCostManagement` enabled. Settled in [ownership.allium](specs/ownership.allium): the marker is one annotation, `knarr.io/applied`, recording per owned annotation what Knarr applied or that it yielded, plus the time of the last write; every write is a JSON Patch whose `test` operations check `deletionTimestamp`, the marker and the last-applied value, and a failed test is a 422 handled from the next LIST; a value another writer changed is yielded for the pod's life, recorded in the marker, with one Event on the Pod.
+10. **Ownership and conflicts with other writers:** the marker annotation, the write mode, and what Knarr does when someone else changes the value. Other writers include user-set values, the lablabs and zepellin controllers, and Karpenter with `PodDeletionCostManagement` enabled. Settled in [ownership.allium](specs/ownership.allium): the marker is one annotation, `knarr.io/applied`, recording per owned annotation what Knarr applied or that it yielded, plus the time of the last write; every write is a JSON Patch whose `test` operations check `deletionTimestamp`, the marker and the last-applied value, and a failed test is a 422 handled from the next LIST; a value another writer changed is yielded for the pod's life, recorded in the marker, with at most one Event on the Pod.
 11. **Feature-gate prerequisite.** Options: (i) document only; (ii) a startup self-test; (iii) a periodic check.
 12. **Cleanup, staleness and freshness.** Options: (i) never clean up; (ii) clean up when a pod or workload leaves scope; (iii) also clean up on graceful shutdown. Also covers: separate expiry for deletion cost and for `safe-to-evict`; what the marker timestamp means; conservative behavior on restart when freshness is unknown; startup reconciliation of marked pods; annotations left after a crash; and an uninstall procedure.
 13. **Rollouts:** guidance on `maxUnavailable` / `maxSurge` plus graceful drain. Cost biases victims within an old ReplicaSet but cannot stop that ReplicaSet from scaling to zero.

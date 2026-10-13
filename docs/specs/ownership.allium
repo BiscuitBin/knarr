@@ -207,8 +207,16 @@ contract Ownership {
         -- NoPatchWhileTerminating window; the value and marker tests make a
         -- lost update impossible, since a patch is accepted only against
         -- the view it was built from. Two writers of the same string are
-        -- indistinguishable and harmless. The Role needs no verb beyond
-        -- list and patch on pods for this.
+        -- indistinguishable and harmless. A test of null passes for a
+        -- member the serialized pod omits, a nil deletionTimestamp or a
+        -- never-written annotation, because the apiserver applies the
+        -- patch with evanphx/json-patch (v4), whose test treats a key
+        -- missing under an existing parent as null; RFC 6902 alone does
+        -- not promise this, and a test under a missing parent fails, which
+        -- is why WriteMode tests /metadata/annotations itself when the map
+        -- is absent. Ticket 41's kind check proves the library's behaviour
+        -- on a real apiserver before anything is built on it. The Role
+        -- needs no verb beyond list and patch on pods for this.
     @invariant Rejected
         -- A 422 is first a precondition failure. rejected is true when
         -- every test operation of the failed patch passes against the view
@@ -237,21 +245,26 @@ contract Ownership {
         -- lablabs or zepellin, therefore disables knarr for every pod it
         -- reaches, once each.
     @invariant Event
-        -- One Event per yield. event is built from the marker and the
-        -- annotations the yield patch was built from, before that patch,
-        -- so applied is the record the yield replaced and found is the
-        -- value the other writer left; it is sent only after patch_pod
+        -- At most one Event per yield: one create attempt, never more.
+        -- event is built from the marker and the annotations the yield
+        -- patch was built from, before that patch, so applied is the
+        -- record the yield replaced and found is the value the other
+        -- writer left; the create is attempted only after patch_pod
         -- returns the yield accepted, never before, and a 422 on the yield
         -- patch raises nothing, the conflict being seen again from the
-        -- next LIST. Its involvedObject is the Pod by name and uid, its
-        -- content is ConflictEvent, and message renders "<key>: knarr
-        -- applied <applied> and found <found>; another writer owns it now
-        -- and knarr will not write it again on this pod", with Owned.key
-        -- for <key> and "absent" for a null applied or found. Nothing
-        -- repeats while the annotation stays yielded, restarts included,
-        -- because the record is on the pod. The reason, the gauge and the
-        -- log line are observability's (ticket 30); the create and its
-        -- Role rule are the client's (ticket 41).
+        -- next LIST. A crash between the accepted yield patch and the
+        -- create, or a create that fails, loses that pod's Event for good:
+        -- nothing retries and nothing repeats while the annotation stays
+        -- yielded, restarts included, because the record is on the pod
+        -- and knarr keeps no other memory of the yield. The yield itself
+        -- is not lost; every later LIST reads the record. Its
+        -- involvedObject is the Pod by name and uid, its content is
+        -- ConflictEvent, and message renders "<key>: knarr applied
+        -- <applied> and found <found>; another writer owns it now and
+        -- knarr will not write it again on this pod", with Owned.key for
+        -- <key> and "absent" for a null applied or found. The reason, the
+        -- gauge and the log line are observability's (ticket 30); the
+        -- create and its Role rule are the client's (ticket 41).
     @invariant Pure
         -- Every signature is a function of its arguments alone: at is
         -- passed in, nothing here reads a clock, the pod, config or state,

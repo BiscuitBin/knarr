@@ -93,7 +93,7 @@ Karpenter is not an MVP target.
 
 - `karpenter.sh/do-not-disrupt` is a possible future addition. `safe-to-evict` does not affect Karpenter.
 - Karpenter already reads `pod-deletion-cost` when scoring consolidation, so Knarr's values can affect Karpenter clusters indirectly.
-- kubernetes-sigs/karpenter #2894 (merged 2026-10-01; the first release containing it is unverified) adds a `PodDeletionCostManagement` gate. With the gate off (the default), Karpenter reads its new `karpenter.sh/disruption-cost` and falls back to `pod-deletion-cost`. With the gate on, Karpenter **writes** `pod-deletion-cost` itself, which conflicts with Knarr (§9.10): under the `Yield` clause of [ownership.allium](specs/ownership.allium) Knarr yields every pod Karpenter writes, once each, with one Event per pod, so the gate on means Knarr is effectively disabled for that cluster.
+- kubernetes-sigs/karpenter #2894 (merged 2026-10-01; the first release containing it is unverified) adds a `PodDeletionCostManagement` gate. With the gate off (the default), Karpenter reads its new `karpenter.sh/disruption-cost` and falls back to `pod-deletion-cost`. With the gate on, Karpenter **writes** `pod-deletion-cost` itself, which conflicts with Knarr (§9.10): under the `Yield` clause of [ownership.allium](specs/ownership.allium) Knarr yields every pod Karpenter writes, once each, with at most one Event per pod, so the gate on means Knarr is effectively disabled for that cluster.
 
 References:
 

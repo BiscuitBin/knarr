@@ -66,7 +66,7 @@ Each row names the transcript that shows it. The first group is local evidence; 
 - **The OTP pin moves.** The loopback test catches a changed alert shape or SNI, and `tls/run.sh` shows the raw terms; either reopens its row. Amended by ticket 42: until then no test checked the SNI.
 - **A string IP host can keep the hostname check without SNI.** In OTP 29's ssl 11.7.7, an IP given as a tuple gets no SNI and is still checked against the `iPAddress` SAN. httpc hands ssl the URL's host as a string, which ssl sends as SNI, and for a string `disable` also skips the hostname check. If ssl stops sending SNI for a string IP, or httpc passes an IP host as a tuple, the SNI row reopens (ticket 42).
 - **A managed cluster differs**, for example a service address that is not an IP literal or an IPv6 one.
-- **Ticket 22 chooses a write mode** that needs more than a merge patch, which amends `Verbs` and the open §9.10 question. Amended by ticket 22: it did, on 2026-10-12, and the `Verbs` and `NoPatchWhileTerminating` bullets above carry the amendment; the row reopens again only if the apiserver stops treating a `test` of null against a missing key as passing, which ticket 41 checks on kind.
+- **Ticket 22 chooses a write mode** that needs more than a merge patch, which amends `Verbs` and the open §9.10 question. Amended by ticket 22: it did, on 2026-10-12, and the `Verbs` and `NoPatchWhileTerminating` bullets above carry the amendment; the row reopens again only if the apiserver stops treating a `test` of null against a missing key as passing, as `gopkg.in/evanphx/json-patch.v4`, which its patch handler imports, does today; ticket 41 checks it on kind.
 
 ## Related pages
 

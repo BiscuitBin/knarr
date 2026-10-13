@@ -8,8 +8,10 @@
 -- (§6, §9.9). Grounded in Decision 0008 (spike S2a, ticket 15); GKE
 -- confirmation is spike S2b (ticket 16). safe-to-evict is the second owned
 -- annotation under ownership's Adoption, Applied and Yield: standing is asked
--- for it only on a Deployment that opted in, its last-applied value is the
--- marker's applied record, and a yield of it leaves pod-deletion-cost owned.
+-- for it on a Deployment that opted in, and on one that has not only while
+-- the marker holds a record for it, so an opt-out's leftover falls to cleanup
+-- (ticket 23); its last-applied value is the marker's applied record, and a
+-- yield of it leaves pod-deletion-cost owned.
 -- Owner: ticket 25.
 
 ------------------------------------------------------------
