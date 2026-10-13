@@ -25,5 +25,5 @@ This needs network and Docker on a host that can build the linux/amd64 image, an
 
 ## Notes
 
-- **CI is the source of the kind transcripts.** The `cluster-s1` job in `.github/workflows/s1-proof.yml` runs the same three scripts when its inputs change or on `workflow_dispatch`; `s1-kind.txt`, `wrong-ca.txt` and `tls-native.txt` are its log from the run above. The kind run found the token file mode 0600 owned by UID 10001, rotation at +512 s, and the first success after the first expiry 2 s later.
+- **CI is the source of the kind transcripts.** The `cluster-s1` job in `.github/workflows/s1-proof.yml` runs the same three scripts on a push to main that changes its inputs, or on `workflow_dispatch`; `s1-kind.txt`, `wrong-ca.txt` and `tls-native.txt` are its log from the run above. The kind run found the token file mode 0600 owned by UID 10001, rotation at +512 s, and the first success after the first expiry 2 s later.
 - **Ticket 35.** [tls-native.txt](tls-native.txt) is native-Linux TLS evidence for the default environment, and [version.json](version.json) is the captured `/version` its fixture item asks for, from the kind version ticket 10 chose; the managed-cluster `minor` suffix claim is not established by it. The runtime environment's TLS probe and the rebar3 probe are not run here.
