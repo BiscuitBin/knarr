@@ -25,5 +25,5 @@
 - [ ] An IPv6 `KUBERNETES_SERVICE_HOST` is bracketed in the URL, or the clause states that only IPv4 service addresses are supported.
 - [ ] The S1 probe is removed once the reconciler calls the client, together with its `ERL_FLAGS` switch and the probe wording in `NoPodEffects`; the Role grants exactly what the client uses.
 - [ ] Decision 0013 is amended where the full module departs from the spike's findings.
-- [ ] The `cluster-s1` CI job is narrowed to the paths it proves, or gated by a label, once its transcripts sit beside the evidence scripts.
+- [x] The `cluster-s1` CI job is narrowed to the paths it proves, or gated by a label, once its transcripts sit beside the evidence scripts. Done ahead of this ticket in pull request #25: the job moved to `.github/workflows/s1-proof.yml`, run on push to main, path-filtered, plus `workflow_dispatch`; not on pull requests.
 - [ ] A failed patch and a failed list are returned as values carrying the response status and the Retry-After header in seconds, which budget's `BackOff` and `PauseScope` read ([46](46-spec-then-build-poll-schedule-and-patcher.md)); the §9.10 open question names it.

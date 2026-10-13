@@ -103,34 +103,6 @@ jobs:
       - if: always()
         run: just cluster-down
 
-  # Ticket 14's S1 proof: the in-cluster client on kind, including the token
-  # rotation wait of about ten minutes and the wrong-CA negative case. It is
-  # the committed evidence's source on native linux/amd64, where the ARM host
-  # cannot build the image. Non-required, like the smoke job, and never in
-  # needs below.
-  cluster-s1:
-    name: Kind S1 client proof (non-required)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 50
-    permissions:
-      contents: read
-    env:
-      KNARR_CLUSTER: kind
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-        with:
-          cluster: "true"
-      - run: sh .scratch/bootstrap/evidence/14/tls/run.sh "$PWD" "$RUNNER_TEMP/tls"
-      - run: sh .scratch/bootstrap/evidence/14/s1-kind.sh "$PWD" "$RUNNER_TEMP/s1-kind"
-      - run: sh .scratch/bootstrap/evidence/14/wrong-ca.sh "$PWD" "$RUNNER_TEMP/wrong-ca"
-      - if: failure()
-        run: just cluster-diagnostics
-      - if: always()
-        run: just cluster-down
-
   # This is the sole status check intended for branch protection. Only required
   # gate jobs belong in needs. Keep the initial kind and kwok jobs out (tickets
   # 10 and 13); kind needs a stated period of stability before becoming required.
