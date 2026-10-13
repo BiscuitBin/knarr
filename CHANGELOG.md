@@ -15,3 +15,4 @@ Notable changes to Knarr are recorded here. This file follows [Keep a Changelog]
 ### Changed
 
 - The Dockerfile's base images are pinned by digest.
+- The image no longer ships perl, which only erlang's conda package pulled in, and the weekly audit also scans the image's conda runtime environment with grype.

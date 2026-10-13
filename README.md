@@ -73,7 +73,10 @@ and on manual dispatch, outside the required gate:
   advisories.
 - `just image-scan` runs grype over the OS packages of the image
   `just image-build` builds. It does not read the image's conda runtime
-  environment; ticket 45 adds that scan.
+  environment.
+- `just runtime-scan` copies that runtime environment out of the image and
+  runs grype over its conda packages as a directory. It fails when grype
+  catalogues no conda package.
 
 Remote availability and published advisories change without a commit
 ([Decision 0014](docs/decisions/0014-dependency-updates-and-audit.md)).

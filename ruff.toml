@@ -76,6 +76,8 @@ ban-relative-imports = "all"
   "T201",
   "TRY003",
 ]
+# The Dockerfile's build stage runs this script on its own, outside any package.
+"scripts/prune_runtime.py" = ["INP001"]
 # Evidence helpers under .scratch/ are scripts like the checkers.
 ".scratch/bootstrap/evidence/*/*.py" = [
   "INP001",

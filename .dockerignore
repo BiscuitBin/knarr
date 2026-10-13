@@ -9,3 +9,4 @@
 !scripts/
 scripts/*
 !scripts/container-entrypoint.sh
+!scripts/prune_runtime.py
