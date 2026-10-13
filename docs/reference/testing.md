@@ -156,7 +156,7 @@ Run birdie's other commands through `just birdie`, for example `just birdie stal
 
 The builder and the decoder are tested by value. The I/O function is tested with a closure fake. The fake asserts the request it was handed and returns a canned response. A second fake returns `Error(_)`, to test the failure path. To snapshot the outgoing request, take the picture inside the fake: it then shows exactly what the function sent, not a request the test built again.
 
-The real client, `src/knarr/k8s_client.gleam` with `test/k8s_client_test.gleam`, follows the same shape for the pod list and the annotation patch. The worked example lives in `test/` only, because it is not part of knarr. It models the apiserver's `GET /version`, a real, read-only call that decides nothing:
+The real client, `src/knarr/k8s_client.gleam` with `test/k8s_client_test.gleam`, follows the same shape for the pod list and the annotation patch. The status poller, `src/knarr/poller.gleam` with `test/poller_test.gleam`, follows it too, except that its `send` returns an `Outcome`, a response or a named transport failure, which the decoder reads like any response. Production passes `poller_http.send` with the per-poll timeout. The worked example lives in `test/` only, because it is not part of knarr. It models the apiserver's `GET /version`, a real, read-only call that decides nothing:
 
 - [sans_io_example.gleam](../../test/sans_io_example.gleam): the builder, the decoder and `fetch_version`
 - [sans_io_example_test.gleam](../../test/sans_io_example_test.gleam): named tests, the closure fakes, a fixed-seed property, and a snapshot taken inside the fake
@@ -196,6 +196,19 @@ On a direct connection the first element is the socket family, `inet` here and `
 ### httpc retries
 
 httpc sends a request again once after a 503 whose Retry-After it can read, unless `autoretry` is 0, and `k8s_http_ffi` sets it to 0. `send_returns_a_503_with_retry_after_without_retrying_test` POSTs to the responder's `/unavailable` path, which answers its first request with a 503 carrying `retry-after: 0` and any later one with 200, and counts the requests that arrive. It expects the 503, its header and one request. If it gets a 200 after a pin move, httpc has renamed or ignored the option; the httpc autoretry row of [Decision 0013](../decisions/0013-in-cluster-client.md#findings) says why one attempt matters.
+
+### The poller's httpc terms
+
+[poller_http_test.gleam](../../test/poller_http_test.gleam) runs `poller_http.send` over plain HTTP against a `gen_tcp` responder on 127.0.0.1 and ::1, in [poller_http_test_ffi.erl](../../test/poller_http_test_ffi.erl). `poller_http_ffi` turns httpc's error term into a `Transport`. On OTP 29:
+
+| httpc returns | `Transport` | Fails if the mapping changes |
+| --- | --- | --- |
+| `{failed_connect, [{to_address, _}, {inet, [inet], econnrefused}]}`, or `inet6` for ::1 | `Refused` | `send_reports_a_closed_port_as_refused_test`, `send_reports_a_closed_ipv6_port_as_refused_test` |
+| `timeout` | `TimedOut` | `send_reports_a_silent_worker_as_timed_out_test` |
+| `socket_closed_remotely`, for a reset | `Unreachable` | `send_reports_a_reset_as_unreachable_test` |
+| `killed`, for a poll in flight when the profile dies | `Unreachable` | `profile_is_restarted_under_its_name_test` |
+
+A `failed_connect` entry carrying `timeout`, the shape a connect dropped by a NetworkPolicy takes, also gives `TimedOut`; no test exercises it. Three httpc defaults are overridden, each with a test that fails without it. The family is set per request with `{socket_opts, [{ipfamily, inet6}]}`, because a bare `inet6` in `socket_opts` loses to the profile's `inet`. `{autoretry, 0}` returns a 503 with Retry-After at once, because httpc's retry goes through a registered manager name a stand-alone profile lacks, and the poll would otherwise time out. `{ipv6_host_with_brackets, true}` keeps the brackets in an IPv6 poll's Host header.
 
 ### SNI
 

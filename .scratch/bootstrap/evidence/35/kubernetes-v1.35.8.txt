@@ -1,0 +1,33 @@
+date: 2026-10-10T19:24Z
+source: https://github.com/kubernetes/kubernetes tag v1.35.8
+tag object: 0222da424dffedde1b428f304aafe6b10cd8ddb4, tagged by Kubernetes Release Robot
+commit: 1c2e10a409eb1b03f2f28f401ce935312e20d9fb
+blob 65595e63fe97c659ef4f7bc0687dd82afdadf732: hack/lib/version.sh
+blob 6a18f9e91d7df51cbb0ae84138c4646ad1b47003: staging/src/k8s.io/apimachinery/pkg/version/types.go
+
+== hack/lib/version.sh: how the build derives gitMajor and gitMinor
+  98        # Try to match the "git describe" output to a regex to try to extract
+  99        # the "major" and "minor" versions and whether this is the exact tagged
+ 100        # version or whether the tree is between two tagged versions.
+ 101        if [[ "${KUBE_GIT_VERSION}" =~ ^v([0-9]+)\.([0-9]+)(\.[0-9]+)?([-].*)?([+].*)?$ ]]; then
+ 102          KUBE_GIT_MAJOR=${BASH_REMATCH[1]}
+ 103          KUBE_GIT_MINOR=${BASH_REMATCH[2]}
+ 104          if [[ -n "${BASH_REMATCH[4]}" ]]; then
+ 105            KUBE_GIT_MINOR+="+"
+ 106          fi
+ 107        fi
+...
+ 177      add_ldflag "gitMajor" "${KUBE_GIT_MAJOR}"
+ 178      add_ldflag "gitMinor" "${KUBE_GIT_MINOR}"
+
+== staging/src/k8s.io/apimachinery/pkg/version/types.go: the fields as JSON sees them
+  22  type Info struct {
+  24  	Major string `json:"major"`
+  26  	Minor string `json:"minor"`
+  35  	GitVersion            string `json:"gitVersion"`
+
+== version.sh's own lines, evaluated
+ok   KUBE_GIT_VERSION=v1.35.8 gives major=1 minor=35
+ok   KUBE_GIT_VERSION=v1.35.6-gke.1638000 gives major=1 minor=35+
+
+kubernetes-source.sh: done

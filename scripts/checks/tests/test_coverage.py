@@ -158,7 +158,12 @@ def test_failed_tests_keep_failure_and_report(coverage_project: Path, failure: s
         source = coverage_project / "test/coverage_probe_test.gleam"
         source.write_text(source.read_text().replace("== 11", "== 12"))
     else:
-        source = next((coverage_project / "test/birdie_snapshots").glob("*.accepted"))
+        # Only some snapshots carry the header, so pick one that does.
+        source = next(
+            path
+            for path in sorted((coverage_project / "test/birdie_snapshots").glob("*.accepted"))
+            if "application/json" in path.read_text()
+        )
         source.write_text(source.read_text().replace("application/json", "application/jsom"))
     result = run_coverage(coverage_project)
     assert result.returncode != 0

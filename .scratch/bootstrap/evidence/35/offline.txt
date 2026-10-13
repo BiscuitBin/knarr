@@ -1,0 +1,17 @@
+date: 2026-10-10T19:13:40Z
+host: Linux x86_64
+clone: <clone> at e548efa66770317dd78cd9209b60998ee15d4ee7, porcelain []
+
+== the network is denied inside the namespace
+     interfaces: lo 
+ok   curl https://github.com: exit 7 (curl: (7) Failed to connect to 127.0.0.1 port 32779 after 0 ms: Couldn't connect to server)
+ok   curl --noproxy * https://github.com: exit 6 (curl: (6) Could not resolve host: github.com)
+ok   curl --noproxy * https://140.82.112.3: exit 7 (curl: (7) Failed to connect to 140.82.112.3 port 443 after 0 ms: Couldn't connect to server)
+
+== just check, network denied
+offline-check: exit 0 after 200.367 s
+     porcelain after offline-check: []
+     All checks passed and the worktree is unchanged.
+
+offline.sh: the probes failed and the gate passed with the network denied
+exit 0

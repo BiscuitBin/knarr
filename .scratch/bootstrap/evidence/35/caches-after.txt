@@ -1,0 +1,7 @@
+pixi info cache_dir: ~/.cache/rattler/cache
+~/.cache/rattler/cache: 17571 files, 742M
+~/.cache/gleam: 38 files, 1.2M
+~/.cache/prek: 5 files, 64K
+~/.cache/rebar3 still absent
+~/.hex still absent
+~/.cache/hex still absent

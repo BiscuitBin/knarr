@@ -1,0 +1,18 @@
+sh scripts/initialize.sh
+The default environment has been installed.
+ok   rebar3 3.27.1 installed (sha256 matches the pin)
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+ok   ripsecrets 0.1.11 installed (sha256 matches the pin)
+ok   editorconfig-checker 4.0.2 installed (sha256 matches the pin)
+ok   allium 3.6.1 installed (sha256 matches the pin)
+ok   kubeconform 0.8.0 installed (sha256 matches the pin)
+ok   hadolint 2.15.1 installed (sha256 matches the pin)
+ok   kwokctl 0.8.0 installed (sha256 matches the pin)
+manifest.toml [requirements] matches gleam.toml
+Downloading packages
+ Downloaded 38 packages in 0.52s
+Installed Git hook at `.git/hooks/pre-commit`
+
+Ready. Next: just check (no network needed).
+Nothing has been staged, committed or pushed.

@@ -170,7 +170,12 @@ pub fn probe_supervisor_restarts_the_probe_and_leaves_the_listener_test() -> Nil
   let config = config("restart", forwarding_send(requests))
   write_file(config.token_file, "a-token")
   let started =
-    runtime.start(port: 0, bind: "127.0.0.1", probe: Some(config))
+    runtime.start(
+      port: 0,
+      bind: "127.0.0.1",
+      poller: False,
+      probe: Some(config),
+    )
     |> should.be_ok
 
   let root_children = children(started.pid)

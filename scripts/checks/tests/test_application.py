@@ -24,8 +24,8 @@ def test_restart_exhaustion_exits_vm():
             timer:sleep(100),
             Crash = fun Again(0, _) -> ok;
                 Again(N, Previous) ->
-                    case catch supervisor:which_children(Root) of
-                        [{_, Pid, supervisor, _}] when is_pid(Pid), Pid =/= Previous ->
+                    case catch lists:keyfind(0, 1, supervisor:which_children(Root)) of
+                        {0, Pid, supervisor, _} when is_pid(Pid), Pid =/= Previous ->
                             exit(Pid, kill), Again(N - 1, Pid);
                         _ -> timer:sleep(10), Again(N, Previous)
                     end

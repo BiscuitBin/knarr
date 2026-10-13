@@ -11,6 +11,7 @@
 -- Owner: spike S1 (ticket 14) settled the TLS, token and verb questions in
 -- Decision 0013; ticket 22 amended Verbs, NoPatchWhileTerminating and the
 -- Pod and patch shapes with what the write mode needs (ownership, §9.10);
+-- ticket 30 named the Events the create carries (observability, §9.14);
 -- ticket 41 stated the full contract and built it. Event reasons are
 -- observability's (ticket 30); rate limiting is budget's (ticket 24).
 
@@ -42,8 +43,8 @@ value Owner {
     uid: String
 }
 
--- A pod as the client reads it: its uid, which the conflict Event's
--- involvedObject names; its annotations as the list of the map's pairs, null
+-- A pod as the client reads it: its uid, which the involvedObject of an
+-- Event on the Pod names; its annotations as the list of the map's pairs, null
 -- when the response carries no annotations map, which is also how the
 -- apiserver serves an empty one and what ownership's WriteMode branches on;
 -- its deletion timestamp; its primary IP from status.podIP, null before one
@@ -138,7 +139,12 @@ contract Client {
         -- these resources. A patch is a JSON Patch, content type
         -- application/json-patch+json, whose body is the document ownership
         -- renders, sent as given; patch_pod returns the patched pod as the
-        -- newest view ownership's Adoption reads from.
+        -- newest view ownership's Adoption reads from. The creates are the
+        -- Events observability's Events names, each of type Warning: on a
+        -- Pod by name and uid for AnnotationYielded (ownership's Event),
+        -- PatchRejected and CleanupRejected, and on a Deployment by name and
+        -- uid for ContractAbsent, so the Deployment LIST returns each
+        -- Deployment's uid.
     @invariant NoPatchWhileTerminating
         -- A pod is not patched when the most recent list shows its
         -- deletion_timestamp set, and every patch tests that
@@ -161,10 +167,10 @@ contract Client {
         -- Retry-After, which budget's BackOff and PauseScope read.
         -- A 404 or 409 from a patch is a Failure of its own kind, never a
         -- precondition failure, and is left to the next LIST. The response
-        -- body is kept for the log and never read to classify. A transport
-        -- error, which VerifiedTls's failed handshake is one of, and a
-        -- success whose body does not decode are values distinct from a
-        -- Failure and from each other.
+        -- body is never read to classify and never logged (observability
+        -- NeverLogged). A transport error, which VerifiedTls's failed
+        -- handshake is one of, and a success whose body does not decode are
+        -- values distinct from a Failure and from each other.
     @invariant RetryAfter
         -- The Retry-After header is read as a number of seconds when its
         -- value is a non-negative decimal integer and nothing else. Any

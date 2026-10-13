@@ -1,0 +1,64 @@
+date: 2026-10-10T18:34:14Z
+host: Linux x86_64 (Ubuntu 24.04.5 LTS)
+kernel: 6.18.44-fc-v114
+cpu: 4 x Intel(R) Xeon(R) Processor @ 2.10GHz
+memory: 15.7 GiB
+user: uid 0
+bootstrap: pixi 0.81.0 (sha256 248510f5f75460a2ae4ec62d761e15c0191dc35db3b1da6f82d9f17c6017051d), just 1.58.0 (sha256 3ad66571feae522db2cad31b9613bf21035b8a06d2738d6fc8fe6089856f2042)
+source: 35-bootstrap-verification-gaps at e548efa66770317dd78cd9209b60998ee15d4ee7
+
+== the caches are cold
+ok   PIXI_CACHE_DIR, RATTLER_CACHE_DIR, XDG_CACHE_HOME, PREK_HOME, HEX_HOME and REBAR_CACHE_DIR are unset
+ok   absent: ~/.cache/rattler ~/.cache/gleam ~/.cache/prek ~/.cache/pre-commit ~/.cache/rebar3 ~/.cache/hex ~/.cache/lychee ~/.hex ~/.pixi ~/.rattler ~/.conda ~/.local/share/gleam ~/.local/share/rattler ~/.config/rebar3
+
+== a fresh clone
+ok   35-bootstrap-verification-gaps cloned at e548efa66770317dd78cd9209b60998ee15d4ee7, with no .pixi, .tools or build; porcelain []
+
+== just initialize, cold
+initialize: exit 0 after 16.676 s
+     porcelain after initialize: []
+     ok   rebar3 3.27.1 installed (sha256 matches the pin)
+     ok   ripsecrets 0.1.11 installed (sha256 matches the pin)
+     ok   editorconfig-checker 4.0.2 installed (sha256 matches the pin)
+     ok   allium 3.6.1 installed (sha256 matches the pin)
+     ok   kubeconform 0.8.0 installed (sha256 matches the pin)
+     ok   hadolint 2.15.1 installed (sha256 matches the pin)
+     ok   kwokctl 0.8.0 installed (sha256 matches the pin)
+ok   gleam cache after initialize: 38 files
+
+== just check
+check: exit 0 after 183.112 s
+     porcelain after check: []
+     57 passed, no failures
+     ======================= 402 passed in 156.41s (0:02:36) ========================
+     All checks passed and the worktree is unchanged.
+
+== the network is denied inside the namespace
+     interfaces: eth0 ifb0 ifb1 lo 
+ok   curl https://github.com: exit 7 (curl: (7) Failed to connect to 127.0.0.1 port 41253 after 0 ms: Couldn't connect to server)
+ok   curl --noproxy * https://github.com: exit 6 (curl: (6) Could not resolve host: github.com)
+ok   curl --noproxy * https://140.82.112.3: exit 7 (curl: (7) Failed to connect to 140.82.112.3 port 443 after 0 ms: Couldn't connect to server)
+
+== just check, network denied
+Traceback (most recent call last):
+  File "<string>", line 7, in <module>
+    rc = subprocess.call(command, stdout=f, stderr=subprocess.STDOUT)
+  File "/usr/lib/python3.13/subprocess.py", line 396, in call
+    with Popen(*popenargs, **kwargs) as p:
+         ~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/subprocess.py", line 1040, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/subprocess.py", line 1992, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: 'offline'
+     porcelain after offline-check: []
+FAIL: just check failed with the network denied
+exit 1

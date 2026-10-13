@@ -1,0 +1,17 @@
+fixture fields: major, minor, gitVersion, gitTreeState, platform; the decoder reads major, minor, gitVersion
+
+== local kind, linux/arm64 (14 version.json): 13 fields, gitCommit 1c2e10a409eb1b03f2f28f401ce935312e20d9fb
+ok   major: fixture string '1', captured string '1'
+ok   minor: fixture string '35', captured string '35'
+ok   gitVersion: fixture string 'v1.35.8', captured string 'v1.35.8'
+ok   gitTreeState: fixture string 'clean', captured string 'clean'
+ok   platform: fixture string 'linux/arm64', captured string 'linux/arm64'
+
+== CI kind, linux/amd64 (14 s1-kind.txt): 13 fields, gitCommit 1c2e10a409eb1b03f2f28f401ce935312e20d9fb
+ok   major: fixture string '1', captured string '1'
+ok   minor: fixture string '35', captured string '35'
+ok   gitVersion: fixture string 'v1.35.8', captured string 'v1.35.8'
+ok   gitTreeState: fixture string 'clean', captured string 'clean'
+ok   (value differs with the machine) platform: fixture string 'linux/arm64', captured string 'linux/amd64'
+
+version_fixture: every field type matches
