@@ -4,7 +4,7 @@
 
 **What to build:** Clauses for each decided behaviour below, written with the `tend` skill without a live session because OVERVIEW already decides them, then tests derived with `propagate` and the controller code that passes them, in the order the `gleam-change` skill sets.
 
-**Non-goals:** Any open question 19, 20 or 21 owns. The ownership and lifecycle invariants (32). Rate limits and back-off (24).
+**Non-goals:** Any open question 19, 20 or 21 owns. The ownership and lifecycle invariants (32). Rate limits and back-off (24, built by [46](46-spec-then-build-poll-schedule-and-patcher.md)).
 
 **Blocked by:** 19, 20, 21, 30, 43
 
@@ -14,7 +14,7 @@
 
 **Status:** ready-for-agent, round 2
 
-- [ ] Discovery is a periodic LIST scoped to knarr's namespace and the opt-in selector, with one install per namespace (§4.1, §9.18). Its cadence is 24's.
+- [ ] Discovery is a periodic LIST scoped to knarr's namespace and the opt-in selector, with one install per namespace (§4.1, §9.18). Its cadence is 60 seconds on its own timer, independent of the poll interval (budget `ListCadence`).
 - [ ] Every pod with a pod IP is polled, whatever its phase or readiness (worker_contract `Discovery`). The pod IP and Ready condition are the `Pod` fields [41](41-k8s-client-spec-then-build.md) adds, and 41's probe removal waits for this ticket's caller, so the two land together.
 - [ ] The readiness warning per worker_contract `ReadinessWarning`: a gauge of pods NotReady whose last valid reading maps to a value above 0 under cost_mapping, and a log line on entry, named as 30 decides.
 - [ ] The desired annotation state is the mapped cost value (cost_mapping `map`), the opt-in `safe-to-evict` value and the ownership marker (§4.3). How the value is computed is 20's.

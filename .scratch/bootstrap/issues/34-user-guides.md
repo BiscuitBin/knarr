@@ -10,6 +10,8 @@
 
 **From 17:** [Decision 0009](../../../docs/decisions/0009-allium-objective-map.md), map rows marked guidance.
 
+**From 24:** the `PodDeletionCost` prerequisite page content, row 14 of [ticket 24](24-elicit-poll-budget-feature-gate.md#settled): the gate is beta and on by default since Kubernetes 1.22, and is needed on both kube-apiserver and kube-controller-manager; GKE enables beta gates by default, may disable one per version, and allows gate changes only on alpha clusters; knarr makes no check. The verification is `kubectl get --raw /metrics | grep 'kubernetes_feature_enabled{name="PodDeletionCost"'` on 1.26 or later, which proves only the apiserver's gate. The behavioural test uses two Ready pods of one Deployment on the same node (or on nodes with equal counts of its pods): annotate the older with `controller.kubernetes.io/pod-deletion-cost: "-1"` and scale down by one; with the gate on the older goes, and with it off the newer goes, since ranking then prefers the pod that became Ready more recently. With the gate off knarr's writes are harmless and useless, and `safe-to-evict` and Karpenter are unaffected. The page cites the kubernetes.io feature-gates reference, the ReplicaSet page's pod-deletion-cost section, KEP-2255 and the GKE feature-gates page.
+
 **From 28:** [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md): a release is installed with `kubectl apply -k` on the digest-pinned overlay 36 adds, one install per namespace, with the digest from the release run's summary (40's hand-back records the MVP's).
 
 **MVP critical path:** no. The MVP runs without them; users need them to adopt it.

@@ -26,7 +26,7 @@ requires: []
 | `reconcile` | The per-pod loop: poll outcome to pod state, desired state against last applied, patch on meaningful change, pending changes, no patches after `deletionTimestamp`, rollouts untouched | 21, then 31 |
 | `ownership` | What knarr may write and how: owned annotations only, live Pods, `metadata.annotations` only, never the pod template, never replicas; marker, write mode, conflicts, Event and back-off, rejected patches | 22, then 32 |
 | `lifecycle` | Startup reconciliation, marker freshness, expiry and cleanup, crash leftovers, the `Recreate` gap, single replica, uninstall | 23, then 32 |
-| `budget` | Poll schedule, LIST cadence, bounded concurrency with jitter, no overlapping polls, per-pod interval, global QPS, APF and 429 back-off, scale target, write rate, feature-gate check | 24 |
+| `budget` | Poll schedule, LIST cadence, bounded concurrency with jitter, no overlapping polls, per-pod interval, global QPS, APF and 429 back-off, scale target, write rate, feature-gate prerequisite (settled as documented only, no check) | 24 |
 | `safe_to_evict` | When knarr writes `"false"`, removes it and never writes `"true"` by default: threshold, hysteresis against the autoscaler's blackout, local storage, pinning caps, best-effort limits | 25, confirmed by 16 |
 | `k8s_client` | The in-cluster API boundary: verified TLS with an IP-SAN check, token reload, the verbs used, the minimum Role, the patch content types the write mode needs | 14, amended by 22 |
 | `observability` | The catalogue of metrics, Events and log lines; the emission points stay in the owning modules | 30 |
@@ -153,7 +153,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 | The names of that Event and metric | §8, §9.14 | `observability` | open | 30 |
 | §8 table: another writer changed the value; Event, back off, the other writer wins | §8, §9.10 | `ownership` | open | 22 |
 | §8 table: rollout, no special handling | §8, §9.13 | `reconcile` | decided | 31 |
-| §8 table: gate disabled, documented prerequisite, optional self-test | §8, §9.11 | `budget` | open | 24 |
+| §8 table: gate disabled, documented prerequisite, no self-test | §8, §9.11 | `budget` | open | 24 |
 | §8 table: a NetworkPolicy block looks like an absent contract and raises an Event | §8, §9.6 | `reconcile` | open | 21 |
 
 ### §9 Open questions
@@ -201,7 +201,7 @@ Each row names one behaviour, its module, its class and its owner. Where the ove
 - Every elicitation ticket starts from a module the gate accepts and deletes open questions as it settles them. A module whose questions are all gone and whose clauses are all in is done.
 - Ticket 30 is a new elicitation ticket, and 31 to 34 are round 2. The bootstrap README's graph and waves table carry them, and the longest chain grows from nine tickets to eleven.
 - Tickets 14, 15, 16 and 28, Decision 0007 and DEFERRED.md own rows that 17's definition of an owner does not cover. If any is reshaped, the rows here move with it.
-- The class of a row is a reading of the overview on 2026-10-08. A ticket that finds the overview wrong amends the overview, and this map follows. Ticket 20 did so on 2026-10-10: it renamed `banding` to `cost_mapping`, settled quantization and reserved bands as none and hysteresis as a margin below each threshold, and amended OVERVIEW §4, §5 and §6 to match; the rows above keep their 2026-10-08 class and follow the amended text, as 18's rows do.
+- The class of a row is a reading of the overview on 2026-10-08. A ticket that finds the overview wrong amends the overview, and this map follows. Ticket 20 did so on 2026-10-10: it renamed `banding` to `cost_mapping`, settled quantization and reserved bands as none and hysteresis as a margin below each threshold, and amended OVERVIEW §4, §5 and §6 to match; the rows above keep their 2026-10-08 class and follow the amended text, as 18's rows do. Ticket 24 did so on 2026-10-12: it settled the feature-gate prerequisite as documented only, with no startup or periodic check, and the schedule, concurrency and write budget with their defaults, and amended OVERVIEW §4, §6, §8 and §9 to match; its rows likewise keep their class.
 
 ## What would reopen this
 
