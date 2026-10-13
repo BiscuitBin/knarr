@@ -16,8 +16,8 @@ import gleeunit/should
 import knarr/k8s_http.{Tls}
 
 /// A loopback TLS responder: its port, the port serving a same-CA certificate
-/// without the IP subjectAltName, the file holding its CA and the file holding
-/// an unrelated CA.
+/// without the IP subjectAltName, the file holding its CA, the file holding
+/// an unrelated CA, and the count of requests that reached `/unavailable`.
 pub type Responder {
   Responder(
     port: Int,
@@ -26,8 +26,12 @@ pub type Responder {
     other_ca_file: String,
     acceptor: Pid,
     wrong_host_acceptor: Pid,
+    hits: Hits,
   )
 }
+
+/// The responder's request counter, an Erlang atomics reference.
+pub type Hits
 
 @external(erlang, "k8s_http_test_ffi", "start_responder")
 fn start_responder() -> Responder
@@ -37,6 +41,9 @@ fn start_ipv6_responder() -> Responder
 
 @external(erlang, "k8s_http_test_ffi", "stop_responder")
 fn stop_responder(responder: Responder) -> Nil
+
+@external(erlang, "k8s_http_test_ffi", "hits")
+fn hits(responder: Responder) -> Int
 
 @external(erlang, "k8s_http_test_ffi", "closed_port")
 fn closed_port() -> Int
@@ -156,6 +163,28 @@ pub fn send_passes_content_type_as_httpc_own_argument_test() -> Nil {
 
 @external(erlang, "k8s_http_test_ffi", "count_lines")
 fn count_lines(text: String, line: String) -> Int
+
+pub fn send_returns_a_503_with_retry_after_without_retrying_test() -> Nil {
+  // httpc resends any request once after a 503 whose Retry-After it can
+  // read, unless autoretry is 0. A create is one attempt (ConflictEvent), and
+  // the 503 and its Retry-After are the caller's to read (Failures). The
+  // responder answers a second request with 200, so a retry shows here.
+  let responder = start_responder()
+  let response =
+    get(responder.port)
+    |> request.set_method(http.Post)
+    |> request.set_path("/unavailable")
+    |> request.set_header("content-type", "application/json")
+    |> request.set_body("{}")
+    |> k8s_http.send(Tls(responder.ca_file))
+    |> should.be_ok
+  let hits = hits(responder)
+  stop_responder(responder)
+
+  assert response.status == 503
+  assert response.get_header(response, "retry-after") == Ok("0")
+  assert hits == 1
+}
 
 pub fn send_reports_a_method_httpc_does_not_take_as_a_value_test() -> Nil {
   let responder = start_responder()

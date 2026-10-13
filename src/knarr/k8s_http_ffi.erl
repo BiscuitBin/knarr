@@ -12,11 +12,17 @@
 %% own whose ipfamily is inet6. That profile is started under inets' own
 %% supervisor on first use; an IPv4 host never touches it. Request options
 %% cannot carry the family: {socket_opts, [inet6]} still resolves with inet.
+%%
+%% autoretry is 0. httpc's default, infinity, sends any request again once
+%% after a 503 whose Retry-After it can read, after that delay: a create
+%% would be two attempts (ConflictEvent), and the caller would see the
+%% retry's answer, or a timeout past ten seconds, instead of the 503 and its
+%% Retry-After (Failures).
 request(Method, Url, Headers, ContentType, Body, CaFile) ->
   Ssl = [{verify, verify_peer},
     {cacertfile, unicode:characters_to_list(CaFile)},
     {customize_hostname_check, [{match_fun, public_key:pkix_verify_hostname_match_fun(https)}]}],
-  Options = [{ssl, Ssl}, {timeout, 10000}, {connect_timeout, 5000}],
+  Options = [{ssl, Ssl}, {timeout, 10000}, {connect_timeout, 5000}, {autoretry, 0}],
   UrlList = unicode:characters_to_list(Url),
   HeaderList = [{unicode:characters_to_list(K), unicode:characters_to_list(V)} || {K, V} <- Headers],
   Request = case {ContentType, Body} of
