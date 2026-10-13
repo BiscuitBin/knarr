@@ -60,4 +60,4 @@ contract Client {
 -- Open Questions
 ------------------------------------------------------------
 
-open question "§9.10 Patch support: the patch content types and preconditions the client must support once ticket 22 chooses the write mode."
+open question "§9.10 Patch support: the patch content types and preconditions the client must support once ticket 22 chooses the write mode, and the failed patch and the failed list surfaced as values carrying the response status and the Retry-After header, which budget's BackOff and PauseScope read (ticket 24); today patch_annotation and list_pods return only Pod."

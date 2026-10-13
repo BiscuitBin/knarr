@@ -112,7 +112,7 @@ contract StatusEndpoint {
         -- send returns the outcome of one request: responded with the
         -- response, refused when nothing listens on the port and the
         -- connection is refused, timed_out when no response arrives within
-        -- the per-poll timeout budget sets, and unreachable for every other
+        -- budget's config.poll_timeout (5 seconds by default), and unreachable for every other
         -- failure, a reset connection among them. decode maps each failure to
         -- the reading of the same name and reads a response as ValidReading,
         -- NotFoundReading and InvalidReading say.
@@ -163,8 +163,8 @@ contract StatusEndpoint {
     @invariant Served
         -- A worker serves the endpoint on the address its pod IP reaches for
         -- the pod's whole life, including after SIGTERM while it drains, when
-        -- it reports accepting false. It answers within the per-poll timeout
-        -- budget sets; a slower answer is a timed_out outcome.
+        -- it reports accepting false. It answers within budget's
+        -- config.poll_timeout, 5 seconds by default; a slower answer is a timed_out outcome.
     @invariant ReadinessWarning
         -- knarr keeps a gauge of pods whose Ready condition is false while
         -- their last valid reading maps to a value above 0 under cost_mapping,

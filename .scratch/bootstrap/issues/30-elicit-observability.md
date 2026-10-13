@@ -10,11 +10,13 @@
 
 **From 17:** [Decision 0009](../../../docs/decisions/0009-allium-objective-map.md) records why §9.14 has no owner in 18–25 and the skeleton module this ticket starts from.
 
+**From 24:** budget emits a patch-rate counter, a gauge of the pending changes the budget holds, a 429 counter and the pause state (paused or not, and its length), the poll queue depth and a counter of polls skipped under `NoOverlap`. The names are this ticket's.
+
 **MVP critical path:** no. The MVP runs without named metrics; operators need them to trust it.
 
 **Status:** needs-human
 
 - [ ] The `elicit` skill is run with the maintainer in a live session.
 - [ ] Every open question in `docs/specs/observability.allium` is settled and recorded before any clause is written.
-- [ ] The clauses cover the metrics for poll results, cost distribution, patch rate and errors; the Event reasons for an absent contract, a rejected patch, a failed cleanup and a conflict; the log fields and what is never logged; and the probes. `check-specs` and `analyse-specs` report nothing.
+- [ ] The clauses cover the metrics for poll results, cost distribution, patch rate and errors; the budget's throttled-pending count, 429 count, pause state, poll queue depth and skipped polls; the Event reasons for an absent contract, a rejected patch, a failed cleanup and a conflict; the log fields and what is never logged; and the probes. `check-specs` and `analyse-specs` report nothing.
 - [ ] The hand-back gives the `plan-spec` obligation count and amends ticket 32's acceptance checks with the Event and metric each invariant emits.
