@@ -192,9 +192,10 @@ contract Client {
         -- Every LIST asks for pages of at most 500 items and follows the
         -- continue token each page's metadata carries until a page carries
         -- none or an empty one; the operation returns the pages' items in
-        -- the order served. A Failure, a transport error or an undecodable
-        -- body on any page fails the whole LIST and discards the pages
-        -- already read, so a caller never acts on part of a namespace;
+        -- the order served. Every page of the Deployment LIST carries its
+        -- selector, as the first did. A Failure, a transport error or an
+        -- undecodable body on any page fails the whole LIST and discards the
+        -- pages already read, so a caller never acts on part of a namespace;
         -- budget's ListCadence retries the cycle.
     @invariant ServiceAddress
         -- The host is KUBERNETES_SERVICE_HOST as given, an IPv4 or IPv6

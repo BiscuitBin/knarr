@@ -113,6 +113,10 @@ pub type ClientError(e) {
 /// The most items one LIST page asks for (Pagination).
 const page_limit = 500
 
+/// The Deployment LIST selects opted-in Deployments; config's OptIn names the
+/// one label and value, which no setting changes.
+const opt_in_selector = "knarr.io/enabled=true"
+
 /// `GET /api/v1/namespaces/{namespace}/pods`, one page, as the bearer of
 /// `token`.
 pub fn list_pods_request(
@@ -125,6 +129,7 @@ pub fn list_pods_request(
     target:,
     token:,
     path: "/api/v1/namespaces/" <> namespace <> "/pods",
+    selector: None,
     continue:,
   )
 }
@@ -140,11 +145,13 @@ pub fn list_replica_sets_request(
     target:,
     token:,
     path: "/apis/apps/v1/namespaces/" <> namespace <> "/replicasets",
+    selector: None,
     continue:,
   )
 }
 
-/// `GET /apis/apps/v1/namespaces/{namespace}/deployments`, one page.
+/// `GET /apis/apps/v1/namespaces/{namespace}/deployments`, one page of the
+/// opted-in Deployments: every page carries the selector (config Discovery).
 pub fn list_deployments_request(
   target target: Target,
   namespace namespace: String,
@@ -155,6 +162,7 @@ pub fn list_deployments_request(
     target:,
     token:,
     path: "/apis/apps/v1/namespaces/" <> namespace <> "/deployments",
+    selector: Some(opt_in_selector),
     continue:,
   )
 }
@@ -163,13 +171,16 @@ fn list_request(
   target target: Target,
   token token: String,
   path path: String,
+  selector selector: Option(String),
   continue continue: Option(String),
 ) -> Request(String) {
-  let limit = #("limit", int.to_string(page_limit))
-  let query = case continue {
-    None -> [limit]
-    Some(token) -> [limit, #("continue", token)]
-  }
+  let query =
+    [
+      option.map(selector, fn(selector) { #("labelSelector", selector) }),
+      Some(#("limit", int.to_string(page_limit))),
+      option.map(continue, fn(token) { #("continue", token) }),
+    ]
+    |> option.values
   // Not request.set_query: it leaves + bare, which the apiserver reads as a
   // space.
   request.Request(

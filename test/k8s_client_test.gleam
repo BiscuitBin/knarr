@@ -206,7 +206,10 @@ pub fn list_requests_percent_encode_the_continue_token_test() -> Nil {
   let query = Some("limit=500&continue=eyJ2Ijo%2B%2Fx%3D")
   assert pods.query == query
   assert replica_sets.query == query
-  assert deployments.query == query
+  assert deployments.query
+    == Some(
+      "labelSelector=knarr.io%2Fenabled%3Dtrue&limit=500&continue=eyJ2Ijo%2B%2Fx%3D",
+    )
 }
 
 pub fn list_replica_sets_request_gets_the_apps_group_test() -> Nil {
@@ -223,7 +226,9 @@ pub fn list_replica_sets_request_gets_the_apps_group_test() -> Nil {
   assert request.query == Some("limit=500")
 }
 
-pub fn list_deployments_request_gets_the_apps_group_test() -> Nil {
+pub fn list_deployments_request_selects_opted_in_deployments_test() -> Nil {
+  // config's Discovery: the Deployment LIST selects on the opt-in label; the
+  // pod and ReplicaSet LISTs carry no selector.
   let request =
     k8s_client.list_deployments_request(
       target:,
@@ -234,7 +239,8 @@ pub fn list_deployments_request_gets_the_apps_group_test() -> Nil {
 
   assert request.method == http.Get
   assert request.path == "/apis/apps/v1/namespaces/workers/deployments"
-  assert request.query == Some("limit=500")
+  assert request.query
+    == Some("labelSelector=knarr.io%2Fenabled%3Dtrue&limit=500")
 }
 
 pub fn patch_pod_request_sends_the_document_as_a_json_patch_test() -> Nil {
@@ -648,11 +654,11 @@ pub fn a_failing_page_fails_the_whole_list_test() -> Nil {
 }
 
 pub fn list_replica_sets_and_deployments_page_the_same_way_test() -> Nil {
-  let send = fn(body) {
+  let send = fn(first_page, body) {
     fn(request: Request(String)) {
-      case request.query {
-        Some("limit=500") -> Ok(ok(200, body))
-        _ -> Error("a page without a continue token is the last")
+      case request.query == Some(first_page) {
+        True -> Ok(ok(200, body))
+        False -> Error("a page without a continue token is the last")
       }
     }
   }
@@ -662,7 +668,7 @@ pub fn list_replica_sets_and_deployments_page_the_same_way_test() -> Nil {
       target:,
       namespace: "default",
       token: "t",
-      send: send(replica_set_list_body),
+      send: send("limit=500", replica_set_list_body),
     )
     |> should.be_ok
   let deployments =
@@ -670,7 +676,10 @@ pub fn list_replica_sets_and_deployments_page_the_same_way_test() -> Nil {
       target:,
       namespace: "default",
       token: "t",
-      send: send(deployment_list_body),
+      send: send(
+        "labelSelector=knarr.io%2Fenabled%3Dtrue&limit=500",
+        deployment_list_body,
+      ),
     )
     |> should.be_ok
   assert list.map(replica_sets, fn(replica_set) { replica_set.name })
