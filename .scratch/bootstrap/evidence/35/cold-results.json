@@ -41,6 +41,6 @@
   ],
   "notes": [
     "initialize and check come from cold.sh's first version, whose own offline step failed to start (cold.txt)",
-    "offline-check comes from offline.sh run on the same clone straight afterwards (offline.txt)"
+    "offline-check comes from offline.sh, run on the same clone at 19:13Z, about 36 minutes after the networked check ended and across a session restart; nothing touched the clone in between (offline.txt)"
   ]
 }

@@ -1,6 +1,6 @@
 # Ticket 35 evidence
 
-Evidence for [ticket 35](../../issues/35-bootstrap-verification-gaps.md), gathered on 2026-10-10 (UTC) at `e548efa66770317dd78cd9209b60998ee15d4ee7`, which was `main` and this branch's starting commit. Every run used that commit; the evidence files were untracked while they ran, and each clone was made from the committed branch. The one exception is the later stub check of the primary-hook probe, whose host and commit [its section](#open-the-maintainers-primary-hook) gives.
+Evidence for [ticket 35](../../issues/35-bootstrap-verification-gaps.md), gathered on 2026-10-10 (UTC) at `e548efa66770317dd78cd9209b60998ee15d4ee7`, which was `main` and this branch's starting commit. Every run used that commit; the evidence files were untracked while they ran, and each clone was made from the committed branch. There are two later exceptions, both on a Mac: the stub check of the primary-hook probe and the fetch of GKE's versioning page. Each one's host and commit are in its section, [the primary hook](#open-the-maintainers-primary-hook) and [the version fixture](#08-version-fixture).
 
 The host was a disposable Claude Code cloud container: a Firecracker VM, Linux x86_64 (kernel 6.18.44), Ubuntu 24.04.5 LTS, 4 × Intel Xeon @ 2.10GHz, 15.7 GiB, running as uid 0. It is native linux-64: `/proc/cpuinfo` names no Rosetta CPU and `ERL_FLAGS` was unset. Pins: bootstrap pixi 0.81.0 and just 1.58.0 ([checksums](bootstrap.txt)); the locked environment's Gleam 1.19.0, erlang 29.1.1 (`pl5321h8f2c242_0`), openssl 3.6.5 (`h781a0a9_0`), Python 3.14.8 and pytest 9.1.1; rebar3 3.27.1 from `tools.txt`.
 
@@ -17,7 +17,7 @@ The host was a disposable Claude Code cloud container: a Firecracker VM, Linux x
 | 06, hosted audit | **Open.** The authorized dispatch was refused, `403 Resource not accessible by integration`; no scheduled run exists yet | [audit.json](audit.json) |
 | 05/06, restricted agent sandbox | **Open.** macOS only; nothing here observes it | — |
 | 08, snapshot commands | **Closed.** Interactive review accepted through a pseudo-terminal, reject and stale delete, with byte-level and isolation assertions | [snapshots.txt](snapshots.txt) |
-| 08, version fixture | **Closed.** The fixture's types match both of 14's captured replies; the `+` suffix is established from Kubernetes v1.35.8's build script and GKE's version format | [version-fixture.txt](version-fixture.txt), [kubernetes-v1.35.8.txt](kubernetes-v1.35.8.txt) |
+| 08, version fixture | **Closed.** The fixture's types match both of 14's captured replies; the `+` suffix is established from Kubernetes v1.35.8's build script and GKE's version format | [version-fixture.txt](version-fixture.txt), [kubernetes-v1.35.8.txt](kubernetes-v1.35.8.txt), [gke-versioning.txt](gke-versioning.txt) |
 | 09, Copilot discovery | **Open.** Needs a Copilot session | — |
 
 ## 03: fully cold initialization
@@ -77,6 +77,7 @@ birdie 2.0.2 reads the review choice with `io:get_line("> ")` after printing the
 ```sh
 python3 .scratch/bootstrap/evidence/35/version_fixture.py .
 sh .scratch/bootstrap/evidence/35/kubernetes-source.sh "$(mktemp -d)"
+sh .scratch/bootstrap/evidence/35/gke-versioning.sh "$(mktemp -d)"
 ```
 
 **Capture.** Ticket 14 captured `/version` from kindest/node v1.35.8, the version ticket 10 chose, twice. [version.json](../14/version.json) is the local kind cluster on linux/arm64; the one-line reply in [s1-kind.txt](../14/s1-kind.txt) is the `cluster-s1` CI job on native linux/amd64. No cluster ran here, because the container has no Docker daemon. [version_fixture.py](version_fixture.py) reads `kind_version_body` out of `test/sans_io_example_test.gleam` and compares each of its five fields with both captures ([output](version-fixture.txt)). Every field is a JSON string in all three, and every value matches except `platform`, which follows the machine. The fixture needs no correction, so nothing goes back to 14.
@@ -88,7 +89,9 @@ sh .scratch/bootstrap/evidence/35/kubernetes-source.sh "$(mktemp -d)"
 - `version.Info` in apimachinery's `pkg/version/types.go` (blob `6a18f9e…`) declares `Major`, `Minor` and `GitVersion` as `string`.
 - Evaluating version.sh's own lines gives `minor=35` for `v1.35.8` and `minor=35+` for `v1.35.6-gke.1638000`.
 
-[GKE's versioning page](https://docs.cloud.google.com/kubernetes-engine/versioning), "Last updated 2026-10-09 UTC" when fetched (sha256 `d0ecdac…b2c4`), says "GKE appends a GKE patch version number to the Kubernetes version (X.Y.Z-gke.N)". `1.35.6-gke.1638000` is its own example. So a GKE control plane built by this script from such a version reports `minor` as `"35+"`, as 08 recalled, and `minor` must stay a string. **Limitation:** this is the build script plus the published version format, not a reply from a managed cluster. A vendor that sets `KUBE_GIT_VERSION_FILE` supplies its own values. No managed cluster was authorized or observed.
+**GKE's version form.** [gke-versioning.sh](gke-versioning.sh) reads the GKE example from `kubernetes-source.sh`'s own case line, so the version evaluated above is the version checked here. It fetches [GKE's versioning page](https://docs.cloud.google.com/kubernetes-engine/versioning) once and fails unless the page's text carries both of these: "GKE appends a GKE patch version number to the Kubernetes version (X.Y.Z-gke.N)", and `1.35.6-gke.1638000` as a whole version. [The transcript](gke-versioning.txt) shows http 200, 182,161 bytes, sha256 `b8b075a…b5c5`, "Last updated 2026-10-09 UTC", and both strings found. The page gives 17 distinct `X.Y.Z-gke.N` versions. The fetch ran on 2026-10-13 (UTC) on a Mac, Darwin arm64. It ran in this branch's linked worktree at `7c5e1fa`, with `gke-versioning.sh` untracked and `kubernetes-source.sh`'s comment edit, below, not yet committed. The transcript records both scripts' sha256, which the committed files match. The script's text filter is 28's with one change: inline tags are dropped without a space. The page wraps `-gke.N` in `<strong>`, so 28's filter would read "(X.Y.Z -gke.N )" and miss the sentence. The container's earlier fetch on 2026-10-10 was not scripted. It had a different sha256 (`d0ecdac…b2c4`) and the same "Last updated" date. Just before the fetch, `kubernetes-source.sh`'s comments were changed to point at `gke-versioning.sh`. Its commands are unchanged, so [its transcript](kubernetes-v1.35.8.txt) stands.
+
+So a GKE control plane built by this script from such a version reports `minor` as `"35+"`, as 08 recalled, and `minor` must stay a string. **Limitation:** this is the build script plus the published version format, not a reply from a managed cluster. A vendor that sets `KUBE_GIT_VERSION_FILE` supplies its own values. No managed cluster was authorized or observed.
 
 ## 04: intermittent checker test
 
@@ -168,3 +171,5 @@ The maintainer authorized, for this session, each of the following:
 - pushing this branch and opening its pull request.
 
 Before any of that was authorized, one `gh auth status` ran during exploration. It reached GitHub and failed on the invalid token. Nothing else left the container before authorization.
+
+On 2026-10-13 (UTC), for Copilot's review of #22, the maintainer authorized a session on the Mac to make read-only GitHub queries for the review, to fetch GKE's versioning page once with `gke-versioning.sh`, and to push this branch and reply to and resolve the review's threads.

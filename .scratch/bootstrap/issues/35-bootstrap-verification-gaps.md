@@ -49,7 +49,7 @@ The [evidence](../evidence/35/README.md) was gathered on 2026-10-10 at `e548efa6
   - `just birdie stale delete` removed an orphan and left the other three snapshots byte for byte.
 
   This checkout, its birdie list and `$TMPDIR` stayed untouched.
-- **08, version fixture.** 14 captured `/version` from kindest/node v1.35.8 locally on arm64 and in CI on amd64. The fixture's five fields have the same JSON types in both captures, and the same values apart from `platform`. Kubernetes v1.35.8, whose commit `1c2e10a…` is the captures' `gitCommit`, appends `+` to `gitMinor` whenever the version carries a `-…` part. Its own lines turn GKE's documented example `1.35.6-gke.1638000` into `minor=35+`. `version.Info` declares `Major` and `Minor` as strings. The fixture is correct; no correction goes to 14.
+- **08, version fixture.** 14 captured `/version` from kindest/node v1.35.8 locally on arm64 and in CI on amd64. The fixture's five fields have the same JSON types in both captures, and the same values apart from `platform`. Kubernetes v1.35.8, whose commit `1c2e10a…` is the captures' `gitCommit`, appends `+` to `gitMinor` whenever the version carries a `-…` part. Its own lines turn GKE's documented example `1.35.6-gke.1638000` into `minor=35+`. [gke-versioning.sh](../evidence/35/gke-versioning.sh) shows that GKE's versioning page states the `X.Y.Z-gke.N` form and gives that example. `version.Info` declares `Major` and `Minor` as strings. The fixture is correct; no correction goes to 14.
 
 ### What stays open
 
@@ -64,6 +64,7 @@ The [evidence](../evidence/35/README.md) was gathered on 2026-10-10 at `e548efa6
 - Raw working material stayed under `ai_tmp/35/`.
 - This checkout's own `just initialize` installed its pre-commit hook. This is a primary checkout, not a linked worktree.
 - The Codex adversarial review found the inline primary-hook probe's cleanup unsafe: had the hook accepted the commit, the commit would have stayed and the index been left dirty. `primary-hook.sh` and its stub check are the fix.
+- Copilot's review of #22 found two faults. The GKE premise rested on an unscripted fetch of GKE's versioning page. `cold-results.json` said the network-denied gate ran "straight afterwards", which contradicted the README's 36-minute gap. `gke-versioning.sh`, with its transcript, and the corrected note are the fixes.
 
 ### For later tickets
 
