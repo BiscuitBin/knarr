@@ -2,13 +2,15 @@
 -export([request/5, start_profile/0, version/0]).
 
 -define(PROFILE, knarr_poller_httpc).
+%% How much later than the caller's deadline httpc's own timers fire.
+-define(BACKSTOP_MS, 1000).
 
 %% One poll, held to one deadline. httpc's own timeout starts only once the
 %% profile's manager has admitted the request, and that admission is a
 %% gen_server call with no bound, so the call runs in a helper process and
-%% the caller waits Timeout for it from the start. On expiry the helper is
-%% killed, which also releases the alias httpc answers to, so a late answer
-%% reaches no one. A method other than GET is a programming error and
+%% the caller waits Timeout for it from the start. This is the only
+%% deadline: on expiry the helper is killed, which also releases the alias
+%% httpc answers to, so a late answer reaches no one. A method other than GET is a programming error and
 %% crashes the caller before any helper starts.
 request(Method, Url, Headers, Ipv6, Timeout) ->
   Get = method(Method),
@@ -39,11 +41,14 @@ call(Method, Url, Headers, Ipv6, Timeout) ->
   end.
 
 %% One synchronous httpc call through the poller's profile. httpc's
-%% timeouts cover connect and the response; on expiry httpc cancels the
-%% request, and since a synchronous call answers to an alias it releases
-%% afterwards, a late answer is dropped. That cancel goes to the default
-%% profile, not this one (httpc:handle_answer/5 calls cancel_request/1), so
-%% the handler is stopped by its own request timer, set to the same timeout.
+%% timeouts are a backstop, BACKSTOP_MS past the caller's deadline, so the
+%% caller has answered and killed this helper before either fires. Set to
+%% the deadline itself, httpc's wait in httpc:handle_answer/5, which starts
+%% only on admission, raced the caller's by a fraction of a millisecond,
+%% and a starved scheduler let it win. The backstop then only stops the
+%% handler: httpc sends its cancel to the default profile, not this one
+%% (handle_answer/5 calls cancel_request/1), so the handler runs until its
+%% own request timer fires and closes the connection.
 %% {ssl, []} stands in for httpc's default ssl options, which load the OS CA
 %% bundle on every request, http included, and crash where there is none.
 %% autoretry 0 returns a 503 with Retry-After as it is, where httpc
@@ -55,7 +60,7 @@ call(Method, Url, Headers, Ipv6, Timeout) ->
 %% NetworkPolicy drop does, carries timeout in the same place.
 call(Profile, Method, Url, Headers, Ipv6, Timeout) ->
   HttpOptions = [{autoredirect, false}, {autoretry, 0}, {ssl, []},
-    {timeout, Timeout}, {connect_timeout, Timeout}],
+    {timeout, Timeout + ?BACKSTOP_MS}, {connect_timeout, Timeout + ?BACKSTOP_MS}],
   Options = [{body_format, binary}, {ipv6_host_with_brackets, Ipv6},
     {socket_opts, [{ipfamily, family(Ipv6)}]}],
   Request = {unicode:characters_to_list(Url),
