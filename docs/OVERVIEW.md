@@ -247,9 +247,9 @@ Knarr never overrides a positive cost. A floor for draining pods was a candidate
 The intent is to keep any fallback bounded and **never treat missing data as "busy"**. If "no data" counts as busy, protection can pin pods or nodes indefinitely. A possible default, with thresholds set in §9.6:
 
 - **Transient failure** (timeout, 5xx, payload that fails to parse): keep the last-known value for a bounded number of polls *and* a bounded time, then fall back to the neutral value, which is the removed annotation (§9.5).
-- **Contract absent** (404 or connection refused for M polls in a row since the pod started): treat the pod as unmanaged. Remove any annotations Knarr owns rather than simply stop writing, and emit a per-Deployment Event and metric.
+- **Contract absent** (404 or connection refused for M polls in a row since the pod started): treat the pod as unmanaged. Remove any annotations Knarr owns rather than simply stop writing, and emit a per-Deployment Event and metric (`ContractAbsent` and `knarr_pods_contract_absent`).
 - **Just started:** such pods are usually Pending or NotReady, so they are ranked first whatever their cost. Leave them at the implicit default until a valid poll.
-- **Stale state outlives failures.** Stopping writes does not undo earlier ones. A high cost or `safe-to-evict: "false"` stays on the pod until Knarr removes it, so each Knarr-owned annotation needs an expiry and a cleanup attempt (§9.6, §9.12). If the API rejects the cleanup, the stale state persists. Raise an Event and a metric.
+- **Stale state outlives failures.** Stopping writes does not undo earlier ones. A high cost or `safe-to-evict: "false"` stays on the pod until Knarr removes it, so each Knarr-owned annotation needs an expiry and a cleanup attempt (§9.6, §9.12). If the API rejects the cleanup, the stale state persists. Raise an Event and a metric (`CleanupRejected` and `knarr_patch_rejections_total` with purpose `cleanup`).
 - With that cleanup working, an unreachable pod alone does not block scale-down for long.
 
 ```mermaid
@@ -476,19 +476,19 @@ flowchart TB
 | Scenario | Knarr behavior (proposed) | Effect on scale-down | Ticket |
 | --- | --- | --- | --- |
 | Pod unreachable, timeout or 5xx | Keep the last value for a bounded number of polls and time, then write neutral | Bias fades to neutral once that write succeeds | §9.6 |
-| Endpoint 404 or never implemented | Treat as unmanaged; remove Knarr-owned annotations; Event and metric | No bias for that pod once cleaned up | §9.6, §9.4a |
+| Endpoint 404 or never implemented | Treat as unmanaged; remove Knarr-owned annotations; `ContractAbsent` Event on the Deployment and `knarr_pods_contract_absent` | No bias for that pod once cleaned up | §9.6, §9.4a |
 | Invalid payload | Same as a transient failure; log and count | As above | §9.6 |
 | Pod just started | Leave unannotated until a valid poll | Pending/NotReady pods are deleted first anyway | §9.6 |
 | Knarr down or crashlooping | No updates | Annotations go stale; `safe-to-evict: "false"` can pin nodes | §9.12 |
 | Knarr restart | Reconcile marked pods from cluster state | Goal: no flapping; depends on freshness semantics | §9.12 |
 | Upgrade (`Recreate`) | Old Pod stops before the new one starts | Short gap with no updates | §9.12 |
 | API throttling (APF / 429) | Pause patching install-wide: 1 s, doubling on each consecutive 429 to 60 s, raised to any `Retry-After`; polls continue and pending changes wait | Costs lag | §9.8, [budget.allium](specs/budget.allium) |
-| Patch rejected (400/403, admission webhook) | Log, Event, metric; no rapid retries | The previous annotations stay, so the old bias and any `safe-to-evict: "false"` persist | §9.14, §9.12 |
+| Patch rejected (400/403, admission webhook) | Log, `PatchRejected` Event (`CleanupRejected` for a cleanup), `knarr_patch_rejections_total`; no rapid retries | The previous annotations stay, so the old bias and any `safe-to-evict: "false"` persist | §9.14, settled in [observability.allium](specs/observability.allium), §9.12 |
 | Many pods (poll fan-out) | Bounded concurrency (64 polls in flight per install, the rest queued oldest-due first), jitter, no overlapping polls | Costs refresh more slowly | §9.8, [budget.allium](specs/budget.allium) |
-| Another writer changed the value | The patch's `test` operations detect it; Knarr yields that annotation for the pod's life, records the yield in the marker, and raises at most one Event on the Pod | The other writer wins | §9.10, settled in [ownership.allium](specs/ownership.allium) |
+| Another writer changed the value | The patch's `test` operations detect it; Knarr yields that annotation for the pod's life, records the yield in the marker, and raises at most one `AnnotationYielded` Event on the Pod | The other writer wins | §9.10, settled in [ownership.allium](specs/ownership.allium) |
 | Deployment rollout | No special handling | Cost still biases victims within the old ReplicaSet, but cannot keep that ReplicaSet alive through the rollout | §9.13 |
 | `PodDeletionCost` gate disabled | Documented prerequisite; no check (settled in [budget.allium](specs/budget.allium)) | Annotations ignored | §9.11 |
-| NetworkPolicy blocks polling | Looks like an absent contract; Event | No bias | §9.4b |
+| NetworkPolicy blocks polling | Looks like an absent contract; `ContractAbsent` Event | No bias | §9.4b |
 
 ## 9. Open questions (candidate tickets)
 
@@ -525,7 +525,7 @@ flowchart LR
 11. **Feature-gate prerequisite.** Options: (i) document only; (ii) a startup self-test; (iii) a periodic check. Settled in [budget.allium](specs/budget.allium): option (i), document only.
 12. **Cleanup, staleness and freshness.** Options: (i) never clean up; (ii) clean up when a pod or workload leaves scope; (iii) also clean up on graceful shutdown. Also covers: separate expiry for deletion cost and for `safe-to-evict`; what the marker timestamp means; conservative behavior on restart when freshness is unknown; startup reconciliation of marked pods; annotations left after a crash; and an uninstall procedure.
 13. **Rollouts:** guidance on `maxUnavailable` / `maxSurge` plus graceful drain. Cost biases victims within an old ReplicaSet but cannot stop that ReplicaSet from scaling to zero.
-14. **Observability:** metrics (poll results, cost distribution, patch rate, errors), Events and logs.
+14. **Observability:** metrics (poll results, cost distribution, patch rate, errors), Events and logs. Settled in [observability.allium](specs/observability.allium): metrics are named `knarr_<subject>_<unit>` and labelled by Deployment, never by pod; four Warning Events, `ContractAbsent` on the Deployment and `AnnotationYielded`, `PatchRejected` and `CleanupRejected` on the Pod; JSON log lines at info by default; `/healthz` is process-level only and `/readyz` latches after the first successful discovery.
 15. **Decided:** kustomize only. A release overlay over the kind base pins the published image by digest, and the namespaced Role stays in the base (see [Decision 0012](decisions/0012-release-and-packaging.md), [DEFERRED.md §8](DEFERRED.md#8-other-future-targets)).
 16. **Testing strategy:** unit tests for the cost mapping, end-to-end tests on kind with a fake worker image, and an envtest equivalent or substitute. Also sets the thresholds for the §3 success criteria.
 17. **Future targets:** see [DEFERRED.md](DEFERRED.md) (§7 Karpenter, §8 other future targets).

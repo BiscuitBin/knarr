@@ -18,6 +18,8 @@ Ticket 22 settled in [ownership.allium](../../../docs/specs/ownership.allium) th
 
 **From 15:** [Decision 0008](../../../docs/decisions/0008-safe-to-evict-on-upstream-ca.md) records S2a's findings and a recommended starting position for §9.9. [15's hand-back notes](15-spike-s2a-ca-on-kwok.md#follow-ups-for-25) list the open points this ticket settles, each with the evidence it cites.
 
+**From 30:** [observability.allium](../../../docs/specs/observability.allium) states the conventions any signal this ticket settles follows: metric names, labels and series life (`Catalogue` `Naming`, `Labels` and `SeriesLife`), Event reasons and type (`Events` `Conventions`), and log fields and levels (`Logs` `Format` and `Levels`). This ticket adds its own rows there with `tend` when it settles, without reopening 30 (`Catalogue` `LaterRows`). Already fixed: `knarr_annotations{deployment, annotation, standing}` with `annotation="safe-to-evict"` counts the annotation by ownership's standing (`Catalogue` `Standing`), and its writes count on `knarr_patches_total` with purpose `apply`, while the removal an opt-out leaves to 23 counts with purpose `cleanup` (`Patches`).
+
 **MVP critical path:** yes, for the opt-in `safe-to-evict` feature only.
 
 **Status:** needs-human
