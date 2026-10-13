@@ -361,13 +361,13 @@ fn decode_page(
 ) -> Result(Page(a), ClientError(e)) {
   decode_success(response:, success: 200, operation: ListOperation, decoder: {
     use items <- decode.field("items", decode.list(item))
-    use continue <- decode.optional_field(
+    use continue <- nullable_field(
       "metadata",
       None,
-      decode.optional_field(
+      nullable_field(
         "continue",
         None,
-        decode.optional(decode.string),
+        decode.map(decode.string, Some),
         decode.success,
       ),
     )
@@ -408,13 +408,13 @@ fn pod_decoder() -> decode.Decoder(Pod) {
       decode.success(#(name, uid, annotations, deletion_timestamp, owner))
     },
   )
-  use #(pod_ip, ready) <- decode.optional_field("status", #(None, False), {
+  use #(pod_ip, ready) <- nullable_field("status", #(None, False), {
     use pod_ip <- decode.optional_field(
       "podIP",
       None,
       decode.optional(decode.string),
     )
-    use conditions <- decode.optional_field(
+    use conditions <- nullable_field(
       "conditions",
       [],
       decode.list({
@@ -436,6 +436,18 @@ fn pod_decoder() -> decode.Decoder(Pod) {
   ))
 }
 
+/// A field the apiserver may omit or, from another writer, send as null:
+/// either is `default`.
+fn nullable_field(
+  name: String,
+  default: a,
+  decoder: decode.Decoder(a),
+  next: fn(a) -> decode.Decoder(b),
+) -> decode.Decoder(b) {
+  use value <- decode.optional_field(name, None, decode.optional(decoder))
+  next(option.unwrap(value, default))
+}
+
 /// A map of strings under `name`: `None` when the field is absent or null,
 /// `Some` of the map, possibly empty, otherwise.
 fn string_map(name: String) -> decode.Decoder(Option(Dict(String, String))) {
@@ -449,14 +461,14 @@ fn string_map(name: String) -> decode.Decoder(Option(Dict(String, String))) {
 
 /// The first ownerReference whose `controller` flag is true.
 fn owner_decoder() -> decode.Decoder(Option(Owner)) {
-  use references <- decode.optional_field(
+  use references <- nullable_field(
     "ownerReferences",
     [],
     decode.list({
       use kind <- decode.field("kind", decode.string)
       use name <- decode.field("name", decode.string)
       use uid <- decode.field("uid", decode.string)
-      use controller <- decode.optional_field("controller", False, decode.bool)
+      use controller <- nullable_field("controller", False, decode.bool)
       decode.success(#(Owner(kind:, name:, uid:), controller))
     }),
   )

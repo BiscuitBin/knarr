@@ -60,9 +60,13 @@ inet6_profile() ->
     {error, Reason} -> {error, {other, describe(Reason)}}
   end.
 
+%% Set on every use, so a request racing the one that started the profile
+%% still gets inet6; a failure is a value, like every other here.
 set_inet6() ->
-  ok = httpc:set_options([{ipfamily, inet6}], knarr_inet6),
-  knarr_inet6.
+  case httpc:set_options([{ipfamily, inet6}], knarr_inet6) of
+    ok -> knarr_inet6;
+    {error, Reason} -> {error, {other, describe(Reason)}}
+  end.
 
 method(<<"GET">>) -> get;
 method(<<"PATCH">>) -> patch;

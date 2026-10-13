@@ -6,7 +6,7 @@
 
 **Non-goals:** Any open question 19, 20 or 21 owns. The ownership and lifecycle invariants (32). Rate limits and back-off (24, built by [46](46-spec-then-build-poll-schedule-and-patcher.md)).
 
-**Blocked by:** 19, 20, 21, 22, 30, 43
+**Blocked by:** 19, 20, 21, 22, 30, 41, 43
 
 **From 17:** [Decision 0009](../../../docs/decisions/0009-allium-objective-map.md), map rows for §4, §5 and §6.
 

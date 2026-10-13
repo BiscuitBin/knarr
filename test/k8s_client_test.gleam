@@ -384,6 +384,36 @@ pub fn decode_pod_page_reads_ready_only_from_a_true_ready_condition_test() -> Ni
   assert ready("[]") == [False]
 }
 
+pub fn decoders_read_an_explicit_null_as_absent_test() -> Nil {
+  let pods =
+    "{\"metadata\":null,\"items\":[{\"metadata\":{\"name\":\"p\",\"uid\":\"u\",\"annotations\":null,\"ownerReferences\":null},\"status\":null},{\"metadata\":{\"name\":\"q\",\"uid\":\"v\",\"ownerReferences\":[{\"kind\":\"ReplicaSet\",\"name\":\"rs\",\"uid\":\"r\",\"controller\":null}]},\"status\":{\"podIP\":null,\"conditions\":null}}]}"
+
+  assert k8s_client.decode_pod_page(ok(200, pods))
+    == Ok(Page(
+      items: [
+        Pod(
+          name: "p",
+          uid: "u",
+          annotations: None,
+          deletion_timestamp: None,
+          pod_ip: None,
+          ready: False,
+          owner: None,
+        ),
+        Pod(
+          name: "q",
+          uid: "v",
+          annotations: None,
+          deletion_timestamp: None,
+          pod_ip: None,
+          ready: False,
+          owner: None,
+        ),
+      ],
+      continue: None,
+    ))
+}
+
 pub fn decode_pod_page_reads_the_continue_token_test() -> Nil {
   assert k8s_client.decode_pod_page(ok(200, page_body([pod_item("a")], "abc")))
     |> should.be_ok
@@ -747,7 +777,9 @@ pub fn patched_annotation_reads_back_any_encoded_key_and_value_test() -> Nil {
 }
 
 // Pictures are taken inside the fakes, so each is exactly the request the
-// function handed to send. The named tests above are what prove them.
+// function handed to send. The named tests above are what prove them. Each
+// title is a literal in its own test: birdie finds a snapshot's file and test
+// name by scanning the source for `birdie.snap(title: "...")`.
 pub fn snapshot_list_pods_request_test() -> Nil {
   let send = fn(request) {
     http_picture.request(request)

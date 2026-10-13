@@ -87,6 +87,13 @@ value Event {
     at: Timestamp
 }
 
+-- A response as the client receives it, the input failure classifies.
+value Response {
+    status: Integer
+    retry_after: String?
+    body: String
+}
+
 -- Why a response was refused: its status, its Retry-After, and the kind
 -- Failures classifies it as.
 value Failure {
@@ -105,7 +112,7 @@ contract Client {
     list_deployments: (target: Target, namespace: String) -> List<Deployment>
     patch_pod: (target: Target, namespace: String, pod_name: String, document: String) -> Pod
     create_event: (target: Target, namespace: String, event: Event) -> Boolean
-    failure: (status: Integer, retry_after: String?, operation: list | patch | create) -> Failure
+    failure: (response: Response, operation: list | patch | create) -> Failure
     precondition_failed: (failure: Failure) -> Boolean
 
     @invariant VerifiedTls
@@ -148,8 +155,8 @@ contract Client {
         -- precondition_failed from patch_pod, which ownership's Precondition
         -- and Rejected branch on, and other from every other operation;
         -- every other status is other. failure is that classification, a
-        -- function of the status, the raw Retry-After header and the
-        -- operation alone, and precondition_failed is true for the
+        -- function of the response's status, its raw Retry-After header and
+        -- the operation alone, and precondition_failed is true for the
         -- precondition_failed kind only. Every Failure carries its status and its
         -- Retry-After, which budget's BackOff and PauseScope read.
         -- A 404 or 409 from a patch is a Failure of its own kind, never a
