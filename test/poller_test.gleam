@@ -131,6 +131,13 @@ pub fn decode_ignores_extra_members_test() -> Nil {
     == Valid(Status(cost: 12, accepting: True))
 }
 
+// StatusEndpoint.ValidReading: an ignored member is ignored even when it is
+// a number no float can hold.
+pub fn decode_ignores_an_unrepresentable_extra_number_test() -> Nil {
+  assert read("{\"cost\":12,\"accepting\":true,\"load\":1e400}")
+    == Valid(Status(cost: 12, accepting: True))
+}
+
 // StatusEndpoint.ValidReading: 0 is the floor and is valid.
 pub fn decode_accepts_a_zero_cost_test() -> Nil {
   assert read("{\"cost\":0,\"accepting\":false}")
@@ -244,6 +251,22 @@ pub fn decode_reads_a_negative_cost_as_invalid_test() -> Nil {
 pub fn decode_reads_a_non_json_body_as_invalid_test() -> Nil {
   assert read("ok") == Invalid
   assert read("") == Invalid
+}
+
+// StatusEndpoint.InvalidReading: a body that is an object followed by
+// anything but whitespace is not JSON.
+pub fn decode_reads_trailing_data_as_invalid_test() -> Nil {
+  assert read("{\"cost\":1,\"accepting\":true} x") == Invalid
+  assert read("{\"cost\":1,\"accepting\":true}{}") == Invalid
+}
+
+// StatusEndpoint.ValidReading: whitespace after the object is still JSON,
+// so a body ending in a newline is valid.
+pub fn decode_reads_trailing_whitespace_as_valid_test() -> Nil {
+  assert read("{\"cost\":1,\"accepting\":true}\n")
+    == Valid(Status(cost: 1, accepting: True))
+  assert read("{\"cost\":1,\"accepting\":true} \t\r\n")
+    == Valid(Status(cost: 1, accepting: True))
 }
 
 // ------------------------------------------------------------- Transport ---

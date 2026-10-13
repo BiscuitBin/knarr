@@ -2,15 +2,16 @@
 //// docs/specs/worker_contract.allium. `request` builds the one GET of a
 //// worker's status endpoint, `decode` reads what came back as a `Reading`,
 //// and `draining` is the one place the drain state is read. All three are
-//// pure. `poll` joins them, and its only I/O is the `send` it is given:
-//// production passes `poller_http.send`, a test passes a closure.
+//// pure; `decode` parses JSON through `poller_ffi`, which does no I/O. `poll`
+//// joins them, and its only I/O is the `send` it is given: production passes
+//// `poller_http.send`, a test passes a closure.
 
 import gleam/bit_array
+import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
 import gleam/http
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
-import gleam/json
 import gleam/string
 
 /// The contract's default path: config.status_path.
@@ -95,14 +96,22 @@ pub fn decode(outcome: Outcome) -> Reading {
   }
 }
 
-// On Erlang `decode.int` accepts an integer term only, so a cost written
-// with a fraction or an exponent, which the JSON parser makes a float, fails.
+// `parse_json` keeps a number with a fraction or an exponent as its text, so
+// `decode.int`, which accepts an integer term only, rejects a cost so
+// written, and an ignored member never fails the parse.
 fn decode_status(body: BitArray) -> Reading {
-  case json.parse_bits(body, status_decoder()) {
-    Ok(Status(cost:, ..) as status) if cost >= 0 -> Valid(status)
-    _ -> Invalid
+  case parse_json(body) {
+    Ok(term) ->
+      case decode.run(term, status_decoder()) {
+        Ok(Status(cost:, ..) as status) if cost >= 0 -> Valid(status)
+        _ -> Invalid
+      }
+    Error(Nil) -> Invalid
   }
 }
+
+@external(erlang, "poller_ffi", "parse_json")
+fn parse_json(body: BitArray) -> Result(Dynamic, Nil)
 
 fn status_decoder() -> decode.Decoder(Status) {
   use cost <- decode.field("cost", decode.int)
