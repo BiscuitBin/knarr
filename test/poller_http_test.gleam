@@ -7,6 +7,7 @@
 
 import gleam/erlang/process.{type Pid}
 import gleam/http/response
+import gleam/int
 import gleeunit/should
 import knarr/poller.{Endpoint, Refused, TimedOut, Unreachable}
 import knarr/poller_http
@@ -20,8 +21,10 @@ fn stop_responder(responder: #(Int, Pid)) -> Nil
 @external(erlang, "poller_http_test_ffi", "closed_port")
 fn closed_port() -> Int
 
-@external(erlang, "poller_http_test_ffi", "restart_profile")
-fn restart_profile() -> Bool
+@external(erlang, "poller_http_test_ffi", "restart_profile_during")
+fn restart_profile_during(
+  poll: fn() -> poller.Outcome,
+) -> #(poller.Outcome, Int)
 
 @external(erlang, "poller_http_test_ffi", "timed")
 fn timed(body: fn() -> a) -> #(a, Int)
@@ -92,6 +95,32 @@ pub fn send_does_not_follow_a_redirect_test() -> Nil {
   assert response.get_header(response, "location") == Ok("/status")
 }
 
+// StatusEndpoint.InvalidReading: a 503 with Retry-After comes back at once
+// as a response for decode to read, not retried and not a timeout.
+pub fn send_returns_a_503_without_retrying_test() -> Nil {
+  let responder = start_responder("inet")
+  let #(outcome, elapsed) =
+    timed(fn() {
+      get(pod_ip: "127.0.0.1", port: responder.0, path: "/unavailable")
+    })
+  stop_responder(responder)
+
+  let response = outcome |> should.be_ok
+  assert response.status == 503
+  assert elapsed < 1000
+}
+
+// StatusEndpoint.Pull: the Host header of an IPv6 poll is bracketed, as RFC
+// 7230 section 5.4 requires.
+pub fn send_brackets_the_ipv6_host_header_test() -> Nil {
+  let responder = start_responder("inet6")
+  let response =
+    get(pod_ip: "::1", port: responder.0, path: "/host") |> should.be_ok
+  stop_responder(responder)
+
+  assert response.body == <<"[::1]:":utf8, int.to_string(responder.0):utf8>>
+}
+
 // StatusEndpoint.Transport: refused when nothing listens on the port.
 pub fn send_reports_a_closed_port_as_refused_test() -> Nil {
   let port = closed_port()
@@ -158,15 +187,29 @@ pub fn version_is_the_gleam_toml_version_test() -> Nil {
   assert poller_http.version() == gleam_toml_version()
 }
 
-// The poller's httpc profile runs under the application's root supervisor,
-// registered by name, and comes back under the same name when it dies, so a
-// later send goes through.
+// The poller's httpc profile runs under its own supervisor in the
+// application's tree, registered by name. A poll in flight when it dies is
+// answered at once as Unreachable, and the profile comes back under the same
+// name, so a later send goes through.
 pub fn profile_is_restarted_under_its_name_test() -> Nil {
   let responder = start_responder("inet")
-  assert restart_profile()
+  let #(during, after_kill) =
+    restart_profile_during(fn() {
+      poller.request(
+        endpoint: Endpoint(
+          pod_ip: "127.0.0.1",
+          port: responder.0,
+          path: "/silent",
+        ),
+        version:,
+      )
+      |> poller_http.send(timeout_ms: 3000)
+    })
   let outcome = get(pod_ip: "127.0.0.1", port: responder.0, path: "/status")
   stop_responder(responder)
 
+  assert during == Error(Unreachable)
+  assert after_kill < 1000
   let response = outcome |> should.be_ok
   assert response.status == 200
 }

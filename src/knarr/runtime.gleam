@@ -32,8 +32,8 @@ fn mark_ready(state: State) -> Nil
 fn set_port(state: State, port: Int) -> Nil
 
 /// Starts the root supervisor: the listener first, then, with `poller`, the
-/// poller's httpc profile, then, with `probe`, the S1 probe under its own
-/// supervisor. Child ids count the children present from 0, so the
+/// poller's httpc profile, then, with `probe`, the S1 probe, each of those
+/// two under its own supervisor. Child ids count the children present from 0, so the
 /// application, which turns `poller` on, has the profile at id 1 and any
 /// probe at id 2. The profile is one per VM, since httpc names its tables
 /// after it, so a second root in the same VM, as the tests start beside the

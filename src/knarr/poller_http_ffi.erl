@@ -3,33 +3,29 @@
 
 -define(PROFILE, knarr_poller_httpc).
 
-%% One asynchronous httpc call through the poller's profile. httpc's own
-%% timeouts cover connect and the response; the receive bounds the whole
-%% call strictly, and on expiry cancels the request and drops an answer that
-%% raced the cancel. The error terms are shaped as k8s_http_ffi documents: a
-%% refused connection is {failed_connect, [{to_address, _}, {inet, _,
-%% econnrefused}]}, and a connect that times out, as a NetworkPolicy drop
-%% does, carries timeout in the same place.
+%% One synchronous httpc call through the poller's profile. httpc's
+%% timeouts cover connect and the response; on expiry httpc cancels the
+%% request, and since a synchronous call answers to an alias it releases
+%% afterwards, a late answer is dropped rather than left in the caller's
+%% mailbox. autoretry 0 returns a 503 with Retry-After as it is, where httpc
+%% would otherwise retry it through a registered manager name a stand-alone
+%% profile does not have, and the poll would time out. The Host header of an
+%% IPv6 poll keeps its brackets. The error terms are shaped as k8s_http_ffi
+%% documents: a refused connection is {failed_connect, [{to_address, _},
+%% {inet, _, econnrefused}]}, and a connect that times out, as a
+%% NetworkPolicy drop does, carries timeout in the same place.
 request(Method, Url, Headers, Ipv6, Timeout) ->
-  Profile = profile(),
-  HttpOptions = [{autoredirect, false}, {timeout, Timeout}, {connect_timeout, Timeout}],
-  Options = [{sync, false}, {body_format, binary},
+  HttpOptions = [{autoredirect, false}, {autoretry, 0}, {timeout, Timeout},
+    {connect_timeout, Timeout}],
+  Options = [{body_format, binary}, {ipv6_host_with_brackets, Ipv6},
     {socket_opts, [{ipfamily, family(Ipv6)}]}],
   Request = {unicode:characters_to_list(Url),
     [{unicode:characters_to_list(K), unicode:characters_to_list(V)} || {K, V} <- Headers]},
-  case httpc:request(method(Method), Request, HttpOptions, Options, Profile) of
-    {ok, Id} ->
-      receive
-        {http, {Id, {error, Reason}}} -> {error, transport(Reason)};
-        {http, {Id, {{_, Status, _}, ResponseHeaders, Body}}} ->
-          {ok, {Status,
-                [{unicode:characters_to_binary(K), unicode:characters_to_binary(V)} || {K, V} <- ResponseHeaders],
-                iolist_to_binary(Body)}}
-      after Timeout ->
-        ok = httpc:cancel_request(Id, Profile),
-        receive {http, {Id, _}} -> ok after 0 -> ok end,
-        {error, timed_out}
-      end;
+  case httpc:request(method(Method), Request, HttpOptions, Options, profile()) of
+    {ok, {{_, Status, _}, ResponseHeaders, Body}} ->
+      {ok, {Status,
+            [{unicode:characters_to_binary(K), unicode:characters_to_binary(V)} || {K, V} <- ResponseHeaders],
+            iolist_to_binary(Body)}};
     {error, Reason} -> {error, transport(Reason)}
   end.
 
@@ -83,7 +79,8 @@ start_profile() ->
 version() ->
   case application:load(knarr) of
     ok -> ok;
-    {error, {already_loaded, knarr}} -> ok
+    {error, {already_loaded, knarr}} -> ok;
+    {error, Reason} -> erlang:error({knarr_app_not_loadable, Reason})
   end,
   {ok, Vsn} = application:get_key(knarr, vsn),
   unicode:characters_to_binary(Vsn).

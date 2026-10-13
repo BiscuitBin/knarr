@@ -36,7 +36,8 @@ pub fn occupied_port_fails_startup_test() -> Nil {
 fn application_runs_the_poller_profile() -> Bool
 
 // The application `gleam test` starts is the production tree: its root runs
-// the poller's httpc profile as child id 1, under the name `send` uses.
+// the poller's httpc profile under its own supervisor as child id 1, under
+// the name `send` uses.
 pub fn application_runs_the_poller_profile_as_child_one_test() -> Nil {
   assert application_runs_the_poller_profile()
 }

@@ -200,10 +200,11 @@ On a direct connection the first element is the socket family, `inet` here and `
 | httpc returns | `Transport` | Fails if the mapping changes |
 | --- | --- | --- |
 | `{failed_connect, [{to_address, _}, {inet, [inet], econnrefused}]}`, or `inet6` for ::1 | `Refused` | `send_reports_a_closed_port_as_refused_test`, `send_reports_a_closed_ipv6_port_as_refused_test` |
-| `timeout`, or the poller's own bound passing first | `TimedOut` | `send_reports_a_silent_worker_as_timed_out_test` |
+| `timeout` | `TimedOut` | `send_reports_a_silent_worker_as_timed_out_test` |
 | `socket_closed_remotely`, for a reset | `Unreachable` | `send_reports_a_reset_as_unreachable_test` |
+| `killed`, for a poll in flight when the profile dies | `Unreachable` | `profile_is_restarted_under_its_name_test` |
 
-A `failed_connect` entry carrying `timeout`, the shape a connect dropped by a NetworkPolicy takes, also gives `TimedOut`; no test exercises it. The family is set per request with `{socket_opts, [{ipfamily, inet6}]}`, because a bare `inet6` in `socket_opts` loses to the profile's `inet`.
+A `failed_connect` entry carrying `timeout`, the shape a connect dropped by a NetworkPolicy takes, also gives `TimedOut`; no test exercises it. Three httpc defaults are overridden, each with a test that fails without it. The family is set per request with `{socket_opts, [{ipfamily, inet6}]}`, because a bare `inet6` in `socket_opts` loses to the profile's `inet`. `{autoretry, 0}` returns a 503 with Retry-After at once, because httpc's retry goes through a registered manager name a stand-alone profile lacks, and the poll would otherwise time out. `{ipv6_host_with_brackets, true}` keeps the brackets in an IPv6 poll's Host header.
 
 ### SNI
 

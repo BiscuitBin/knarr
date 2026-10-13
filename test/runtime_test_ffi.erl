@@ -28,11 +28,12 @@ listener(Root) ->
   {0, Child, supervisor, _} = lists:keyfind(0, 1, supervisor:which_children(Root)),
   Child.
 
-%% The application's root runs the poller's httpc profile as child id 1,
-%% under the name poller_http_ffi sends through.
+%% The application's root runs the poller's httpc profile under its own
+%% supervisor, child id 1, under the name poller_http_ffi sends through.
 application_runs_the_poller_profile() ->
   {ok, Root} = application:get_supervisor(knarr),
-  {1, Profile, worker, _} = lists:keyfind(1, 1, supervisor:which_children(Root)),
+  {1, Supervisor, supervisor, _} = lists:keyfind(1, 1, supervisor:which_children(Root)),
+  [{0, Profile, worker, _}] = supervisor:which_children(Supervisor),
   is_pid(Profile) andalso Profile =:= whereis(knarr_poller_httpc).
 
 serves(Port) ->
