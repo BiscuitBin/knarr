@@ -156,7 +156,7 @@ Run birdie's other commands through `just birdie`, for example `just birdie stal
 
 The builder and the decoder are tested by value. The I/O function is tested with a closure fake. The fake asserts the request it was handed and returns a canned response. A second fake returns `Error(_)`, to test the failure path. To snapshot the outgoing request, take the picture inside the fake: it then shows exactly what the function sent, not a request the test built again.
 
-The real client, `src/knarr/k8s_client.gleam` with `test/k8s_client_test.gleam`, follows the same shape for the pod list and the annotation patch. The worked example lives in `test/` only, because it is not part of knarr. It models the apiserver's `GET /version`, a real, read-only call that decides nothing:
+The real client, `src/knarr/k8s_client.gleam` with `test/k8s_client_test.gleam`, follows the same shape for the pod list and the annotation patch. The status poller, `src/knarr/poller.gleam` with `test/poller_test.gleam`, follows it too, except that its `send` returns an `Outcome`, a response or a named transport failure, which the decoder reads like any response. Production passes `poller_http.send` with the per-poll timeout. The worked example lives in `test/` only, because it is not part of knarr. It models the apiserver's `GET /version`, a real, read-only call that decides nothing:
 
 - [sans_io_example.gleam](../../test/sans_io_example.gleam): the builder, the decoder and `fetch_version`
 - [sans_io_example_test.gleam](../../test/sans_io_example_test.gleam): named tests, the closure fakes, a fixed-seed property, and a snapshot taken inside the fake
@@ -192,6 +192,18 @@ The FFI does not read the list by position. It walks it and matches each entry b
 - Any other entry, such as `{to_address, _}`, is skipped. An exhausted list gives `ConnectFailed("unknown")`.
 
 On a direct connection the first element is the socket family, `inet` here and `inet6` for IPv6. In inets 9.8, httpc's proxy-tunnel path reports `{tls, TLSOptions, Reason}`, which the same clauses match. So a reordered list or another first element still maps, and fails none of the three tests; [tls/run.sh](../../.scratch/bootstrap/evidence/14/tls/run.sh) prints the raw terms. A new entry shape inside the list is a value, and the named test then fails with the term in its output. Two shapes still raise in the FFI instead: a `failed_connect` reason that is not a list, and an alert that is not an atom. Neither has been seen. No test exercises `timeout`, `inet6` or the tunnel path.
+
+### The poller's httpc terms
+
+[poller_http_test.gleam](../../test/poller_http_test.gleam) runs `poller_http.send` over plain HTTP against a `gen_tcp` responder on 127.0.0.1 and ::1, in [poller_http_test_ffi.erl](../../test/poller_http_test_ffi.erl). `poller_http_ffi` turns httpc's error term into a `Transport`. On OTP 29:
+
+| httpc returns | `Transport` | Fails if the mapping changes |
+| --- | --- | --- |
+| `{failed_connect, [{to_address, _}, {inet, [inet], econnrefused}]}`, or `inet6` for ::1 | `Refused` | `send_reports_a_closed_port_as_refused_test`, `send_reports_a_closed_ipv6_port_as_refused_test` |
+| `timeout`, or the poller's own bound passing first | `TimedOut` | `send_reports_a_silent_worker_as_timed_out_test` |
+| `socket_closed_remotely`, for a reset | `Unreachable` | `send_reports_a_reset_as_unreachable_test` |
+
+A `failed_connect` entry carrying `timeout`, the shape a connect dropped by a NetworkPolicy takes, also gives `TimedOut`; no test exercises it. The family is set per request with `{socket_opts, [{ipfamily, inet6}]}`, because a bare `inet6` in `socket_opts` loses to the profile's `inet`.
 
 ### SNI
 

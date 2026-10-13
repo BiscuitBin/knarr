@@ -14,9 +14,41 @@
 
 **MVP critical path:** yes. Every reading the reconciler maps comes from it.
 
-**Status:** ready-for-agent
+**Status:** done. See [the hand-back notes](#hand-back-notes).
 
-- [ ] The builder and decoder clauses of `StatusEndpoint` (`Pull`, `Versioning`, `RequestHeaders`, `ValidReading`, `NotFoundReading`, `InvalidReading`, `Payload`) each have a test that traces to them. The decoder is tested by value for each case the contract names: a valid object with extra members, a 404, a 3xx, a 500, a body over 4096 bytes, a non-object, a missing member, a null, a string boolean, a fractional cost, a negative cost, a 404 with an HTML body and a 404 over 4096 bytes (both `not_found`), and a refused, a timed_out and an unreachable outcome (each the reading of the same name). `draining` is tested by value for a valid reading with `accepting` false, a valid reading with `accepting` true, a `not_found` reading and an `invalid` reading. `Discovery`'s "every pod with a pod IP is polled" and `ReadinessWarning` are 31's, which selects pods and holds the mapped value; `Served` is the worker's, which 29 tests.
-- [ ] The request builder brackets an IPv6 pod IP and sends `User-Agent: knarr/<version>`.
-- [ ] `send` returns an `Outcome` and stays injected; the per-poll timeout is a parameter of the adapter, 5 seconds by default; the HTTP adapter maps its errors to refused, timed_out and unreachable over plain HTTP (`Transport`); any FFI is a named `*_ffi.erl` module; the poller runs under a supervisor.
-- [ ] `just check` passes and the hand-back gives the `plan-spec` obligation count.
+- [x] The builder and decoder clauses of `StatusEndpoint` (`Pull`, `Versioning`, `RequestHeaders`, `ValidReading`, `NotFoundReading`, `InvalidReading`, `Payload`) each have a test that traces to them. The decoder is tested by value for each case the contract names: a valid object with extra members, a 404, a 3xx, a 500, a body over 4096 bytes, a non-object, a missing member, a null, a string boolean, a fractional cost, a negative cost, a 404 with an HTML body and a 404 over 4096 bytes (both `not_found`), and a refused, a timed_out and an unreachable outcome (each the reading of the same name). `draining` is tested by value for a valid reading with `accepting` false, a valid reading with `accepting` true, a `not_found` reading and an `invalid` reading. `Discovery`'s "every pod with a pod IP is polled" and `ReadinessWarning` are 31's, which selects pods and holds the mapped value; `Served` is the worker's, which 29 tests.
+- [x] The request builder brackets an IPv6 pod IP and sends `User-Agent: knarr/<version>`.
+- [x] `send` returns an `Outcome` and stays injected; the per-poll timeout is a parameter of the adapter, 5 seconds by default; the HTTP adapter maps its errors to refused, timed_out and unreachable over plain HTTP (`Transport`); any FFI is a named `*_ffi.erl` module; the poller runs under a supervisor.
+- [x] `just check` passes and the hand-back gives the `plan-spec` obligation count.
+
+## Hand-back notes
+
+### What changed
+
+- `src/knarr/poller.gleam`, pure with no FFI: the config defaults `status_path`, `status_port` and `max_body_bytes`; the types `Endpoint`, `Status`, `Transport` (`Refused`, `TimedOut`, `Unreachable`), `Outcome = Result(Response(BitArray), Transport)` and `Reading` (`Valid(Status)`, `NotFound`, `Invalid`, `Failed(Transport)`); `request(endpoint:, version:)`, which brackets an IPv6 pod IP and sets `user-agent: knarr/<version>` and no other header; `decode`, which checks the 4096-byte cap before parsing and reads a 404 as `NotFound` whatever its body; `draining`; and `poll(endpoint:, version:, send:)`, whose only I/O is the injected `send`.
+- `src/knarr/poller_http.gleam` and `poller_http_ffi.erl`: `send(request:, timeout_ms:)` and `default_timeout_ms = 5000`. It makes an async `httpc:request` through a stand-alone profile registered as `knarr_poller_httpc`. It never follows a redirect. httpc's `timeout` and `connect_timeout` are set to the timeout, and a `receive … after` bounds the whole call; on expiry the FFI cancels the request and drops an answer that raced the cancel. The FFI sets the family per request with `{socket_opts, [{ipfamily, inet | inet6}]}`. A bare `inet6` in `socket_opts` loses to the profile's `inet`, and `ipfamily inet6fb4` would first try an IPv4 literal over inet6, which is a resolver lookup of the address. Every poll therefore gets its own connection, which httpc closes after the response. `supervised()` starts the profile linked to its supervisor. `version()` reads the `.app` `vsn`.
+- `src/knarr/runtime.gleam`: `start` takes `poller: Bool`. The application (`application_ffi.erl`) turns it on, so its root has the listener at id 0, the profile at id 1 and any S1 probe at id 2. httpc names the profile's ETS tables after the profile, so there can be only one profile per VM. `gleam test` starts the application, so the tests' own roots run with `poller: False`, and the adapter tests send through the application's profile. This changes how the tests use the agreed shape, not the shape: the profile is stand-alone and registered by name.
+- `test/runtime_test_ffi.erl` and `scripts/checks/tests/test_application.py` now select the listener by child id 0 rather than as the root's only child. `scripts/checks/tests/test_coverage.py` now picks a snapshot that contains `application/json` rather than the first one globbed, because the new snapshot has no such header.
+- Tests: `test/poller_test.gleam` (pure, with closure fakes and one snapshot, `status_request_sent_by_poll`), `test/poller_http_test.gleam` with `poller_http_test_ffi.erl` (a `gen_tcp` responder on 127.0.0.1 and ::1), and a runtime test that the application's root runs the profile as child 1.
+- `docs/reference/testing.md`: the poller in the sans-IO section, and a table of the poller's httpc error terms. `CHANGELOG.md`: one Added line.
+
+### What was verified
+
+- Each clause test traces to its clause (`// StatusEndpoint.<Clause>`): `Pull`, `Versioning`, `RequestHeaders`, `ValidReading`, `NotFoundReading`, `InvalidReading`, `Transport` and `Payload`. That covers every case this ticket lists, plus a body of exactly 4096 bytes, `1.0`, `1e2`, a big integer and a wrong or missing Content-Type.
+- `just plan-spec docs/specs/worker_contract.allium` reports 22 obligations, unchanged. Each has a named test or a comment naming the test that discharges it. `just check-specs` reports no diagnostic.
+- On the adapter: a 200 over IPv4 and IPv6; a 404; a 302 returned rather than followed; a closed port is `Refused` over both families; a silent accept with a 200 ms timeout is `TimedOut` within 200 to 1500 ms; an RST is `Unreachable` (httpc returns `socket_closed_remotely`); exactly one `User-Agent: knarr/0.1.0` reaches the worker; `version()` equals `gleam.toml`'s version line; and when the profile is killed, its supervisor restarts it under the same name and a later send succeeds.
+- `just format-check`, `just build`, `just test` (107 tests) and `just check` all pass.
+
+### What later tickets need
+
+- **46:** call `poller.poll(endpoint:, version: poller_http.version(), send: poller_http.send(_, timeout_ms: <budget poll_timeout>))` from a process in the VM where the application's profile, `knarr_poller_httpc`, is registered. Read `version()` once rather than on every poll. A poll with no profile crashes the caller. The concurrency bound, jitter and no-overlap are still yours. `send` blocks its caller for up to the timeout, so run polls in worker processes. A late httpc answer can still race the cancel after the flush and land in the caller's mailbox as `{http, {RequestId, _}}`; a long-lived poll process should drop messages it does not expect.
+- **31:** `Reading` is `Valid(Status(cost:, accepting:))`, `NotFound`, `Invalid` or `Failed(Refused | TimedOut | Unreachable)`. `poll` takes the pod IP as the string 41's `Pod` will carry, and the port and path come from config (19) or the defaults.
+- **21:** `Failed(Transport)` keeps refused, timed_out and unreachable distinct, as the contract names them.
+- **29:** the adapter test's responder imitates the fake worker's endpoint: a status object on 200, and 404 for a path it does not serve. The fake worker's own tests are what prove `Served`.
+
+### Residual risks
+
+- The adapter does not bound the body. httpc reads every response whole, a large 404 included, before `decode` applies the 4096-byte cap, so a misbehaving worker can make knarr buffer an arbitrarily large body.
+- On CI, IPv6 has been tested only on loopback (`::1`, present on ubuntu-24.04 and macOS). A pod network without IPv6 support gives `Unreachable` or `Refused` for an IPv6 pod IP, which reconcile then handles.
+- No test exercises a connect that times out (`failed_connect` with `timeout`, the NetworkPolicy drop). It maps to `TimedOut` by shape only.
+- Each poll opens and closes its own TCP connection. At poll intervals of seconds this costs little, and no poll can reuse a stale connection to a recycled pod IP.

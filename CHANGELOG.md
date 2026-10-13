@@ -11,6 +11,7 @@ Notable changes to Knarr are recorded here. This file follows [Keep a Changelog]
 - Contribution instructions for the ticket and worktree workflow, private security reporting with support for current `main`, and this changelog.
 - Dependency update proposals from Renovate, held until they are activated, and a weekly audit of hex and Erlang/OTP advisories from OSV.dev and of the container image with grype.
 - A release workflow: a pushed version tag publishes the image to `ghcr.io/steven-cutting/knarr` once the maintainer approves the `release` environment, and `deploy/release` installs it pinned by digest.
+- The status poller: a pure builder and decoder for a worker's `GET /knarr/v1/status`, and a supervised plain-HTTP adapter with a per-poll timeout.
 
 ### Changed
 

@@ -1,0 +1,8 @@
+---
+version: 2.0.2
+title: status request sent by poll
+file: ./test/poller_test.gleam
+test_name: snapshot_status_request_test
+---
+GET http://10.1.2.3:8080/knarr/v1/status
+user-agent: knarr/0.1.0
