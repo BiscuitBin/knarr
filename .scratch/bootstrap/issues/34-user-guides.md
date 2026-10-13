@@ -14,6 +14,8 @@
 
 **From 28:** [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md): a release is installed with `kubectl apply -k` on the digest-pinned overlay 36 adds, one install per namespace, with the digest from the release run's summary (40's hand-back records the MVP's).
 
+**From 30:** the user guides may want a metrics and alerting page from [observability.allium](../../../docs/specs/observability.allium): the metric catalogue in `Catalogue`; an alert on `knarr_last_discovery_timestamp_seconds` going stale, since liveness never restarts on a stalled loop (`Probes` `Liveness`) and `/readyz` latches after the first discovery cycle (`Probes` `Readiness`); the four Event reasons, `AnnotationYielded`, `ContractAbsent`, `PatchRejected` and `CleanupRejected`, and their messages (`Events`), including the `kubectl annotate pod <pod> <key>-` a `CleanupRejected` message names; and the JSON log fields (`Logs` `Format`) with the `log_level` setting, info by default (`Levels`).
+
 **MVP critical path:** no. The MVP runs without them; users need them to adopt it.
 
 **Status:** ready-for-agent, round 2
