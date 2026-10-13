@@ -135,9 +135,11 @@ contract Catalogue {
         -- Deployment's name, about 50 values at budget's scale target, which
         -- is a sizing assumption and not a limit knarr enforces, plus labels
         -- whose values are the fixed sets this module names. tier ranges
-        -- over drained and 0 to the number of the Deployment's thresholds,
-        -- whose longest valid list is config's to bound (ticket 19); every
-        -- other label set is fixed here. No metric carries a pod label or a
+        -- over drained and 0 to the length of the Deployment's effective
+        -- threshold list, whose length config's Keys does not cap (ticket
+        -- 19), so its value count, like deployment's, is a sizing
+        -- assumption and not a limit knarr enforces; every other label set
+        -- is fixed here. No metric carries a pod label or a
         -- namespace label: an install is one namespace (§9.18), and per-pod
         -- detail lives in Events and log lines. A label name that also names
         -- a log field means the same thing in both (Logs Format).
@@ -396,12 +398,12 @@ contract Probes {
         -- (budget Restart) and fix nothing. A stalled loop is an alert on
         -- knarr_last_discovery_timestamp_seconds, not a liveness failure.
     @invariant Readiness
-        -- /readyz answers 503 until the first discovery cycle in which both
-        -- LISTs succeed, then 200 for the life of the process: the latch is
-        -- never released. A configuration that runs no discovery cycle, as
-        -- the gate runs knarr (knarr Lifecycle NoPodEffects), is ready once
-        -- the supervision tree starts. The responses themselves are knarr's
-        -- Diagnostics Health and Readiness.
+        -- /readyz answers 503 until the first discovery cycle in which every
+        -- LIST of it succeeds, then 200 for the life of the process: the
+        -- latch is never released. A configuration that runs no discovery
+        -- cycle, as the gate runs knarr (knarr Lifecycle NoPodEffects), is
+        -- ready once the supervision tree starts. The responses themselves
+        -- are knarr's Diagnostics Health and Readiness.
 }
 
 ------------------------------------------------------------
