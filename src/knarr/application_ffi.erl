@@ -6,7 +6,7 @@ start(_Type, _Args) ->
   metrics_ffi:startup(),
   Port = application:get_env(knarr, port, 8080),
   Bind = unicode:characters_to_binary(application:get_env(knarr, bind, "0.0.0.0")),
-  case 'knarr@runtime':start(Port, Bind, probe()) of
+  case 'knarr@runtime':start(Port, Bind, true, probe()) of
     {ok, {started, Pid, _Runtime}} -> {ok, Pid};
     {error, Reason} -> {error, Reason}
   end.

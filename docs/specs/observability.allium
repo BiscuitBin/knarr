@@ -1,17 +1,391 @@
 -- allium: 3
 
 -- Module: observability.
--- Scope: the catalogue of metrics, Events and log lines knarr emits (§8
--- health_metrics, §9.14). The points at which they are emitted stay in the
--- owning modules; this module names them.
--- Owner: the elicitation follow-up ticket 30, after ticket 24 excludes metric
--- names and Events in general from its scope.
+-- Scope: the catalogue of metrics, Events and log lines knarr emits and what
+-- its own probes report (§8 health_metrics, §9.14). The points at which they
+-- are emitted stay in the owning modules: when a pod's contract is absent is
+-- reconcile's (ticket 21), when a patch is rejected and when another writer
+-- is recognised are ownership's (ticket 22), when a cleanup is made is
+-- lifecycle's (ticket 23), and the schedule, the pending set and the pauses
+-- are budget's (ticket 24). This module names what each emits, the
+-- conventions every name follows and the cadence of the Events and lines
+-- raised on entry to a state. The probe responses are knarr's Diagnostics;
+-- the Event create is k8s_client's.
+-- Owner: ticket 30 settled every question here with the maintainer on
+-- 2026-10-12. The reconcile core (ticket 31) emits the readings, cost,
+-- standing, pod-state and discovery signals, the readiness latch and the log
+-- format; the ownership and lifecycle invariants (ticket 32) the rejection
+-- and yield signals and their Events; the poll schedule and patcher (ticket
+-- 46) the budget signals, every patch and LIST result and the poll duration,
+-- where the patches, LISTs and polls are sent; the client (ticket 41) the
+-- Event create. Tickets 19,
+-- 21, 23 and 25 add their own rows under the conventions here when they
+-- settle (LaterRows).
 
 ------------------------------------------------------------
--- Open Questions
+-- Value Types
 ------------------------------------------------------------
 
-open question "§9.14 Metrics: the names and labels of the metrics for poll results, cost distribution, patch rate and errors."
-open question "§9.14 Events: the Event reasons and targets for an absent contract, a rejected patch, a conflict with another writer (the reason for the per-yield Event on the Pod whose content ownership's Event fixes, the gauge and the log line ownership's Adoption names for a foreign annotation) and a failed cleanup (§5, §8 failure modes)."
-open question "§9.14 Logs: the log fields and levels, and what is never logged (for example the service-account token, §9.2)."
-open question "§9.14 Probes: what knarr's own liveness and readiness probes report (§8)."
+-- One label of a series: its name and the value it carries.
+value Label {
+    name: String
+    value: String
+}
+
+-- One exported series: the metric's name and its labels.
+value Series {
+    name: String
+    labels: List<Label>
+}
+
+-- One pair of a pod's metadata.annotations map, as ownership names it.
+value Annotation {
+    key: String
+    value: String
+}
+
+-- The content of the Event raised when a pod enters the contract-absent
+-- state, on its Deployment: the Deployment by name and uid, the pod, the
+-- port and path it was polled at, and the kind of its last reading.
+value AbsentEvent {
+    deployment_name: String
+    deployment_uid: String
+    pod_name: String
+    port: Integer
+    path: String
+    reading: ReadingKind
+}
+
+-- The content of the Event raised on the first rejection of a run, on the
+-- Pod: the pod by name and uid, what the rejected patch was for, the status
+-- it was rejected with (422 for a 422 the next LIST classifies as a
+-- rejection), the full keys of the owned annotations it concerned in the
+-- order the patch names them, and, for a cleanup, the owned annotations that
+-- stay on the pod with the values found in the view the patch was built
+-- from (empty for any other purpose).
+value RejectedEvent {
+    pod_name: String
+    pod_uid: String
+    purpose: Purpose
+    status: Integer
+    keys: List<String>
+    left: List<Annotation>
+}
+
+-- One pod's place in a state that is announced on entry: the pod, the owned
+-- annotation's short name for foreign (null for every other state), and the
+-- state.
+value Entry {
+    pod_name: String
+    annotation: String?
+    state: foreign | not_ready_with_cost | contract_absent | rejected | cleanup_rejected
+}
+
+-- One field of a log line: its name and the JSON text of its value, a quoted
+-- and escaped string, an integer or a boolean.
+value Field {
+    name: String
+    value: String
+}
+
+-- One log line before it is rendered.
+value LogLine {
+    time: Timestamp
+    level: Level
+    msg: String
+    fields: List<Field>
+}
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+-- worker_contract's Reading kinds, verbatim.
+enum ReadingKind { valid | not_found | invalid | refused | timed_out | unreachable }
+
+-- What a patch was for: a write cost_mapping or safe_to_evict maps, the
+-- removal that spells 0 included; ownership's yield; or a removal made
+-- because the pod or the annotation leaves knarr's management, which is
+-- lifecycle's and reconcile's to decide (tickets 21, 23).
+enum Purpose { apply | yield | cleanup }
+
+-- Log levels, least to most severe.
+enum Level { debug | info | warning | error }
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract Catalogue {
+    tier: (value: Integer, thresholds: List<Integer>) -> String
+    patch_result: (status: Integer?) -> String
+    list_result: (status: Integer?) -> String
+    retire: (series: List<Series>, deployment: String) -> List<Series>
+
+    @invariant Naming
+        -- Every metric knarr defines is named knarr_<subject>_<unit>: a
+        -- counter ends _total, a duration is in seconds and ends _seconds, a
+        -- timestamp is unix seconds and ends _timestamp_seconds, and a
+        -- boolean is a gauge of 0 or 1. knarr_startups_total keeps its name
+        -- and meaning (knarr Diagnostics Metrics); the metrics library's VM
+        -- collectors keep their own names. The exposition, its path and its
+        -- content type are knarr's Diagnostics.
+    @invariant Labels
+        -- A per-workload metric carries the label deployment, the
+        -- Deployment's name, which an install bounds at about 50 values
+        -- (budget's scale target), plus labels whose values are the small
+        -- fixed sets this module names. No metric carries a pod label or a
+        -- namespace label: an install is one namespace (§9.18), and per-pod
+        -- detail lives in Events and log lines. A label name that also names
+        -- a log field means the same thing in both (Logs Format).
+    @invariant Polls
+        -- knarr_polls_total{deployment, reading} counts every reading a poll
+        -- produces, reading being worker_contract's Reading kind verbatim:
+        -- valid, not_found, invalid, refused, timed_out or unreachable. A
+        -- response budget's Leaving discards is not counted.
+        -- knarr_poll_duration_seconds is a histogram with no labels of the
+        -- time from send to outcome, a timed_out outcome observed at the
+        -- timeout, under the buckets Buckets names.
+        -- knarr_polls_skipped_total{deployment} counts the polls budget's
+        -- NoOverlap skips. knarr_poll_queue_depth, a gauge with no labels,
+        -- is the number of due polls waiting in budget's concurrency queue,
+        -- not yet sent.
+    @invariant Tiers
+        -- knarr_pods{deployment, tier} is a gauge of the Deployment's pods
+        -- by the tier of the pod-deletion-cost value the marker records as
+        -- applied, which is what the ReplicaSet controller ranks (ownership
+        -- Applied): tier returns "drained" for -1 and otherwise cost_mapping's
+        -- tier of the value under the Deployment's own thresholds, in
+        -- canonical decimal. A pod knarr has not written, or whose record is
+        -- a removal, is tier "0". A pod whose pod-deletion-cost stands
+        -- conflict, yielded or foreign is not counted here; knarr_annotations
+        -- counts it (Standing).
+    @invariant Patches
+        -- knarr_patches_total{deployment, purpose, result} counts every patch
+        -- sent, when its response arrives, purpose being Purpose's apply,
+        -- yield or cleanup and result patch_result's label for the
+        -- response's status, null for a transport failure: accepted for a
+        -- 2xx, precondition_failed for 422, rejected for 400 or 403,
+        -- throttled for 429 and error for every other status and for null.
+        -- knarr_patch_rejections_total{deployment, purpose} counts every
+        -- rejection when it is known: a 400 or 403 at once, and a 422 when
+        -- the next LIST classifies it as one with ownership's rejected
+        -- (ownership Rejected). A failed cleanup is a rejection whose purpose
+        -- is cleanup.
+    @invariant Budget
+        -- budget's six signals. The patch rate is knarr_patches_total. A 429
+        -- is counted once, as result throttled: on knarr_patches_total for a
+        -- patch and on knarr_lists_total{resource, result} for a LIST, whose
+        -- resource is pods, replicasets or deployments (config Discovery,
+        -- ticket 19) and whose result is list_result's
+        -- label: succeeded for a 2xx, throttled for 429, error for every
+        -- other status and for null; no other metric counts a 429.
+        -- knarr_paused{scope} is 1 while budget's pause of that scope lasts
+        -- and 0 otherwise, and knarr_pause_seconds{scope} is the length of
+        -- the current pause as last set, from the 429 that set it to its
+        -- until, 0 when not paused; scope is patch for WriteBudget's
+        -- BackOff and list for PauseScope's LIST pause.
+        -- knarr_patches_pending{deployment} is the number of budget's
+        -- Pending entries for the Deployment's pods, and
+        -- knarr_patch_pending_oldest_seconds, with no labels, is the age of
+        -- the oldest due_since across the install, 0 when nothing is
+        -- pending. The poll queue depth and the skipped polls are Polls'.
+    @invariant Standing
+        -- knarr_annotations{deployment, annotation, standing} is a gauge of
+        -- the owned annotations on the Deployment's pods by ownership's
+        -- standing, annotation being Owned.name and standing owned,
+        -- conflict, yielded or foreign; unowned is not counted. Its foreign
+        -- series are the gauge ownership's Adoption requires.
+        -- knarr_yields_total{deployment, annotation} counts every yield
+        -- patch accepted. knarr_pods_not_ready_with_cost{deployment} is the
+        -- gauge worker_contract's ReadinessWarning requires, and
+        -- knarr_pods_contract_absent{deployment} the number of the
+        -- Deployment's pods in the contract-absent state, as reconcile
+        -- decides it (ticket 21).
+    @invariant Install
+        -- knarr_last_discovery_timestamp_seconds is the end of the last
+        -- discovery cycle in which every LIST of it succeeded (budget
+        -- ListCadence),
+        -- and knarr_discovery_duration_seconds is a histogram with no labels
+        -- of the length of every cycle sent, under the buckets Buckets
+        -- names. knarr_events_total{reason, result} counts every Event
+        -- create attempt by its reason and by created or failed.
+        -- knarr_targets{kind} is the number of opted-in Deployments
+        -- (deployments) and of their pods the last LIST shows, terminating
+        -- ones included (pods). knarr_build_info{version} is 1, with
+        -- version knarr's release version.
+    @invariant Buckets
+        -- knarr_poll_duration_seconds and knarr_discovery_duration_seconds
+        -- share the fixed bucket bounds 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+        -- 1, 2.5, 5, 10, 30 and 60 seconds and +Inf. They are not derived
+        -- from config.
+    @invariant SeriesLife
+        -- A Deployment leaving the target set removes every series labelled
+        -- with it, counters included: retire returns the series it is given
+        -- less every one whose deployment label is that name, so a
+        -- Deployment that returns starts its counters at 0. A terminating
+        -- pod counts only in knarr_targets; the tier, standing and pod-state
+        -- gauges exclude it. Every count is in memory: a restart starts the
+        -- counters at 0, and the per-Deployment gauges carry no series until
+        -- the first discovery cycle in which every LIST of it succeeds
+        -- rebuilds
+        -- them.
+    @invariant LaterRows
+        -- These invariants are the conventions every later metric follows.
+        -- A ticket that settles a signal of its own (19, 21, 23 or 25) adds
+        -- its row here with tend under Naming, Labels and SeriesLife, without
+        -- reopening ticket 30.
+    @invariant Pure
+        -- tier, patch_result, list_result and retire are functions of their
+        -- arguments alone. Keeping the counts and serving the exposition are
+        -- the adapters' of the tickets that emit them, under supervision.
+}
+
+contract Events {
+    reason: (event: RejectedEvent) -> String
+    rejected_message: (event: RejectedEvent) -> String
+    absent_message: (event: AbsentEvent) -> String
+
+    @invariant Conventions
+        -- Every Event knarr raises is of type Warning, its reason is
+        -- UpperCamelCase with no knarr prefix, and its reporting component
+        -- is knarr. Whether it is created through core v1 or events.k8s.io
+        -- is the client's (ticket 41). Every create is one attempt, never
+        -- retried, and counted on knarr_events_total (Catalogue Install).
+    @invariant Yielded
+        -- The Event ownership's Event raises for a yield has the reason
+        -- AnnotationYielded. Its target, content, message and cadence are
+        -- ownership's.
+    @invariant ContractAbsent
+        -- When a pod enters the contract-absent state (Cadence: state
+        -- contract_absent), knarr makes one create attempt of an Event with
+        -- the reason ContractAbsent whose involvedObject is the pod's
+        -- Deployment by name and uid. absent_message renders "pod <pod>: no
+        -- knarr status contract at port <port> path <path>; last reading
+        -- <reading>", with ReadingKind's literal for <reading>. When a pod
+        -- enters that state, and whether a restart enters it again, is
+        -- reconcile's (ticket 21).
+    @invariant Rejected
+        -- On the first rejection of a run for a pod, knarr makes one create
+        -- attempt of an Event on the Pod by name and uid, with reason's
+        -- value for it: PatchRejected for purpose apply or yield and
+        -- CleanupRejected for cleanup. A run starts with that rejection and
+        -- ends with the next accepted patch to the pod; a rejection in the
+        -- same run raises nothing more. A rejection is known as Catalogue's
+        -- Patches says, a 400 or 403 at once and a 422 when the next LIST
+        -- classifies it. The run is in memory only (Cadence: states rejected
+        -- and cleanup_rejected), so a restart raises it once more on the next
+        -- rejection. knarr_patch_rejections_total counts every rejection.
+        -- For PatchRejected, rejected_message renders "<keys>: the apiserver
+        -- rejected knarr's patch with <status>; the previous annotations stay
+        -- and knarr tries again no sooner than the patch interval", with
+        -- <keys> the full annotation keys joined by ", ".
+    @invariant CleanupRejected
+        -- For CleanupRejected, rejected_message renders "<keys>: the
+        -- apiserver rejected knarr's cleanup with <status>; <pairs> stays on
+        -- the pod until removed, for example kubectl annotate pod <pod>
+        -- <removals>", with <keys> as Rejected says, <pairs> each annotation
+        -- left as <key>=<value> joined by ", " ("stay" for more than one),
+        -- and <removals> each left key followed by "-", joined by " ".
+    @invariant AlsoLogged
+        -- Every Event's cause logs one warning line with the reason as the
+        -- reason field and the fields of the Event's content, whether or not
+        -- the create succeeds, so a lost Event still leaves a trace; a
+        -- create that fails logs a second warning line saying so.
+    @invariant Pure
+        -- reason and both messages are functions of their arguments alone.
+        -- Creating the Event is k8s_client's; deciding the run and the entry
+        -- is Cadence's.
+}
+
+contract Cadence {
+    entered: (seen: List<Entry>, current: List<Entry>) -> List<Entry>
+
+    @invariant OnEntry
+        -- A state that is announced on entry is announced once when a pod
+        -- (and, for foreign, an owned annotation) enters it in this process,
+        -- not while it stays, and again when it re-enters after leaving.
+        -- entered returns every entry of current that seen does not hold;
+        -- the caller announces those and keeps current as the next seen.
+        -- foreign and not_ready_with_cost are read from the latest views
+        -- each cycle and contract_absent from reconcile's pod state (ticket
+        -- 21); rejected is held from a rejection with purpose apply or
+        -- yield, and cleanup_rejected from one with purpose cleanup, to the
+        -- pod's next accepted patch (Events Rejected). A terminating pod or
+        -- one the LIST no longer shows leaves every state. The gauges carry
+        -- "still in it".
+    @invariant Restart
+        -- seen is in memory only and empty after a restart, so every state
+        -- current holds at the first evaluation is announced once more.
+    @invariant Pure
+        -- entered is a function of its arguments alone.
+}
+
+contract Logs {
+    render: (line: LogLine) -> String
+    enabled: (level: Level, threshold: Level) -> Boolean
+
+    @invariant Format
+        -- knarr logs through OTP logger to stdout, one JSON object per line.
+        -- render writes the members time, as RFC 3339 UTC with milliseconds
+        -- (2026-10-12T09:30:00.123Z), level, as Level's literal, and msg, in
+        -- that order, then each field in the order given, flat, no
+        -- whitespace, and a newline. A field's name is one of deployment,
+        -- pod, annotation (Owned.name), reading, cost, accepting, standing,
+        -- purpose, status, reason, applied, found, retry_after_seconds,
+        -- pause_seconds and scope, appears at most once and is present only
+        -- when it applies; a name that is also a metric label means the
+        -- same thing.
+    @invariant Levels
+        -- error: knarr cannot do its job, as when the token or the
+        -- namespace is unreadable, a LIST fails or a process crashes.
+        -- warning: an operator should act, as for each Event's cause
+        -- (AlsoLogged), a foreign annotation, a pod NotReady with cost and a
+        -- failed Event create. info: knarr's own life, as startup, a pause
+        -- starting and ending, and the token file changing. debug: each poll
+        -- and each patch. enabled is true when level is threshold or more
+        -- severe, in Level's order; the threshold is config.log_level, info
+        -- by default, set by OTP application configuration as knarr's
+        -- Listening sets the bind address.
+    @invariant StateLines
+        -- A line for a pod's state, foreign, NotReady with cost,
+        -- contract absent or rejected, is logged on entry as Cadence's
+        -- OnEntry says: once on entry in this process, none while the state
+        -- stays, again on re-entry, and once for each current state after a
+        -- restart.
+    @invariant NeverLogged
+        -- No line carries the service-account token or the Authorization
+        -- header; k8s_client's TokenReload logs a token change only as the
+        -- file's sha256 and the token's expiry claim. No line carries a
+        -- worker's response body: a poll logs its reading kind, the status
+        -- and, for a valid reading, cost and accepting. No line carries an
+        -- apiserver response body or a whole Pod object: only the status
+        -- code, the pod's name and the owned values involved. No line
+        -- carries a raw URL with its query string: a poll is named by its
+        -- pod and path.
+    @invariant Pure
+        -- render and enabled are functions of their arguments alone; the
+        -- time is passed in. Writing the line is OTP logger's.
+}
+
+contract Probes {
+    @invariant Liveness
+        -- /healthz is process-level only: it answers 200 while the listener
+        -- serves and the supervision tree is up, and never depends on the
+        -- apiserver or a worker, since a restart would refill the bucket
+        -- (budget Restart) and fix nothing. A stalled loop is an alert on
+        -- knarr_last_discovery_timestamp_seconds, not a liveness failure.
+    @invariant Readiness
+        -- /readyz answers 503 until the first discovery cycle in which both
+        -- LISTs succeed, then 200 for the life of the process: the latch is
+        -- never released. The responses themselves are knarr's Diagnostics
+        -- Health and Readiness.
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    log_level: Level = info
+}

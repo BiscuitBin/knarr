@@ -1,0 +1,908 @@
+test -x .pixi/envs/default/bin/python3 || { printf '%s\n' 'the pixi environment is missing; run just initialize' >&2; exit 2; }
+python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam build test snapshots-check test-checkers packaging-check toml-check lint
+
+==> just lock-check
+pixi lock --check --offline --dry-run
+i Dry-run: lock file would not change
+
+==> just env-check
+python3 scripts/checks/env_check.py
+the default environment and .tools/bin match the pins (linux-64)
+
+==> just manifest-check
+python3 scripts/checks/manifest_check.py
+manifest.toml [requirements] matches gleam.toml
+
+==> just docs-check
+python3 scripts/checks/validate_docs.py
+Validated 26 pages and 30 canonical topics.
+
+==> just agents-check
+python3 scripts/checks/validate_agents.py
+Validated AGENTS.md, 2 adapters, 7 house skills, 7 vendored skills and 14 bridges.
+
+==> just check-specs
+python3 scripts/checks/run_allium.py check
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/banding.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/observability.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/knarr.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/ownership.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/config.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/lifecycle.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/budget.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/safe_to_evict.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/k8s_client.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/reconcile.allium"
+}
+{
+  "command": "check",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/worker_contract.allium"
+}
+allium check: 11 specifications, no diagnostics and no findings.
+
+==> just analyse-specs
+python3 scripts/checks/run_allium.py analyse
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/banding.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/observability.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/knarr.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/ownership.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/config.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/lifecycle.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/budget.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/safe_to_evict.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/k8s_client.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/reconcile.allium"
+}
+{
+  "command": "analyse",
+  "diagnostics": [],
+  "findings": [],
+  "spec_file": "docs/specs/worker_contract.allium"
+}
+allium analyse: 11 specifications, no diagnostics and no findings.
+
+==> just format-check
+gleam format --check src test
+
+==> just lint-gleam
+python3 scripts/checks/manifest_check.py
+manifest.toml [requirements] matches gleam.toml
+before=$(cksum < manifest.toml); gleam build --warnings-as-errors; [ "$(cksum < manifest.toml)" = "$before" ] || { echo 'gleam rewrote manifest.toml; run just manifest-check' >&2; exit 1; }
+  Compiling argv
+  Compiling gleam_stdlib
+  Compiling edit_distance
+  Compiling envoy
+  Compiling filepath
+  Compiling splitter
+  Compiling glexer
+  Compiling glance
+  Compiling gleam_json
+  Compiling gleam_community_colour
+  Compiling gleam_regexp
+  Compiling gleam_community_ansi
+  Compiling global_value
+  Compiling justin
+  Compiling rank
+  Compiling simplifile
+  Compiling term_size
+  Compiling gleam_time
+  Compiling tom
+  Compiling trie_again
+  Compiling birdie
+  Compiling ddskerl
+Setting httpc proxy: scheme=https_proxy host="127.0.0.1" port=41253 no_proxy=["localhost",
+                                                                              "127.0.0.1",
+                                                                              "::1",
+                                                                              "127.0.0.0/8",
+                                                                              "0.0.0.0/8",
+                                                                              "::",
+                                                                              "169.254.0.0/16",
+                                                                              "api.anthropic.com",
+                                                                              "api-staging.anthropic.com",
+                                                                              "api-pr-preview.anthropic.com",
+                                                                              "mcp-proxy.anthropic.com",
+                                                                              "mcp-proxy-staging.anthropic.com",
+                                                                              "registry.npmjs.org",
+                                                                              "jsr.io",
+                                                                              "npm.jsr.io",
+                                                                              "pypi.org",
+                                                                              "files.pythonhosted.org",
+                                                                              "index.crates.io",
+                                                                              "proxy.golang.org",
+                                                                              "host.docker.internal",
+                                                                              "10.0.0.0/8",
+                                                                              "172.16.0.0/12",
+                                                                              "192.168.0.0/16",
+                                                                              "100.64.0.0/10",
+                                                                              ".svc.cluster.local",
+                                                                              "*.svc.cluster.local"]
+===> Analyzing applications...
+===> Compiling ddskerl
+  Compiling exception
+  Compiling gleam_crypto
+  Compiling gleam_erlang
+  Compiling gleam_http
+  Compiling gleam_otp
+  Compiling gleam_yielder
+  Compiling gleeunit
+  Compiling glinter
+  Compiling logging
+  Compiling glisten
+  Compiling gramps
+warning: Deprecated type used
+    ┌─ <work>/clone/build/packages/gramps/src/gramps/http.gleam:132:52
+    │
+132 │ pub fn response_builder(status: Int, headers: List(Header)) -> BytesTree {
+    │                                                    ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+warning: Deprecated type used
+    ┌─ <work>/clone/build/packages/gramps/src/gramps/http.gleam:209:37
+    │
+209 │ pub fn encode_headers(headers: List(Header)) -> BytesTree {
+    │                                     ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+  Compiling hpack_erl
+Setting httpc proxy: scheme=https_proxy host="127.0.0.1" port=41253 no_proxy=["localhost",
+                                                                              "127.0.0.1",
+                                                                              "::1",
+                                                                              "127.0.0.0/8",
+                                                                              "0.0.0.0/8",
+                                                                              "::",
+                                                                              "169.254.0.0/16",
+                                                                              "api.anthropic.com",
+                                                                              "api-staging.anthropic.com",
+                                                                              "api-pr-preview.anthropic.com",
+                                                                              "mcp-proxy.anthropic.com",
+                                                                              "mcp-proxy-staging.anthropic.com",
+                                                                              "registry.npmjs.org",
+                                                                              "jsr.io",
+                                                                              "npm.jsr.io",
+                                                                              "pypi.org",
+                                                                              "files.pythonhosted.org",
+                                                                              "index.crates.io",
+                                                                              "proxy.golang.org",
+                                                                              "host.docker.internal",
+                                                                              "10.0.0.0/8",
+                                                                              "172.16.0.0/12",
+                                                                              "192.168.0.0/16",
+                                                                              "100.64.0.0/10",
+                                                                              ".svc.cluster.local",
+                                                                              "*.svc.cluster.local"]
+===> Analyzing applications...
+===> Compiling hpack
+  Compiling mist
+warning: Deprecated type used
+   ┌─ <work>/clone/build/packages/mist/src/mist/internal/encoder.gleam:16:17
+   │
+16 │   headers: List(Header),
+   │                 ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+warning: Deprecated type used
+   ┌─ <work>/clone/build/packages/mist/src/mist/internal/encoder.gleam:95:37
+   │
+95 │ pub fn encode_headers(headers: List(Header)) -> BytesTree {
+   │                                     ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+warning: Deprecated type used
+   ┌─ <work>/clone/build/packages/mist/src/mist/internal/http2.gleam:63:17
+   │
+63 │   headers: List(Header),
+   │                 ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+warning: Deprecated type used
+    ┌─ <work>/clone/build/packages/mist/src/mist/internal/http2.gleam:169:20
+    │
+169 │ ) -> Result(#(List(Header), HpackContext), HpackError)
+    │                    ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+warning: Deprecated type used
+    ┌─ <work>/clone/build/packages/mist/src/mist/internal/http2.gleam:174:17
+    │
+174 │   headers: List(Header),
+    │                 ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+warning: Deprecated type used
+   ┌─ <work>/clone/build/packages/mist/src/mist/internal/http2/stream.gleam:60:17
+   │
+60 │   headers: List(Header),
+   │                 ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+warning: Deprecated type used
+    ┌─ <work>/clone/build/packages/mist/src/mist/internal/http2/stream.gleam:143:17
+    │
+143 │   headers: List(Header),
+    │                 ^^^^^^ This type has been deprecated
+
+It was deprecated with this message: Use #(String, String) instead
+
+  Compiling prng
+  Compiling prometheus
+Setting httpc proxy: scheme=https_proxy host="127.0.0.1" port=41253 no_proxy=["localhost",
+                                                                              "127.0.0.1",
+                                                                              "::1",
+                                                                              "127.0.0.0/8",
+                                                                              "0.0.0.0/8",
+                                                                              "::",
+                                                                              "169.254.0.0/16",
+                                                                              "api.anthropic.com",
+                                                                              "api-staging.anthropic.com",
+                                                                              "api-pr-preview.anthropic.com",
+                                                                              "mcp-proxy.anthropic.com",
+                                                                              "mcp-proxy-staging.anthropic.com",
+                                                                              "registry.npmjs.org",
+                                                                              "jsr.io",
+                                                                              "npm.jsr.io",
+                                                                              "pypi.org",
+                                                                              "files.pythonhosted.org",
+                                                                              "index.crates.io",
+                                                                              "proxy.golang.org",
+                                                                              "host.docker.internal",
+                                                                              "10.0.0.0/8",
+                                                                              "172.16.0.0/12",
+                                                                              "192.168.0.0/16",
+                                                                              "100.64.0.0/10",
+                                                                              ".svc.cluster.local",
+                                                                              "*.svc.cluster.local"]
+===> Analyzing applications...
+===> Compiling prometheus
+  Compiling qcheck
+  Compiling knarr
+   Compiled in 11.14s
+before=$(cksum < manifest.toml); ERL_FLAGS="${ERL_FLAGS:-} -knarr port 0 bind '\"127.0.0.1\"'" sh scripts/checks/run_glinter.sh; [ "$(cksum < manifest.toml)" = "$before" ] || { echo 'gleam rewrote manifest.toml; run just manifest-check' >&2; exit 1; }
+No issues found.
+
+==> just build
+python3 scripts/checks/manifest_check.py
+manifest.toml [requirements] matches gleam.toml
+before=$(cksum < manifest.toml); gleam build --warnings-as-errors; [ "$(cksum < manifest.toml)" = "$before" ] || { echo 'gleam rewrote manifest.toml; run just manifest-check' >&2; exit 1; }
+   Compiled in 0.39s
+
+==> just test
+python3 scripts/checks/manifest_check.py
+manifest.toml [requirements] matches gleam.toml
+mkdir -p "<work>/clone/build/birdie"; rm -f "<work>/clone/build/birdie/knarr_referenced.txt" test/birdie_snapshots/*.new
+before=$(cksum < manifest.toml); ERL_FLAGS="${ERL_FLAGS:-} -knarr port 0 bind '\"127.0.0.1\"'" TMPDIR="<work>/clone/build/birdie" gleam test; [ "$(cksum < manifest.toml)" = "$before" ] || { echo 'gleam rewrote manifest.toml; run just manifest-check' >&2; exit 1; }
+   Compiled in 0.40s
+    Running knarr_test.main
+......................=NOTICE REPORT==== 10-Oct-2026::18:34:48.667665 ===
+TLS server: In state wait_finished received CLIENT ALERT: Fatal - Unknown CA
+
+=NOTICE REPORT==== 10-Oct-2026::18:34:48.667440 ===
+TLS client: In state wait_cert_cr at ssl_handshake.erl:2304 generated CLIENT ALERT: Fatal - Unknown CA
+
+.=NOTICE REPORT==== 10-Oct-2026::18:34:48.924376 ===
+TLS client: In state wait_cert_cr at ssl_handshake.erl:2312 generated CLIENT ALERT: Fatal - Bad Certificate
+ - {bad_cert,
+       {hostname_check_failed,
+           {requested,"127.0.0.1"},
+           {received,[{dNSName,"kubernetes.default.svc"}]}}}
+=NOTICE REPORT==== 10-Oct-2026::18:34:48.924540 ===
+TLS server: In state wait_finished received CLIENT ALERT: Fatal - Bad Certificate
+
+........=SUPERVISOR REPORT==== 10-Oct-2026::18:34:50.431528 ===
+    supervisor: {<0.273.0>,gleam@otp@static_supervisor}
+    errorContext: child_terminated
+    reason: killed
+    offender: [{pid,<0.274.0>},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,infinity},
+               {child_type,supervisor}]
+
+=ERROR REPORT==== 10-Oct-2026::18:34:50.431781 ===
+** Generic server 'mist_factory_supervisor$1634' terminating 
+** Last message in was {'EXIT',<0.274.0>,killed}
+** When Server state == {state,
+                         {local,'mist_factory_supervisor$1634'},
+                         simple_one_for_one,
+                         {[0],
+                          #{0 =>
+                             {child,undefined,0,
+                              {gleam@otp@factory_supervisor,
+                               start_child_callback,
+                               [#Fun<mist.31.92232750>]},
+                              temporary,false,5000,worker,
+                              [gleam@otp@factory_supervisor]}}},
+                         {mapsets,#{}},
+                         2,5,[],0,0,never,infinity,false,
+                         #Ref<0.3978804843.4049862657.226649>,
+                         gleam@otp@factory_supervisor,
+                         {#{intensity => 2,period => 5,
+                            strategy => simple_one_for_one},
+                          [#{id => 0,restart => temporary,shutdown => 5000,
+                             start =>
+                              {gleam@otp@factory_supervisor,
+                               start_child_callback,
+                               [#Fun<mist.31.92232750>]},
+                             type => worker}]}}
+** Reason for termination ==
+** killed
+
+=ERROR REPORT==== 10-Oct-2026::18:34:50.432210 ===
+** Generic server <0.275.0> terminating 
+** Last message in was {'EXIT',<0.274.0>,killed}
+** When Server state == {state,
+                         {<0.275.0>,gleam@otp@static_supervisor},
+                         one_for_one,
+                         {[2,1,0],
+                          #{0 =>
+                             {child,<0.276.0>,0,
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                              permanent,false,5000,worker,
+                              [gleam@otp@static_supervisor]},
+                            1 =>
+                             {child,<0.277.0>,1,
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                              permanent,false,infinity,supervisor,
+                              [gleam@otp@static_supervisor]},
+                            2 =>
+                             {child,<0.288.0>,2,
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                              permanent,false,infinity,supervisor,
+                              [gleam@otp@static_supervisor]}}},
+                         undefined,2,5,[],0,0,never,1000,false,
+                         #Ref<0.3978804843.4049862657.226573>,
+                         gleam@otp@static_supervisor,
+                         {#{intensity => 2,period => 5,
+                            strategy => one_for_one,auto_shutdown => never},
+                          [#{id => 0,restart => permanent,shutdown => 5000,
+                             start =>
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                             type => worker,significant => false},
+                           #{id => 1,restart => permanent,
+                             shutdown => infinity,
+                             start =>
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                             type => supervisor,significant => false},
+                           #{id => 2,restart => permanent,
+                             shutdown => infinity,
+                             start =>
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                             type => supervisor,significant => false}]}}
+** Reason for termination ==
+** killed
+
+=CRASH REPORT==== 10-Oct-2026::18:34:50.432567 ===
+  crasher:
+    initial call: supervisor:gleam@otp@factory_supervisor/1
+    pid: <0.289.0>
+    registered_name: 'mist_factory_supervisor$1634'
+    exception exit: killed
+      in function  gen_server:decode_msg/6 (gen_server.erl:2379)
+    ancestors: [<0.274.0>,<0.273.0>,<0.145.0>]
+    message_queue_len: 0
+    messages: []
+    links: []
+    dictionary: []
+    trap_exit: true
+    status: running
+    heap_size: 233
+    stack_size: 29
+    reductions: 8850
+  neighbours:
+
+=CRASH REPORT==== 10-Oct-2026::18:34:50.432550 ===
+  crasher:
+    initial call: supervisor:gleam@otp@static_supervisor/1
+    pid: <0.275.0>
+    registered_name: []
+    exception exit: killed
+      in function  gen_server:decode_msg/6 (gen_server.erl:2379)
+    ancestors: [<0.274.0>,<0.273.0>,<0.145.0>]
+    message_queue_len: 0
+    messages: []
+    links: []
+    dictionary: []
+    trap_exit: true
+    status: running
+    heap_size: 10958
+    stack_size: 29
+    reductions: 17453
+  neighbours:
+
+.=SUPERVISOR REPORT==== 10-Oct-2026::18:34:50.450271 ===
+    supervisor: {<0.312.0>,gleam@otp@static_supervisor}
+    errorContext: child_terminated
+    reason: killed
+    offender: [{pid,<0.313.0>},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,infinity},
+               {child_type,supervisor}]
+
+=ERROR REPORT==== 10-Oct-2026::18:34:50.450282 ===
+** Generic server 'mist_factory_supervisor$163' terminating 
+** Last message in was {'EXIT',<0.313.0>,killed}
+** When Server state == {state,
+                         {local,'mist_factory_supervisor$163'},
+                         simple_one_for_one,
+                         {[0],
+                          #{0 =>
+                             {child,undefined,0,
+                              {gleam@otp@factory_supervisor,
+                               start_child_callback,
+                               [#Fun<mist.31.92232750>]},
+                              temporary,false,5000,worker,
+                              [gleam@otp@factory_supervisor]}}},
+                         {mapsets,#{}},
+                         2,5,[],0,0,never,infinity,false,
+                         #Ref<0.3978804843.4049862658.222548>,
+                         gleam@otp@factory_supervisor,
+                         {#{intensity => 2,period => 5,
+                            strategy => simple_one_for_one},
+                          [#{id => 0,restart => temporary,shutdown => 5000,
+                             start =>
+                              {gleam@otp@factory_supervisor,
+                               start_child_callback,
+                               [#Fun<mist.31.92232750>]},
+                             type => worker}]}}
+** Reason for termination ==
+** killed
+
+=CRASH REPORT==== 10-Oct-2026::18:34:50.450571 ===
+  crasher:
+    initial call: supervisor:gleam@otp@factory_supervisor/1
+    pid: <0.328.0>
+    registered_name: 'mist_factory_supervisor$163'
+    exception exit: killed
+      in function  gen_server:decode_msg/6 (gen_server.erl:2379)
+    ancestors: [<0.313.0>,<0.312.0>,<0.145.0>]
+    message_queue_len: 0
+    messages: []
+    links: []
+    dictionary: []
+    trap_exit: true
+    status: running
+    heap_size: 2586
+    stack_size: 29
+    reductions: 8825
+  neighbours:
+
+=ERROR REPORT==== 10-Oct-2026::18:34:50.450917 ===
+** Generic server <0.314.0> terminating 
+** Last message in was {'EXIT',<0.313.0>,killed}
+** When Server state == {state,
+                         {<0.314.0>,gleam@otp@static_supervisor},
+                         one_for_one,
+                         {[2,1,0],
+                          #{0 =>
+                             {child,<0.315.0>,0,
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                              permanent,false,5000,worker,
+                              [gleam@otp@static_supervisor]},
+                            1 =>
+                             {child,<0.316.0>,1,
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                              permanent,false,infinity,supervisor,
+                              [gleam@otp@static_supervisor]},
+                            2 =>
+                             {child,<0.327.0>,2,
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                              permanent,false,infinity,supervisor,
+                              [gleam@otp@static_supervisor]}}},
+                         undefined,2,5,[],0,0,never,1000,false,
+                         #Ref<0.3978804843.4049862658.222472>,
+                         gleam@otp@static_supervisor,
+                         {#{intensity => 2,period => 5,
+                            strategy => one_for_one,auto_shutdown => never},
+                          [#{id => 0,restart => permanent,shutdown => 5000,
+                             start =>
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                             type => worker,significant => false},
+                           #{id => 1,restart => permanent,
+                             shutdown => infinity,
+                             start =>
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                             type => supervisor,significant => false},
+                           #{id => 2,restart => permanent,
+                             shutdown => infinity,
+                             start =>
+                              {gleam@otp@static_supervisor,
+                               start_child_callback,
+                               [#Fun<gleam@otp@supervision.0.28095728>]},
+                             type => supervisor,significant => false}]}}
+** Reason for termination ==
+** killed
+
+=CRASH REPORT==== 10-Oct-2026::18:34:50.451332 ===
+  crasher:
+    initial call: supervisor:gleam@otp@static_supervisor/1
+    pid: <0.314.0>
+    registered_name: []
+    exception exit: killed
+      in function  gen_server:decode_msg/6 (gen_server.erl:2379)
+    ancestors: [<0.313.0>,<0.312.0>,<0.145.0>]
+    message_queue_len: 0
+    messages: []
+    links: []
+    dictionary: []
+    trap_exit: true
+    status: running
+    heap_size: 10958
+    stack_size: 29
+    reductions: 17453
+  neighbours:
+
+=ERROR REPORT==== 10-Oct-2026::18:34:50.453429 ===
+Failed to start socket listener: Eaddrinuse
+=SUPERVISOR REPORT==== 10-Oct-2026::18:34:50.453529 ===
+    supervisor: {<0.332.0>,gleam@otp@static_supervisor}
+    errorContext: start_error
+    reason: {init_failed,<<"Failed to start socket listener: Eaddrinuse">>}
+    offender: [{pid,undefined},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,5000},
+               {child_type,worker}]
+
+=SUPERVISOR REPORT==== 10-Oct-2026::18:34:50.453673 ===
+    supervisor: {<0.331.0>,gleam@otp@static_supervisor}
+    errorContext: start_error
+    reason: {init_failed,<<"shutdown">>}
+    offender: [{pid,undefined},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,infinity},
+               {child_type,supervisor}]
+
+=SUPERVISOR REPORT==== 10-Oct-2026::18:34:50.453778 ===
+    supervisor: {<0.312.0>,gleam@otp@static_supervisor}
+    errorContext: start_error
+    reason: {init_failed,<<"shutdown">>}
+    offender: [{pid,<0.313.0>},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,infinity},
+               {child_type,supervisor}]
+
+.=ERROR REPORT==== 10-Oct-2026::18:34:50.486702 ===
+Failed to start socket listener: Eaddrinuse
+=SUPERVISOR REPORT==== 10-Oct-2026::18:34:50.486820 ===
+    supervisor: {<0.355.0>,gleam@otp@static_supervisor}
+    errorContext: start_error
+    reason: {init_failed,<<"Failed to start socket listener: Eaddrinuse">>}
+    offender: [{pid,undefined},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,5000},
+               {child_type,worker}]
+
+=SUPERVISOR REPORT==== 10-Oct-2026::18:34:50.486959 ===
+    supervisor: {<0.354.0>,gleam@otp@static_supervisor}
+    errorContext: start_error
+    reason: {init_failed,<<"shutdown">>}
+    offender: [{pid,undefined},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,infinity},
+               {child_type,supervisor}]
+
+=SUPERVISOR REPORT==== 10-Oct-2026::18:34:50.487098 ===
+    supervisor: {<0.353.0>,gleam@otp@static_supervisor}
+    errorContext: start_error
+    reason: {init_failed,<<"shutdown">>}
+    offender: [{pid,undefined},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,infinity},
+               {child_type,supervisor}]
+
+.=NOTICE REPORT==== 10-Oct-2026::18:34:50.651456 ===
+s1_probe event=token_changed token_sha256=55b4b48f529c jwt_exp=not_a_jwt
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.651737 ===
+s1_probe event=list_pods count=1
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.651783 ===
+s1_probe event=patch_annotation pod=knarr-7d4b9c-abcde value=1791657290
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.702713 ===
+s1_probe event=token_changed token_sha256=7a35833597e6 jwt_exp=not_a_jwt
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.703091 ===
+s1_probe event=list_pods count=1
+.=NOTICE REPORT==== 10-Oct-2026::18:34:50.757642 ===
+s1_probe event=token_read_failed reason=enoent
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.808585 ===
+s1_probe event=token_read_failed reason=enoent
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.859638 ===
+s1_probe event=token_read_failed reason=enoent
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.910551 ===
+s1_probe event=token_changed token_sha256=a37d12117f07 jwt_exp=not_a_jwt
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.910949 ===
+s1_probe event=list_pods count=1
+.=NOTICE REPORT==== 10-Oct-2026::18:34:50.965753 ===
+s1_probe event=token_changed token_sha256=1f6076e3a47b jwt_exp=not_a_jwt
+=NOTICE REPORT==== 10-Oct-2026::18:34:50.966003 ===
+s1_probe event=namespace_read_failed reason=enoent
+=NOTICE REPORT==== 10-Oct-2026::18:34:51.016761 ===
+s1_probe event=namespace_read_failed reason=enoent
+=NOTICE REPORT==== 10-Oct-2026::18:34:51.067909 ===
+s1_probe event=namespace_read_failed reason=enoent
+.=NOTICE REPORT==== 10-Oct-2026::18:34:51.169752 ===
+s1_probe event=token_changed token_sha256=1f6076e3a47b jwt_exp=not_a_jwt
+=NOTICE REPORT==== 10-Oct-2026::18:34:51.169953 ===
+s1_probe event=list_pods_failed error=tls_alert unknown_ca
+=NOTICE REPORT==== 10-Oct-2026::18:34:51.220661 ===
+s1_probe event=list_pods_failed error=tls_alert unknown_ca
+=NOTICE REPORT==== 10-Oct-2026::18:34:51.271713 ===
+s1_probe event=list_pods_failed error=tls_alert unknown_ca
+.=NOTICE REPORT==== 10-Oct-2026::18:34:51.327667 ===
+s1_probe event=token_changed token_sha256=1f6076e3a47b jwt_exp=not_a_jwt
+=NOTICE REPORT==== 10-Oct-2026::18:34:51.327968 ===
+s1_probe event=list_pods count=1
+=SUPERVISOR REPORT==== 10-Oct-2026::18:34:51.328234 ===
+    supervisor: {<0.383.0>,gleam@otp@static_supervisor}
+    errorContext: child_terminated
+    reason: killed
+    offender: [{pid,<0.384.0>},
+               {id,0},
+               {mfargs,
+                   {gleam@otp@static_supervisor,start_child_callback,
+                       [#Fun<gleam@otp@supervision.0.28095728>]}},
+               {restart_type,permanent},
+               {significant,false},
+               {shutdown,15000},
+               {child_type,worker}]
+
+...................
+57 passed, no failures
+
+==> just snapshots-check
+[ -d test/birdie_snapshots ] || exit 0; pending=$(find test/birdie_snapshots -type f -name '*.new'); [ -z "$pending" ] || { printf '%s\n' "$pending" | sort >&2; echo 'pending snapshots: review them with just snapshots-review' >&2; exit 1; }
+python3 scripts/checks/manifest_check.py
+manifest.toml [requirements] matches gleam.toml
+mkdir -p "<work>/clone/build/birdie"
+before=$(cksum < manifest.toml); ERL_FLAGS="${ERL_FLAGS:-} -knarr port 0 bind '\"127.0.0.1\"'" TMPDIR="<work>/clone/build/birdie" gleam run --no-print-progress -m birdie "$@"; [ "$(cksum < manifest.toml)" = "$before" ] || { echo 'gleam rewrote manifest.toml; run just manifest-check' >&2; exit 1; }
+Checking stale snapshots...
+🐦‍⬛ Done!
+
+==> just test-checkers
+python3 scripts/checks/manifest_check.py
+manifest.toml [requirements] matches gleam.toml
+before=$(cksum < manifest.toml); gleam build --warnings-as-errors; [ "$(cksum < manifest.toml)" = "$before" ] || { echo 'gleam rewrote manifest.toml; run just manifest-check' >&2; exit 1; }
+   Compiled in 0.38s
+python3 -m pytest
+============================= test session starts ==============================
+platform linux -- Python 3.14.8, pytest-9.1.1, pluggy-1.6.0
+rootdir: <work>/clone
+configfile: pytest.toml
+testpaths: scripts
+collected 402 items
+
+scripts/checks/tests/test_application.py ...                             [  0%]
+scripts/checks/tests/test_cluster_commands.py ...........                [  3%]
+scripts/checks/tests/test_cluster_name.py ...                            [  4%]
+scripts/checks/tests/test_container_entrypoint.py ...                    [  4%]
+scripts/checks/tests/test_coverage.py .............                      [  8%]
+scripts/checks/tests/test_deployment.py ......................           [ 13%]
+scripts/checks/tests/test_env_check.py ...............                   [ 17%]
+scripts/checks/tests/test_hook_configs.py ........                       [ 19%]
+scripts/checks/tests/test_image.py ....                                  [ 20%]
+scripts/checks/tests/test_install_hooks.py ...                           [ 21%]
+scripts/checks/tests/test_install_tools.py ...........                   [ 23%]
+scripts/checks/tests/test_lint_cold_build.py ..                          [ 24%]
+scripts/checks/tests/test_manifest_check.py ........                     [ 26%]
+scripts/checks/tests/test_project.py .........                           [ 28%]
+scripts/checks/tests/test_release_lib.py .                               [ 28%]
+scripts/checks/tests/test_release_pin.py ...............                 [ 32%]
+scripts/checks/tests/test_ripsecrets_redacted.py .............           [ 35%]
+scripts/checks/tests/test_run_allium.py ......................           [ 41%]
+scripts/checks/tests/test_run_glinter.py ..........                      [ 43%]
+scripts/checks/tests/test_run_project_check.py ..................        [ 48%]
+scripts/checks/tests/test_validate_agents.py ........................... [ 54%]
+...............................................................          [ 70%]
+scripts/checks/tests/test_validate_docs.py ............................. [ 77%]
+...............................................                          [ 89%]
+scripts/checks/tests/test_with_env.py ..                                 [ 90%]
+scripts/checks/tests/test_workflows.py ................................. [ 98%]
+.......                                                                  [100%]
+
+======================= 402 passed in 156.41s (0:02:36) ========================
+
+==> just packaging-check
+hadolint Dockerfile
+python3 scripts/checks/deployment.py
+Summary: 4 resources found parsing stdin - Valid: 4, Invalid: 0, Errors: 0, Skipped: 0
+
+==> just toml-check
+taplo fmt --check
+ INFO taplo:format_files:load_config: found configuration file path="<work>/clone/taplo.toml"
+ INFO taplo:format_files:collect_files: found files total=47 excluded=40 files=["<work>/clone/_typos.toml", "<work>/clone/checks.toml", "<work>/clone/gleam.toml", "<work>/clone/pixi.toml", "<work>/clone/pytest.toml", "<work>/clone/ruff.toml", "<work>/clone/taplo.toml"] cwd="<work>/clone"
+taplo lint
+ INFO taplo:load_config: found configuration file path="<work>/clone/taplo.toml"
+ INFO taplo:lint_files:collect_files: found files total=47 excluded=40 files=["<work>/clone/_typos.toml", "<work>/clone/checks.toml", "<work>/clone/gleam.toml", "<work>/clone/pixi.toml", "<work>/clone/pytest.toml", "<work>/clone/ruff.toml", "<work>/clone/taplo.toml"] cwd="<work>/clone"
+
+==> just lint
+SKIP=gleam-format,taplo prek run --all-files
+check for added large files..............................................Passed
+check for case conflicts.................................................Passed
+check that executables have shebangs.................(no files to check)Skipped
+check json...............................................................Passed
+check for merge conflicts................................................Passed
+check toml...............................................................Passed
+check yaml...............................................................Passed
+detect private key.......................................................Passed
+gleam format check......................................................Skipped
+taplo format check and lint.............................................Skipped
+typos....................................................................Passed
+markdownlint.............................................................Passed
+lychee (offline, local links only).......................................Passed
+shellcheck...............................................................Passed
+editorconfig-checker.....................................................Passed
+ruff check...............................................................Passed
+ruff format check........................................................Passed
+actionlint...............................................................Passed
+ripsecrets (output redacted).............................................Passed
+
+==> just check-clean
+python3 scripts/checks/run_project_check.py clean "$1"
+The worktree matches the check baseline.
+
+All checks passed and the worktree is unchanged.

@@ -10,6 +10,8 @@
 
 **From 19:** [config.allium](../../../docs/specs/config.allium) leaves one open question for this ticket: whether the unreachable windows gain a per-Deployment override. If you add one, it is an annotation under `knarr.io/`, hyphenated after its `config.<key>`, parsed and invalidated under config's `Syntax`, `Effective` and `InvalidValue`, with a member added to `Settings` and `Defaults`; either way, close that question.
 
+**From 30:** [observability.allium](../../../docs/specs/observability.allium) states the conventions any signal this ticket settles follows: metric names, labels and series life (`Catalogue` `Naming`, `Labels` and `SeriesLife`), Event reasons and type (`Events` `Conventions`), and log fields and levels (`Logs` `Format` and `Levels`). This ticket adds its own rows there with `tend` when it settles, without reopening 30 (`Catalogue` `LaterRows`). Already fixed: a pod entering the contract-absent state raises one create attempt of a `ContractAbsent` Event on its Deployment by name and uid, with the message `pod <pod>: no knarr status contract at port <port> path <path>; last reading <reading>` (`Events` `ContractAbsent`), counts on `knarr_pods_contract_absent{deployment}` (`Catalogue` `Standing`), and logs one warning line on entry (`Logs` `StateLines`). When a pod enters that state, and whether a restart enters it again, are this ticket's. Every poll outcome already counts on `knarr_polls_total{deployment, reading}` by Reading kind (`Polls`).
+
 **MVP critical path:** yes. Unreachable and invalid pods are routine in production.
 
 **Status:** needs-human

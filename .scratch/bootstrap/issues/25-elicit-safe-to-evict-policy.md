@@ -20,6 +20,8 @@ Ticket 22 settled in [ownership.allium](../../../docs/specs/ownership.allium) th
 
 **From 19:** the opt-in key is the annotation `knarr.io/safe-to-evict` on the Deployment with the value `"true"` exactly, off when absent, any other value an invalid key under config's `InvalidValue`, carried as `Settings.safe_to_evict` (config `SafeToEvict`). This ticket owns what knarr writes while it is on and at what threshold. [config.allium](../../../docs/specs/config.allium) leaves one open question for this ticket: whether the threshold gains a per-Deployment override, under the same key, syntax and invalid-value rules as every override there; close it either way.
 
+**From 30:** [observability.allium](../../../docs/specs/observability.allium) states the conventions any signal this ticket settles follows: metric names, labels and series life (`Catalogue` `Naming`, `Labels` and `SeriesLife`), Event reasons and type (`Events` `Conventions`), and log fields and levels (`Logs` `Format` and `Levels`). This ticket adds its own rows there with `tend` when it settles, without reopening 30 (`Catalogue` `LaterRows`). Already fixed: `knarr_annotations{deployment, annotation, standing}` with `annotation="safe-to-evict"` counts the annotation by ownership's standing (`Catalogue` `Standing`), and its writes count on `knarr_patches_total` with purpose `apply`, while the removal an opt-out leaves to 23 counts with purpose `cleanup` (`Patches`).
+
 **MVP critical path:** yes, for the opt-in `safe-to-evict` feature only.
 
 **Status:** needs-human

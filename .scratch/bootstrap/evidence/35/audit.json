@@ -1,0 +1,41 @@
+{
+  "observed_at": "2026-10-10, about 18:33 UTC",
+  "workflow": ".github/workflows/audit.yml",
+  "schedule": "0 6 * * 1 (Mondays 06:00 UTC); audit.yml reached main on 2026-10-08, so the first scheduled run is 2026-10-12T06:00Z",
+  "runs_before_dispatch": {
+    "query": "GET repos/steven-cutting/knarr/actions/workflows/audit.yml/runs?per_page=5",
+    "total_count": 1,
+    "runs": [
+      {
+        "id": 38015514089,
+        "html_url": "https://github.com/steven-cutting/knarr/actions/runs/38015514089",
+        "event": "workflow_dispatch",
+        "head_branch": "27-spike-dependency-updates-and-audit",
+        "head_sha": "d5c71783f077482f5785e14a41c5192994833f41",
+        "created_at": "2026-10-10T02:03:03Z",
+        "conclusion": "failure",
+        "jobs": [
+          {"name": "Hex advisories", "conclusion": "success"},
+          {
+            "name": "External links",
+            "conclusion": "failure",
+            "failed_step": "just links-audit",
+            "errors": [
+              "docs/DEFERRED.md:44:13 https://keda.sh/docs/2.20/concepts/external-scalers/ Connection failed",
+              "docs/OVERVIEW.md:560:89 https://keda.sh/docs/2.17/concepts/scaling-jobs/ Connection failed",
+              "docs/OVERVIEW.md:560:3 https://keda.sh/docs/2.20/concepts/scaling-deployments/ Connection failed"
+            ],
+            "summary": "946 Total, 413 Unique, 943 OK, 3 Errors, 3 Redirects"
+          },
+          {"name": "Image scan", "conclusion": "failure", "failed_step": "just image-scan"}
+        ]
+      }
+    ]
+  },
+  "dispatch": {
+    "request": "POST repos/steven-cutting/knarr/actions/workflows/audit.yml/dispatches {\"ref\": \"main\"}",
+    "authorized_by": "the maintainer, for one manual dispatch in this session",
+    "result": "403 Resource not accessible by integration",
+    "retried": false
+  }
+}

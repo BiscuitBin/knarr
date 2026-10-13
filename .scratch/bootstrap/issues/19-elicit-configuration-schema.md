@@ -10,6 +10,8 @@
 
 **From 24:** two overrides: `poll_interval` (whole seconds, 5 to 300, default 30, valid only when greater than the install-wide `poll_timeout` as configured, 5 s by default and up to below the install-wide poll interval, else an invalid value under this ticket's rule) and `patch_interval` (whole seconds, 0 to 3600, default 60; 0 is valid and leaves the global bucket as the only bound on that Deployment's pods, after a rejection too, with no floor applied). The timeout has no override. The key syntax and the handling of an invalid value are this ticket's.
 
+**From 30:** [observability.allium](../../../docs/specs/observability.allium) states the conventions any signal this ticket settles follows: metric names, labels and series life (`Catalogue` `Naming`, `Labels` and `SeriesLife`), Event reasons and type (`Events` `Conventions`), and log fields and levels (`Logs` `Format` and `Levels`). This ticket adds its own rows there with `tend` when it settles, without reopening 30 (`Catalogue` `LaterRows`). An invalid override, whatever this ticket decides it does, is such a row: its metric, Event or log line is named then. `config.log_level` (`Logs` `Levels`, default info) is install-wide, set by OTP application configuration as knarr's `Listening` sets the bind address; observability gives it no per-Deployment override.
+
 **MVP critical path:** yes. Users configure the MVP through this schema.
 
 **Status:** done. See [the hand-back notes](#hand-back-notes).

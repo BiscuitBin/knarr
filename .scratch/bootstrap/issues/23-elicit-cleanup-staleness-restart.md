@@ -27,6 +27,8 @@ Ticket 22 settled the marker in [ownership.allium](../../../docs/specs/ownership
 
 **Blocked by:** 20, 22
 
+**From 30:** [observability.allium](../../../docs/specs/observability.allium) states the conventions any signal this ticket settles follows: metric names, labels and series life (`Catalogue` `Naming`, `Labels` and `SeriesLife`), Event reasons and type (`Events` `Conventions`), and log fields and levels (`Logs` `Format` and `Levels`). This ticket adds its own rows there with `tend` when it settles, without reopening 30 (`Catalogue` `LaterRows`). Already fixed: a removal knarr makes because a pod or an annotation leaves its management has purpose `cleanup` on `knarr_patches_total` and `knarr_patch_rejections_total`, and a rejected cleanup raises `CleanupRejected` on the Pod on the first rejection of a run, with a message naming each annotation left and the `kubectl annotate pod <pod> <key>-` that removes it (`Events` `CleanupRejected`). What counts as a cleanup is this ticket's. A restart starts every counter at 0 and rebuilds the per-Deployment gauges from the first discovery cycle in which every LIST of it succeeds (`SeriesLife`).
+
 **MVP critical path:** yes. Restart safety is an MVP success criterion.
 
 **Status:** needs-human

@@ -29,13 +29,22 @@ contract Diagnostics {
 
     @invariant Health
         -- GET /healthz returns 200 with body "ok\n" while the listener is available.
+        -- It reports on the process alone and depends on neither the
+        -- apiserver nor any worker (observability Probes Liveness).
     @invariant Readiness
-        -- GET /readyz returns 200 after the supervision tree starts,
-        -- with body "ok\n", otherwise 503. A failed startup exits unsuccessfully.
+        -- GET /readyz returns 200 with body "ok\n" when ready, otherwise 503.
+        -- In a configuration that runs discovery, ready latches true at the
+        -- end of the first discovery cycle in which every LIST of it
+        -- succeeds and
+        -- stays true for the life of the process (observability Probes
+        -- Readiness). In a configuration that runs no discovery cycle, as
+        -- the gate runs it (NoPodEffects), ready is true once the
+        -- supervision tree starts. A failed startup exits unsuccessfully.
     @invariant Metrics
         -- GET /metrics returns 200 and Prometheus text exposition including
         -- knarr_startups_total, incremented once per application startup,
-        -- and the metrics library's available VM collectors.
+        -- and the metrics library's available VM collectors. Every other
+        -- metric knarr exports is named in observability's Catalogue.
         -- Response headers include Content-Type with value
         -- "text/plain; version=0.0.4; charset=utf-8".
     @invariant Routing

@@ -6,10 +6,12 @@
 -- and the two verbs spike S1 proved: list and patch on pods. List on
 -- Deployments and ReplicaSets (config Discovery, ticket 19), the JSON Patch write mode with the
 -- preconditions ownership's WriteMode states, and the Event create
--- ownership's Event needs are ticket 41's to build from this contract.
+-- ownership's Event and observability's Events need are ticket 41's to build
+-- from this contract.
 -- Owner: spike S1 (ticket 14) settled the TLS, token and verb questions in
 -- Decision 0013; ticket 22 amended Verbs, NoPatchWhileTerminating and the
 -- Pod and patch shapes with what the write mode needs (ownership, §9.10);
+-- ticket 30 named the Events the create carries (observability, §9.14);
 -- ticket 41 builds the full module.
 
 value Target {
@@ -22,8 +24,8 @@ value Annotation {
     value: String
 }
 
--- A pod as the client reads it: its uid, which the conflict Event's
--- involvedObject names; its annotations as the list of the map's pairs, null
+-- A pod as the client reads it: its uid, which the involvedObject of an
+-- Event on the Pod names; its annotations as the list of the map's pairs, null
 -- when the response carries no annotations map, which is also how the
 -- apiserver serves an empty one and what ownership's WriteMode branches on;
 -- and its deletion timestamp.
@@ -57,8 +59,12 @@ contract Client {
         -- ownership's document produces; patch_pod returns the patched pod
         -- as the newest view ownership's Adoption reads from, and reports a
         -- 422 as the precondition failure ownership's Precondition and
-        -- Rejected classify. Ticket 41 adds the create of the conflict Event
-        -- ownership's Event raises, the LIST of Deployments selected on
+        -- Rejected classify. Ticket 41 adds the create of the Events
+        -- observability's Events names, each of type Warning: on a Pod by
+        -- name and uid for AnnotationYielded (ownership's Event),
+        -- PatchRejected and CleanupRejected, and on a Deployment by name
+        -- and uid for ContractAbsent, so the Deployment LIST returns each
+        -- Deployment's uid; and the LIST of Deployments selected on
         -- knarr.io/enabled=true and the unselected LIST of ReplicaSets that
         -- config's Discovery needs (ticket 19), each in knarr's namespace.
         -- The Role grants exactly list and patch on pods, list on

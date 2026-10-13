@@ -1,5 +1,5 @@
 -module(runtime_test_ffi).
--export([recover/2, occupied_port/1, start_on_free_port/1]).
+-export([recover/2, application_runs_the_poller_profile/0, occupied_port/1, start_on_free_port/1]).
 
 recover({runtime, Root, State}, SamePort) ->
   unlink(Root),
@@ -7,12 +7,12 @@ recover({runtime, Root, State}, SamePort) ->
     {ok, _} = application:ensure_all_started(inets),
     Port = atomics:get(State, 2),
     serves(Port),
-    [{_, Child, supervisor, _}] = supervisor:which_children(Root),
+    Child = listener(Root),
     Monitor = monitor(process, Child),
     exit(Child, kill),
     receive {'DOWN', Monitor, process, Child, killed} -> ok after 2000 -> error(no_crash) end,
     await(fun() ->
-      [{_, NewChild, supervisor, _}] = supervisor:which_children(Root),
+      NewChild = listener(Root),
       true = is_pid(NewChild) andalso NewChild =/= Child,
       NewPort = atomics:get(State, 2),
       true = (not SamePort) orelse NewPort =:= Port,
@@ -22,6 +22,19 @@ recover({runtime, Root, State}, SamePort) ->
   after
     gen_server:stop(Root, shutdown, 5000)
   end.
+
+%% The listener is the root's first child, id 0.
+listener(Root) ->
+  {0, Child, supervisor, _} = lists:keyfind(0, 1, supervisor:which_children(Root)),
+  Child.
+
+%% The application's root runs the poller's httpc profile under its own
+%% supervisor, child id 1, under the name poller_http_ffi sends through.
+application_runs_the_poller_profile() ->
+  {ok, Root} = application:get_supervisor(knarr),
+  {1, Supervisor, supervisor, _} = lists:keyfind(1, 1, supervisor:which_children(Root)),
+  [{0, Profile, worker, _}] = supervisor:which_children(Supervisor),
+  is_pid(Profile) andalso Profile =:= whereis(knarr_poller_httpc).
 
 serves(Port) ->
   loopback_listener(Port),
