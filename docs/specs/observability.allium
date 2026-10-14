@@ -4,8 +4,8 @@
 -- Scope: the catalogue of metrics, Events and log lines knarr emits and what
 -- its own probes report (§8 health_metrics, §9.14). The points at which they
 -- are emitted stay in the owning modules: when a pod's contract is absent is
--- reconcile's (ticket 21), when a patch is rejected and when another writer
--- is recognised are ownership's (ticket 22), when a cleanup is made is
+-- reconcile's Absent (ticket 21), when a patch is rejected and when another
+-- writer is recognised are ownership's (ticket 22), when a cleanup is made is
 -- lifecycle's (ticket 23), and the schedule, the pending set and the pauses
 -- are budget's (ticket 24). This module names what each emits, the
 -- conventions every name follows and the cadence of the Events and lines
@@ -19,8 +19,8 @@
 -- 46) the budget signals, every patch and LIST result and the poll duration,
 -- where the patches, LISTs and polls are sent; the client (ticket 41) the
 -- Event create. Tickets 19,
--- 21, 23 and 25 add their own rows under the conventions here when they
--- settle (LaterRows).
+-- 23 and 25 add their own rows under the conventions here when they settle
+-- (LaterRows); 21 added knarr_pods_unknown on 2026-10-13 (Standing).
 
 ------------------------------------------------------------
 -- Value Types
@@ -104,9 +104,10 @@ value LogLine {
 enum ReadingKind { valid | not_found | invalid | refused | timed_out | unreachable }
 
 -- What a patch was for: a write cost_mapping or safe_to_evict maps, the
--- removal that spells 0 included; ownership's yield; or a removal made
--- because the pod or the annotation leaves knarr's management, which is
--- lifecycle's and reconcile's to decide (tickets 21, 23).
+-- removal that spells 0 and reconcile's neutral removal included (reconcile
+-- Neutral); ownership's yield; or a removal made because the pod or the
+-- annotation leaves knarr's management, which is lifecycle's to decide
+-- (ticket 23).
 enum Purpose { apply | yield | cleanup }
 
 -- Log levels, least to most severe.
@@ -203,16 +204,19 @@ contract Catalogue {
         -- annotation counts on a pod exactly when reconcile asks its standing
         -- under ownership's Adoption: when the Deployment enables it, and
         -- otherwise only while the marker holds a record for it, so a value
-        -- an opt-out leaves counts until cleanup removes it, and a
+        -- an opt-out leaves counts until cleanup, or reconcile's Neutral,
+        -- removes it, and a
         -- safe-to-evict on a pod whose Deployment never enabled it counts
         -- nowhere. Its foreign series are the gauge ownership's Adoption
         -- requires.
         -- knarr_yields_total{deployment, annotation} counts every yield
         -- patch accepted. knarr_pods_not_ready_with_cost{deployment} is the
-        -- gauge worker_contract's ReadinessWarning requires, and
-        -- knarr_pods_contract_absent{deployment} the number of the
-        -- Deployment's pods in the contract-absent state, as reconcile
-        -- decides it (ticket 21).
+        -- gauge worker_contract's ReadinessWarning requires,
+        -- knarr_pods_unknown{deployment} the number of the Deployment's pods
+        -- whose reading is unknown, the window elapsed and the contract not
+        -- absent, and knarr_pods_contract_absent{deployment} the number in
+        -- the contract-absent state, the two disjoint, as reconcile's
+        -- Window, Absent and Gauges decide them (ticket 21).
     @invariant Install
         -- knarr_last_discovery_timestamp_seconds is the end of the last
         -- discovery cycle in which every LIST of it succeeded (budget
@@ -247,9 +251,9 @@ contract Catalogue {
         -- them.
     @invariant LaterRows
         -- These invariants are the conventions every later metric follows.
-        -- A ticket that settles a signal of its own (19, 21, 23 or 25) adds
-        -- its row here with tend under Naming, Labels and SeriesLife, without
-        -- reopening ticket 30.
+        -- A ticket that settles a signal of its own (19, 23 or 25, as 21 did)
+        -- adds its row here with tend under Naming, Labels and SeriesLife,
+        -- without reopening ticket 30.
     @invariant Pure
         -- tier, patch_result, list_result and retire are functions of their
         -- arguments alone. Keeping the counts and serving the exposition are
@@ -278,8 +282,8 @@ contract Events {
         -- Deployment by name and uid. absent_message renders "pod <pod>: no
         -- knarr status contract at port <port> path <path>; last reading
         -- <reading>", with ReadingKind's literal for <reading>. When a pod
-        -- enters that state, and whether a restart enters it again, is
-        -- reconcile's (ticket 21).
+        -- enters that state is reconcile's Absent, and a restart enters it
+        -- again once a new run has lasted the window (reconcile Restart).
     @invariant Rejected
         -- On the first rejection of a run for a pod, knarr makes one create
         -- attempt of an Event on the Pod by name and uid, with reason's
@@ -326,8 +330,8 @@ contract Cadence {
         -- entered returns every entry of current that seen does not hold;
         -- the caller announces those and keeps current as the next seen.
         -- foreign and not_ready_with_cost are read from the latest views
-        -- each cycle and contract_absent from reconcile's pod state (ticket
-        -- 21); rejected is held from a rejection with purpose apply or
+        -- each cycle and contract_absent from reconcile's pod state (reconcile
+        -- Absent); rejected is held from a rejection with purpose apply or
         -- yield, and cleanup_rejected from one with purpose cleanup, to the
         -- pod's next accepted patch (Events Rejected). A terminating pod or
         -- one the LIST no longer shows leaves every state. The gauges carry

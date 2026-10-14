@@ -7,7 +7,7 @@
 -- (§5) and the readiness guidance (§9.7). The per-poll timeout is a budget
 -- value (§9.8), the handling of each drain state is cost_mapping (§9.5), and
 -- what knarr does over time with an invalid, absent or unreachable reading
--- is reconcile (§9.6).
+-- is reconcile's Fallback (§9.6, ticket 21).
 -- Owner: ticket 18 settled every question here with the maintainer on
 -- 2026-10-09. Ticket 43 builds the poller from this contract and ticket 29 the
 -- fake worker.
@@ -64,8 +64,9 @@ value Status {
 -- at the contract path, invalid is every other response; refused, timed_out
 -- and unreachable come from the transport, named as Outcome names them.
 -- reconcile consumes a reading and nothing else from a poll. (Not "absent":
--- reconcile's ContractAbsent is the pod state reached after several such
--- readings, and the two must stay distinct.)
+-- reconcile's absent state, which raises ContractAbsent, is reached once a
+-- run of such readings has lasted its window, and the two must stay
+-- distinct.)
 value Reading {
     kind: valid | not_found | invalid | refused | timed_out | unreachable
     status: Status?
@@ -159,7 +160,9 @@ contract StatusEndpoint {
         -- that label in the same namespace. knarr does not detect a policy
         -- block; a blocked poll is whatever outcome the transport reports, in
         -- practice timed_out, since a policy drops packets rather than
-        -- refusing the connection.
+        -- refusing the connection. reconcile treats that reading as any
+        -- timed_out one, transient under its Window and never an absent
+        -- contract (reconcile Absent).
     @invariant Served
         -- A worker serves the endpoint on the address its pod IP reaches for
         -- the pod's whole life, including after SIGTERM while it drains, when
@@ -167,8 +170,10 @@ contract StatusEndpoint {
         -- config.poll_timeout, 5 seconds by default; a slower answer is a timed_out outcome.
     @invariant ReadinessWarning
         -- knarr keeps a gauge of pods whose Ready condition is false while
-        -- their last valid reading maps to a value above 0 under cost_mapping,
-        -- and logs a line when a pod enters that state. No Event is emitted.
+        -- their reading is known, fresh or stale under reconcile's
+        -- NotReadyWithCost, and their last valid reading maps to a value
+        -- above 0 under cost_mapping, and logs a line when a pod enters that
+        -- state. No Event is emitted.
         -- The gauge and log names are observability's.
     @guidance
         -- ReplicaSet scale-down deletes a NotReady pod before a Ready one

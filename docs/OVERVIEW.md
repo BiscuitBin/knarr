@@ -244,39 +244,33 @@ Knarr never overrides a positive cost. A floor for draining pods was a candidate
 
 ### Unreachable, invalid or absent endpoints
 
-The intent is to keep any fallback bounded and **never treat missing data as "busy"**. If "no data" counts as busy, protection can pin pods or nodes indefinitely. A possible default, with thresholds set in §9.6:
+The intent is to keep any fallback bounded and **never treat missing data as "busy"**. If "no data" counts as busy, protection can pin pods or nodes indefinitely. The policy, settled in [reconcile.allium](specs/reconcile.allium):
 
-- **Transient failure** (timeout, 5xx, payload that fails to parse): keep the last-known value for a bounded number of polls *and* a bounded time, then fall back to the neutral value, which is the removed annotation (§9.5).
-- **Contract absent** (404 or connection refused for M polls in a row since the pod started): treat the pod as unmanaged. Remove any annotations Knarr owns rather than simply stop writing, and emit a per-Deployment Event and metric (`ContractAbsent` and `knarr_pods_contract_absent`).
-- **Just started:** such pods are usually Pending or NotReady, so they are ranked first whatever their cost. Leave them at the implicit default until a valid poll.
-- **Stale state outlives failures.** Stopping writes does not undo earlier ones. A high cost or `safe-to-evict: "false"` stays on the pod until Knarr removes it, so each Knarr-owned annotation needs an expiry and a cleanup attempt (§9.6, §9.12). If the API rejects the cleanup, the stale state persists. Raise an Event and a metric (`CleanupRejected` and `knarr_patch_rejections_total` with purpose `cleanup`).
-- With that cleanup working, an unreachable pod alone does not block scale-down for long.
+- **Transient failure** (timeout, 5xx or a payload that fails to parse, and a 404 or refused connection too): keep the last applied value for three consecutive readings that are not valid (`unknown_polls`, install-wide), then write neutral: one patch with purpose `apply` removes every Knarr-owned annotation, a drained `-1` included, which is the removed annotation (§9.5). The marker stays and polling continues, so a busy pod is rewritten at its next valid reading. A skipped poll gives no reading and does not count, so under load the window stretches with the effective interval.
+- **Contract absent** (404 or connection refused, unbroken by any other kind of reading, for 300 s; `absent_after`, install-wide): remove whatever Knarr-owned annotation still stands, raise one `ContractAbsent` Event on the Deployment naming its effective port and path, count the pod on `knarr_pods_contract_absent`, and keep polling on the normal schedule, so a pod that binds late is managed again from its next valid reading. A NetworkPolicy block reads as a timeout (§9.4b) and never raises the Event; an invalid payload never counts toward an absent contract.
+- **Just started:** a pod without a pod IP is not polled and has no state until a LIST shows one. Such pods are usually Pending or NotReady, so they are ranked first whatever their cost. A pod stays unannotated until its first valid poll, since nothing was ever written on it.
+- **Stale state outlives failures.** Stopping writes does not undo earlier ones. A high cost or `safe-to-evict: "false"` stays on the pod until Knarr removes it: within a run, the neutral write above does that once the window elapses; both windows are in memory, so a restart keeps every value until its window elapses again in the new process and nothing flaps (§3), and what a value found after a downtime means is §9.12's. If the API rejects the removal, the stale state persists. Raise an Event and a metric (`PatchRejected` and `knarr_patch_rejections_total` with purpose `apply`; `CleanupRejected` and purpose `cleanup` for §9.12's cleanup).
+- With that removal working, an unreachable pod alone does not block scale-down for long.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Live
     state Live {
-        [*] --> Unannotated
-        Unannotated --> Mapped : valid poll
-        Unannotated --> ContractAbsent : 404 or refused, M polls in a row
-        Mapped --> TransientFailure : timeout, 5xx, bad payload
-        TransientFailure --> Mapped : valid poll
-        TransientFailure --> Neutral : bounded polls and time exceeded
-        Neutral --> Mapped : valid poll
-        ContractAbsent --> Cleanup : Event + metric
-        Cleanup --> Unmanaged : Knarr-owned annotations removed
-        Cleanup --> StaleState : patch rejected
-        note right of TransientFailure
-            Keeps the last-known value.
-            Thresholds OPEN §9.6
+        [*] --> Fresh
+        Fresh --> Stale : reading not valid
+        Stale --> Fresh : valid reading
+        Stale --> Unknown : third such reading, neutral write
+        Unknown --> Fresh : valid reading
+        Stale --> Absent : 404 or refused for 300 s
+        Unknown --> Absent : 404 or refused for 300 s
+        Absent --> Fresh : valid reading
+        note right of Stale
+            Keeps the last applied value
         end note
-        note right of Neutral
-            Neutral is the removed
-            annotation (§9.5)
-        end note
-        note right of StaleState
-            Old annotations stay on the pod.
-            Event + metric, no rapid retries
+        note right of Absent
+            Event, gauge, neutral write.
+            Unknown and Absent are the
+            removed annotation (§9.5)
         end note
     }
     Live --> Terminating : deletionTimestamp set
@@ -465,7 +459,7 @@ flowchart TB
 - **In-cluster TLS** is the hard part of option (A). The cluster CA is not in the OS trust store, so a small Erlang FFI step is likely needed. Do not rely on `httpc` defaults. `gleam_httpc` passes no ssl options when verification is on, so it inherits `httpc`'s defaults, and those only became verifying in OTP 26 (Inets 9.0). Pass explicit ssl options instead: `verify_peer`, the service-account `ca.crt` as `cacertfile`, and a hostname check. Require OTP 26 or later. Spike S1 verified that the hostname check passes against the IP literal in `KUBERNETES_SERVICE_HOST` ([Decision 0013](decisions/0013-in-cluster-client.md)).
 - **Tokens:** projected service-account tokens rotate on disk. Re-read the token periodically and never cache it for the life of the process.
 - **Single replica, `Recreate` strategy:** no leader election. `Recreate` avoids two replicas writing at once, but leaves a short gap with no updates during upgrades. HA notes are in [DEFERRED.md §4](DEFERRED.md#4-ha-and-leader-election).
-- **Restart safety and staleness:** derive state from the current poll, the current annotations, and Knarr's marker annotation `knarr.io/applied`, which holds, per owned annotation, what Knarr applied or that it yielded, and the time of Knarr's last write to the pod; its shape is settled in the `Recorded` clause of [ownership.allium](specs/ownership.allium). Do not rely on in-memory counters. On startup, reconcile every pod that carries the marker. **Open tension:** writes are sparse, so after a restart a last-written timestamp cannot tell "the same cost reported for hours" from "hours of failed polls". Freshness semantics and conservative restart behavior go in §9.12. Document uninstall and manual recovery, for example `kubectl annotate pod <p> cluster-autoscaler.kubernetes.io/safe-to-evict-`, and the release of a yield, which removes the marker together with every owned annotation: `kubectl annotate pod <p> knarr.io/applied- controller.kubernetes.io/pod-deletion-cost- cluster-autoscaler.kubernetes.io/safe-to-evict-`.
+- **Restart safety and staleness:** derive state from the current poll, the current annotations, and Knarr's marker annotation `knarr.io/applied`, which holds, per owned annotation, what Knarr applied or that it yielded, and the time of Knarr's last write to the pod; its shape is settled in the `Recorded` clause of [ownership.allium](specs/ownership.allium). What stands on a pod is derived from the marker, while the reading windows of §9.6 are in memory on purpose: a restart resets them, which keeps a found value until the window elapses again rather than removing it, so nothing flaps. On startup, reconcile every pod that carries the marker. **Open tension:** writes are sparse, so after a restart a last-written timestamp cannot tell "the same cost reported for hours" from "hours of failed polls". Freshness semantics and conservative restart behavior go in §9.12. Document uninstall and manual recovery, for example `kubectl annotate pod <p> cluster-autoscaler.kubernetes.io/safe-to-evict-`, and the release of a yield, which removes the marker together with every owned annotation: `kubectl annotate pod <p> knarr.io/applied- controller.kubernetes.io/pod-deletion-cost- cluster-autoscaler.kubernetes.io/safe-to-evict-`.
 - **Minimum RBAC (one namespaced Role; settled in the `Verbs` clause of [k8s_client.allium](specs/k8s_client.allium)):**
   - core `pods`: list, patch (watch later, if watch-based discovery is adopted). No get: the next LIST is how Knarr learns what a pod is now
   - `apps` `deployments`, `replicasets`: list (watch later)
@@ -475,10 +469,10 @@ flowchart TB
 
 | Scenario | Knarr behavior (proposed) | Effect on scale-down | Ticket |
 | --- | --- | --- | --- |
-| Pod unreachable, timeout or 5xx | Keep the last value for a bounded number of polls and time, then write neutral | Bias fades to neutral once that write succeeds | §9.6 |
-| Endpoint 404 or never implemented | Treat as unmanaged; remove Knarr-owned annotations; `ContractAbsent` Event on the Deployment and `knarr_pods_contract_absent` | No bias for that pod once cleaned up | §9.6, §9.4a |
-| Invalid payload | Same as a transient failure; log and count | As above | §9.6 |
-| Pod just started | Leave unannotated until a valid poll | Pending/NotReady pods are deleted first anyway | §9.6 |
+| Pod unreachable, timeout or 5xx | Keep the last value for three consecutive readings that are not valid, then remove every Knarr-owned annotation | Bias fades to neutral once that write succeeds | §9.6, settled in [reconcile.allium](specs/reconcile.allium) |
+| Endpoint 404 or never implemented | Neutral after three readings; after 300 s of 404 or refused, `ContractAbsent` Event on the Deployment and `knarr_pods_contract_absent`; polling continues | No bias for that pod once the removal succeeds; managed again from its next valid reading | §9.6, §9.4a, settled in [reconcile.allium](specs/reconcile.allium) |
+| Invalid payload | A transient failure; log and count; never an absent contract | As above | §9.6, settled in [reconcile.allium](specs/reconcile.allium) |
+| Pod just started | Unannotated until a valid poll; no pod IP, not polled | Pending/NotReady pods are deleted first anyway | §9.6, settled in [reconcile.allium](specs/reconcile.allium) |
 | Knarr down or crashlooping | No updates | Annotations go stale; `safe-to-evict: "false"` can pin nodes | §9.12 |
 | Knarr restart | Reconcile marked pods from cluster state | Goal: no flapping; depends on freshness semantics | §9.12 |
 | Upgrade (`Recreate`) | Old Pod stops before the new one starts | Short gap with no updates | §9.12 |
@@ -488,7 +482,7 @@ flowchart TB
 | Another writer changed the value | The patch's `test` operations detect it; Knarr yields that annotation for the pod's life, records the yield in the marker, and raises at most one `AnnotationYielded` Event on the Pod | The other writer wins | §9.10, settled in [ownership.allium](specs/ownership.allium) |
 | Deployment rollout | No special handling | Cost still biases victims within the old ReplicaSet, but cannot keep that ReplicaSet alive through the rollout | §9.13 |
 | `PodDeletionCost` gate disabled | Documented prerequisite; no check (settled in [budget.allium](specs/budget.allium)) | Annotations ignored | §9.11 |
-| NetworkPolicy blocks polling | Looks like an absent contract; `ContractAbsent` Event | No bias | §9.4b |
+| NetworkPolicy blocks polling | Reads as a timeout: neutral after three readings, no Event, visible on `knarr_polls_total{reading="timed_out"}` | Bias fades to neutral | §9.4b, §9.6, settled in [reconcile.allium](specs/reconcile.allium) |
 
 ## 9. Open questions (candidate tickets)
 
@@ -498,7 +492,7 @@ flowchart TB
 flowchart LR
     S1[Spike S1]:::open -- "validates" --> D2["9.2 k8s client<br/>decided"]
     S2[Spike S2]:::open -- "decides" --> D9["9.9 safe-to-evict policy"]:::open
-    D5["9.5 cost mapping<br/>decided"] -- "before" --> D6["9.6 unknown/unreachable policy"]:::open
+    D5["9.5 cost mapping<br/>decided"] -- "before" --> D6["9.6 unknown/unreachable policy<br/>decided"]
     D10["9.10 ownership, conflicts<br/>decided"] -- "before" --> D12["9.12 cleanup, staleness"]:::open
     D5 -. "sign convention: what<br/>removing an annotation means" .- D12
     D16["9.16 testing strategy"]:::open -- "sets thresholds" --> SC["§3 success criteria"]
@@ -510,14 +504,14 @@ flowchart LR
 - **S1:** pure-Gleam in-cluster list and patch on kind, on OTP 26 or later with explicit ssl options. Pass requires verified TLS (including IP-SAN verification against `KUBERNETES_SERVICE_HOST`), a negative test showing that a wrong CA is rejected, and working token reload. The result validates §9.2. Settled in [Decision 0013](decisions/0013-in-cluster-client.md).
 - **S2:** how CA behaves when `safe-to-evict` flips, on GKE Standard's managed Cluster Autoscaler, including whether flips reset the per-node unneeded timer. The result decides §9.9.
 
-1. **Decided:** a controller configured through labels and annotations on Deployments (see §4, [DEFERRED.md §5](DEFERRED.md#5-install-scope-and-configuration-alternatives)). The schema is settled in [config.allium](specs/config.allium): one opt-in label, `knarr.io/enabled: "true"`, which the Deployment LIST selects on; six override annotations under the fixed `knarr.io/` prefix (`status-port`, `status-path`, `thresholds`, `threshold-margin`, `poll-interval`, `patch-interval`), plus `knarr.io/safe-to-evict: "true"` for the opt-in policy; an invalid value falls to its default (or to 0 for the margin when an overriding threshold list undercuts it) with one Event on the Deployment and the Deployment stays opted in; unsupported kinds are documented, not detected. Overrides 21, 23 and 25 may add stay open there.
+1. **Decided:** a controller configured through labels and annotations on Deployments (see §4, [DEFERRED.md §5](DEFERRED.md#5-install-scope-and-configuration-alternatives)). The schema is settled in [config.allium](specs/config.allium): one opt-in label, `knarr.io/enabled: "true"`, which the Deployment LIST selects on; six override annotations under the fixed `knarr.io/` prefix (`status-port`, `status-path`, `thresholds`, `threshold-margin`, `poll-interval`, `patch-interval`), plus `knarr.io/safe-to-evict: "true"` for the opt-in policy; an invalid value falls to its default (or to 0 for the margin when an overriding threshold list undercuts it) with one Event on the Deployment and the Deployment stays opted in; unsupported kinds are documented, not detected. Overrides 23 and 25 may add stay open there.
 2. **Decided:** k8s client option (A), pure Gleam plus Erlang FFI, until complexity pushes us elsewhere (see §8, [DEFERRED.md §3](DEFERRED.md#3-kubernetes-client-alternatives)).
 3. **Decided:** scaling ownership option (a), annotations only (see §7). (b) is a planned quick follow ([DEFERRED.md §1](DEFERRED.md#1-scaling-option-b-quick-follow)).
 4. **Worker contract details**, split in two and settled in [worker_contract.allium](specs/worker_contract.allium), except the per-poll timeout, which is §9.8's:
    - **4a. Endpoint shape:** path, port, schema, field types, versioning, timeouts.
    - **4b. Discovery, auth and network:** how Knarr finds the endpoint on a pod, auth (if any), and compatibility with NetworkPolicies.
 5. **Cost mapping:** sign convention, clamp, the drained value, the canonical string, the thresholds and the margin, and how `cost` and `accepting` combine (see the §5 drain states). Settled in [cost_mapping.allium](specs/cost_mapping.allium): no bands and no hysteresis.
-6. **Unknown/unreachable policy:** how long to keep the last value (in polls and in time) before the removal §9.5 fixes as neutral, and how to detect an absent contract. Depends on 5.
+6. **Unknown/unreachable policy:** the last applied value stands for three consecutive readings that are not valid, then the removal §9.5 fixes as neutral; 404 or refused for 300 s is an absent contract, with one Event and a gauge, polling continuing; both windows are install-wide with no override; a NetworkPolicy block is a timeout. Settled in [reconcile.allium](specs/reconcile.allium).
 7. **Readiness interaction:** how to document it, and whether Knarr warns on "high cost while NotReady". Settled in [worker_contract.allium](specs/worker_contract.allium).
 8. **Poll interval, concurrency and write budget:** numeric defaults and a v1 scale target (pods, Deployments, interval), LIST cadence, limits per Deployment and per cluster, and the expected API write rate. Settled in [budget.allium](specs/budget.allium).
 9. **`safe-to-evict` policy:** the threshold; removing the annotation vs writing `"true"` (matters for local-storage pods); how to avoid pinning nodes. Depends on S2.
@@ -542,6 +536,7 @@ flowchart LR
 - **Marker:** Knarr's `knarr.io/applied` annotation, recording per owned annotation what Knarr applied or that it yielded, plus the time of the last write (§8).
 - **Yielded:** an owned annotation another writer changed, which Knarr records in the marker and never writes again for the pod's life; the operator releases it by removing the marker together with every owned annotation on the pod, since removing the marker alone leaves every present value foreign (§6, §8).
 - **Write budget:** the per-pod minimum patch interval and the global token bucket that decide whether a due patch may go now; a change held by it stays pending (§6, [budget.allium](specs/budget.allium)).
+- **Reading window:** the three consecutive readings that are not valid after which a pod's last applied value is removed, and the 300 s of 404 or refused readings after which its contract is absent; both install-wide and in memory, so a restart starts them again (§5, [reconcile.allium](specs/reconcile.allium)).
 - **Accepting / draining:** the worker's statement that it is or is not taking new work.
 - **Path A / B / C:** ReplicaSet scale-down; node removal through the Eviction API; other ways a pod can be killed (§2).
 

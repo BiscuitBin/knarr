@@ -55,7 +55,7 @@ contract CostMapping {
         -- that lands below it and is not draining maps to 0, and 0 is spelled by
         -- removing the annotation: render returns null for it and the
         -- string "0" is never written. For pod-deletion-cost, removal, the
-        -- neutral fallback (reconcile, ticket 21) and cleanup (lifecycle,
+        -- neutral fallback (reconcile Neutral) and cleanup (lifecycle,
         -- ticket 23) are one operation: the same removal of the same
         -- annotation.
     @invariant Drained

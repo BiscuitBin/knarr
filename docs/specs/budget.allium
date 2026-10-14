@@ -160,9 +160,10 @@ contract PollSchedule {
         -- to one already in flight is discarded when it returns. on_list
         -- also adds, for every listed pod that has none, the schedule
         -- joining holds for it: the caller builds joining with phase, one
-        -- entry per listed pod, each from that pod's Deployment interval and
-        -- its own draw, and on_list ignores an entry whose pod already has a
-        -- schedule. Joining and leaving are learned only from the LIST.
+        -- entry per listed pod with a pod IP (reconcile NoPodIp), each from
+        -- that pod's Deployment interval and its own draw, and on_list
+        -- ignores an entry whose pod already has a schedule. Joining and
+        -- leaving are learned only from the LIST.
     @invariant Restart
         -- The schedule is in memory only. After a restart it is rebuilt
         -- from the first LIST with every phase drawn afresh; nothing on a

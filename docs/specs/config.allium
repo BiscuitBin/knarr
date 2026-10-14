@@ -17,8 +17,9 @@
 -- leaves the target set is lifecycle's (ticket 23).
 -- Owner: ticket 19 settled every §9.1 question here with the maintainer on
 -- 2026-10-12. Override defaults and ranges come from 18, 20 and 24; the
--- overrides 21, 23 and 25 may add stay as the open questions below. Ticket 31
--- builds discovery and the parse.
+-- overrides 23 and 25 may add stay as the open questions below, and 21 added
+-- none (reconcile Window and Absent). Ticket 31 builds discovery and the
+-- parse.
 
 ------------------------------------------------------------
 -- Value Types
@@ -158,8 +159,9 @@ contract Configuration {
         -- Deployment deleted and recreated under the same name claims no
         -- pod of the old one until the new one's ReplicaSets own it. The
         -- target set's pod names are the listed pods budget's on_list
-        -- receives and the pods worker_contract polls: a listed pod that is
-        -- no target is neither scheduled nor polled. Every
+        -- receives, and those with a pod IP are the pods worker_contract
+        -- polls (reconcile NoPodIp): a listed pod that is no target is
+        -- neither scheduled nor polled. Every
         -- ReplicaSet the Deployment controls is followed, so during a
         -- rollout the pods of the old and the new ReplicaSet are both in the
         -- target set (§9.13, no special handling). A pod with no controller
@@ -188,10 +190,12 @@ contract Configuration {
         -- owning modules' (worker_contract Discovery, cost_mapping Tiers,
         -- budget Interval and PerPod) and are restated here so the parse is
         -- complete. No other install-wide value has an override: not the
-        -- timeout, jitter, concurrency, LIST interval, bucket, back-off or
-        -- max_body_bytes. Overrides are read from metadata.annotations
-        -- only; a label under the prefix other than knarr.io/enabled is
-        -- never read as an override and is an unknown key under Unknown.
+        -- timeout, jitter, concurrency, LIST interval, bucket, back-off,
+        -- max_body_bytes, or reconcile's unknown_polls and absent_after
+        -- (reconcile Window and Absent). Overrides are read from
+        -- metadata.annotations only; a label under the prefix other than
+        -- knarr.io/enabled is never read as an override and is an unknown
+        -- key under Unknown.
     @invariant Syntax
         -- Every value is parsed from its annotation string after leading
         -- and trailing whitespace, ASCII space, tab, carriage return and
@@ -301,7 +305,8 @@ contract Configuration {
         -- for the bind address, with the default and valid range its
         -- owning module states: worker_contract's status_path, status_port
         -- and max_body_bytes, cost_mapping's thresholds and
-        -- threshold_margin, and budget's ten. The caller reads them once
+        -- threshold_margin, reconcile's unknown_polls and absent_after, and
+        -- budget's ten. The caller reads them once
         -- into Defaults; this module declares no config of its own, since
         -- the prefix is fixed by Prefix and every overridable value already
         -- lives in its owning module's block.
@@ -320,6 +325,5 @@ contract Configuration {
 -- Open Questions
 ------------------------------------------------------------
 
-open question "§9.1 Overrides from 21: whether the unreachable windows reconcile settles (ticket 21) gain a per-Deployment override, with its default and range; any such key is an annotation under knarr.io/, hyphenated after its config.<key>, parsed and invalidated under this module's Syntax, Effective and InvalidValue."
-open question "§9.1 Overrides from 23: whether the staleness and expiry values lifecycle settles (ticket 23) gain a per-Deployment override, with its default and range, under the same rule as the override from 21."
-open question "§9.1 Overrides from 25: whether the safe-to-evict threshold safe_to_evict settles (ticket 25) gains a per-Deployment override, with its default and range, under the same rule as the override from 21."
+open question "§9.1 Overrides from 23: whether the staleness and expiry values lifecycle settles (ticket 23) gain a per-Deployment override, with its default and range, under the same rule as every override here."
+open question "§9.1 Overrides from 25: whether the safe-to-evict threshold safe_to_evict settles (ticket 25) gains a per-Deployment override, with its default and range, under the same rule as every override here."
