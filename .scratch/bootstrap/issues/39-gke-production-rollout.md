@@ -10,6 +10,8 @@
 
 **From 28:** [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md); 40's hand-back for the digest.
 
+**From 37:** the install box means: check out 40's tag, run `just release-pin <40's digest>` there (it needs `just cluster-install`), then `kubectl apply -k deploy/release`. At a release's own tag the overlay still holds the previous digest ([37's hand-back](37-first-release-v0-1-0.md#what-each-later-ticket-needs), [install-at-tag.txt](../evidence/37/install-at-tag.txt)). The package is public, so GKE nodes pull anonymously. A pull from a GKE node is still unverified.
+
 **MVP critical path:** yes. This is the acceptance.
 
 **Status:** needs-human, round 2. Every cloud action below needs the maintainer's explicit approval, one action at a time, and GKE Standard access that no ticket provides.

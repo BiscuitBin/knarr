@@ -398,8 +398,10 @@ deployment-check: cluster-tools
 # ---------------------------------------------------------------- release ---
 
 # Writes deploy/release/kustomization.yaml, a tracked file, so it is outside the
-# check group. Ticket 37 runs it with the digest release.yml prints in its run
-# summary; it fails unless the overlay then renders exactly that reference.
+# check group. Each release runs it after its run (ticket 37 did first), with
+# the bare sha256: digest: the run log's digest= line, or the part after @ in
+# the reference its run summary prints. It fails unless the overlay then
+# renders exactly that reference.
 [group('release')]
 [doc('Pin the release overlay to an image digest and print the rendered reference (edits a tracked file)')]
 release-pin digest: cluster-tools
