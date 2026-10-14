@@ -9,14 +9,16 @@
 -- applied (ownership Applied), a patch only on meaningful change and only
 -- where may_write allows, a throttled change pending, no patch once
 -- deletionTimestamp is set (§4) and no special handling of a rollout (§9.13),
--- is ticket 31's to state here with tend. What a reading is is
+-- is the Loop contract, which ticket 31 stated with tend on 2026-10-13 and
+-- built. What a reading is is
 -- worker_contract's (§9.4a); the mapped value is cost_mapping's (§9.5); the
 -- patch is ownership's (§9.10); whether a due write may go now is budget's
 -- (§9.8); the Event, gauge and line names are observability's (§9.14); what
 -- the marker's write times mean across a downtime, and cleanup, are
 -- lifecycle's (§9.12, ticket 23).
 -- Owner: ticket 21 settled every §9.6 question here with the maintainer on
--- 2026-10-13. Ticket 31 builds it with the decided loop.
+-- 2026-10-13. Ticket 31 built it with the decided loop (Loop), and runs it
+-- in a thin driver that 46 replaces with budget's schedule and bucket (Cycle).
 
 ------------------------------------------------------------
 -- Value Types
@@ -36,6 +38,34 @@ value PodState {
     kind: fresh | stale | unknown | absent
     failed: Integer
     run_since: Timestamp?
+}
+
+-- One poll's reading as the loop consumes it: worker_contract's kind, and,
+-- for a valid reading, the cost and whether the worker is draining (accepting
+-- false); cost is null and draining false for every other kind.
+value Reading {
+    kind: ReadingKind
+    cost: Integer?
+    draining: Boolean
+}
+
+-- The parse of the marker's applied record for pod-deletion-cost (ownership
+-- Applied) to cost_mapping's value: usable with value 0 for a null or missing
+-- record, usable with the value for a canonical int32 string of -1 or 1 to
+-- 2147483647 (cost_mapping Canonical), and not usable, with value 0, for any
+-- other string, "0", "+5" and "007" among them, which stands as a conflict
+-- (Conflict).
+value Applied {
+    value: Integer
+    usable: Boolean
+}
+
+-- The desired state of the two owned annotations on one pod: the
+-- pod-deletion-cost value as cost_mapping's Mapped, 0 for the removal, and
+-- the safe-to-evict string, null for absent or the removal.
+value Desired {
+    cost: Integer
+    safe_to_evict: String?
 }
 
 ------------------------------------------------------------
@@ -206,6 +236,155 @@ contract Fallback {
         -- sending the neutral write, creating the Event, logging the line
         -- and serving the gauges are the reconcile process's (ticket 31),
         -- under supervision.
+}
+
+contract Loop {
+    parse_applied: (record: String?) -> Applied
+    safe_to_evict_usable: (record: String?) -> Boolean
+    desired: (state: PodState, reading: Reading, applied: Applied, safe_to_evict: String?, thresholds: List<Integer>, margin: Integer) -> Desired
+    due: (desired: Desired, applied: Applied, safe_to_evict: String?) -> List<String>
+
+    @invariant Desired
+        -- The desired state of a pod is the mapped cost value, the
+        -- safe-to-evict value and the marker (§4.3). desired reads the
+        -- pod's state and the reading the cycle's poll produced, after
+        -- observe has taken that reading: while the pod is neutral
+        -- (Neutral) the desired cost is 0 and the desired safe-to-evict is
+        -- null, the removal of both; otherwise a valid reading maps through
+        -- cost_mapping's map with the reading's clamped cost, its draining,
+        -- applied.value as the last applied value and the Deployment's
+        -- effective thresholds and margin (config Effective), and any other
+        -- reading leaves the desired cost at applied.value, so a stale pod
+        -- keeps its value (Window). The desired safe-to-evict outside the
+        -- removal is the applied safe-to-evict record as it stands: knarr
+        -- writes no safe-to-evict value until safe_to_evict (ticket 25)
+        -- settles what it writes, so an opt-in enables standing and the
+        -- gauge (observability Standing) and nothing else yet. applied is
+        -- parse_applied of the applied record's value for pod-deletion-cost,
+        -- which is the value cost_mapping's Pure names: the marker's, never
+        -- the annotation's own text. A reading maps against the applied
+        -- value the cycle's view holds, so after a restart the first valid
+        -- reading maps against what the marker records and nothing flaps
+        -- (Restart).
+    @invariant Due
+        -- A patch is made only when the desired state differs from the last
+        -- applied state (§4.4): due returns pod-deletion-cost when
+        -- desired.cost differs from applied.value and safe-to-evict when
+        -- desired.safe_to_evict differs from the applied safe-to-evict
+        -- record, in that order, and nothing else. That one comparison
+        -- covers a threshold crossing (cost_mapping Crossing), the first
+        -- annotation of a pod, whose applied value is 0 with no record, the
+        -- startup repair of a pod whose marker records a value its reading
+        -- no longer maps to, the removal that spells 0 or the neutral
+        -- fallback (Neutral), and a safe-to-evict flip. The loop asks
+        -- ownership's standing and may_write for each owned annotation it
+        -- considers, pod-deletion-cost always and safe-to-evict while the
+        -- marker holds a record for it or the Deployment enables it
+        -- (ownership Adoption), and hands ownership's patch only the due
+        -- writes may_write allows: a write of null for an annotation whose
+        -- record is null or missing is dropped, and a patch left with no
+        -- writes sends nothing (ownership WriteMode). The write carries
+        -- cost_mapping's render of the desired cost, so the emitted string
+        -- is canonical (§6).
+    @invariant Conflict
+        -- A record that does not parse as its annotation's value stands as
+        -- a conflict (ownership Adoption and Applied): for pod-deletion-cost
+        -- an applied record parse_applied finds not usable, and for
+        -- safe-to-evict an applied record safe_to_evict_usable rejects,
+        -- which is any string but "true" and "false" (null is usable). The
+        -- loop treats such a standing as conflict whatever ownership's
+        -- standing says of the annotation's text, so the annotation is
+        -- yielded with ownership's yield and never fed to map, and a write
+        -- of it that due names is dropped by ownership's may_write, so
+        -- nothing of it is written.
+    @invariant Pending
+        -- A change that is due but may not go now stays pending and is not
+        -- dropped (§4.4; budget Pending). Nothing is stored for it: when the
+        -- pod's turn comes the change is re-derived with desired from the
+        -- pod's latest reading against the applied value the newest view
+        -- holds, so a change that is no longer due has nothing pending.
+        -- Under Cycle every due write goes at once, so nothing is pending
+        -- between cycles until 46 builds the bucket.
+    @invariant Sequence
+        -- The view a patch is built from is the newest API-returned one:
+        -- the cycle's LIST or knarr's own last accepted patch response,
+        -- later by the order received (ownership Adoption). A write and a
+        -- yield on one pod in one cycle go in sequence, the yield first and
+        -- the write built from the yield's response, and an accepted patch
+        -- response replaces the pod's view for the rest of the cycle. The
+        -- marker a yield is reported from, and the Event, are ownership's
+        -- Event: the create is attempted only after the yield patch is
+        -- accepted.
+    @invariant Rejected422
+        -- A 422 is handled from the next LIST, with no GET and no retry in
+        -- that cycle (ownership Precondition): the loop keeps the failed
+        -- patch's operations for the pod until the next LIST and no longer,
+        -- classifies them against that LIST's view of the pod with
+        -- ownership's rejected, and forgets them when the LIST arrives,
+        -- whatever rejected says. The handling of a rejection is ticket
+        -- 32's (ownership Rejected, observability Events Rejected). The
+        -- kept operations are in memory only: a restart forgets them and
+        -- the write is simply rebuilt.
+    @invariant Terminating
+        -- No patch is made once a pod's deletionTimestamp is set in the
+        -- newest view, and no yield either; polling it continues while the
+        -- LIST shows it, and observe keeps its state (§4.5, Absent;
+        -- k8s_client NoPatchWhileTerminating). A patch in flight when the
+        -- deletion lands fails its deletionTimestamp test with 422 and is
+        -- forgotten under Rejected422.
+    @invariant JustStarted
+        -- A pod that has just started stays unannotated until its first
+        -- valid poll (§5): before any reading in this process its state is
+        -- initial, its reading is none, so desired is its applied value and
+        -- nothing is due; a pod without a pod IP has no reading, no state
+        -- and no write until a LIST shows one (NoPodIp). No annotation is
+        -- written before scale-down and none ahead of a reading: costs stay
+        -- fresh all the time, cycle by cycle (§4, §7).
+    @invariant Rollout
+        -- A Deployment rollout gets no special handling (§9.13): the pods
+        -- of the old and the new ReplicaSet are both targets (config
+        -- Discovery), each is polled and mapped on its own, and a pod the
+        -- rollout terminates is a terminating pod (Terminating).
+    @invariant Cycle
+        -- Until the poll schedule and the patcher are built (budget
+        -- PollSchedule and WriteBudget, ticket 46), the reconcile process is
+        -- a thin driver on the LIST timer: on its own start and then every
+        -- config.list_interval it runs one discovery cycle (config
+        -- Discovery), polls every target pod with a pod IP once, at most
+        -- config.poll_concurrency polls at a time, observes each reading,
+        -- and sends each due write and yield at once through k8s_client's
+        -- patch_pod, with no per-pod patch interval, no bucket and no pause;
+        -- a 429 is a failed patch left to the next cycle. The cycle reads
+        -- the token and the namespace first (k8s_client TokenReload); a
+        -- failed read, or a LIST that fails, ends the cycle with an error
+        -- line, the previous target set stands, and the next tick tries
+        -- again. The cycle latches readiness once the first cycle's three
+        -- LISTs have succeeded, before that cycle's polls and writes:
+        -- readiness is the discovery cycle's (observability Probes
+        -- Readiness), not the polls'. It rebuilds the per-Deployment gauges and retires a
+        -- Deployment that left (observability SeriesLife), at once, since
+        -- nothing is pending or in flight between its cycles. Ticket 46
+        -- replaces the poll fan-out and the direct patch with the schedule
+        -- and the bucket, and nothing here depends on their absence. The
+        -- next tick is armed config.list_interval after a cycle ends, so
+        -- cycles never overlap. The cycle reads the clock once, after its
+        -- LISTs, and that reading is the time of every reading and write of
+        -- the cycle, the at ownership's Recorded marker holds among them.
+        -- The polls run in workers linked to the reconcile process and
+        -- bounded by its wait, not under a supervisor of their own: a
+        -- worker that crashes crashes the process, which its supervisor
+        -- restarts, and a worker that has not answered when the wait ends
+        -- gives its pod a timed_out reading (worker_contract Transport) and
+        -- no other pod's. That is the one exception to a supervisor per
+        -- process in knarr, and it ends with the fan-out when 46 builds
+        -- the schedule.
+    @invariant Pure
+        -- parse_applied, safe_to_evict_usable, desired and due are
+        -- functions of their arguments alone: the state, the reading, the
+        -- view's applied records and the Deployment's settings are passed
+        -- in, and none reads state, time, config or the pod, or sends. The
+        -- cycle, the per-pod memory and every send are the reconcile
+        -- process's, under supervision.
 }
 
 ------------------------------------------------------------

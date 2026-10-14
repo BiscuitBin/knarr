@@ -148,8 +148,9 @@ def test_uncalled_modules_empty_modules_and_startup(coverage_project: Path) -> N
     assert files["src/never_called.gleam"]["uncovered_lines"] == [2]
     assert files["src/types_only.gleam"]["executable"] == 0
     assert "0/0 (n/a)" in result.stdout
-    # The real application callback calls metrics once, before main/tests.
-    assert 6 in files["src/knarr/application_ffi.erl"]["covered_lines"]
+    # The real application callback checks the install-wide values once,
+    # before main/tests.
+    assert 11 in files["src/knarr/application_ffi.erl"]["covered_lines"]
 
 
 @pytest.mark.parametrize("failure", ["assertion", "snapshot"])

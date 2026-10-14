@@ -4,6 +4,16 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ## [Unreleased]
 
+### Added
+
+- The reconcile loop: discovery of opted-in Deployments by three LISTs matched by owner chain, one poll of every target pod per cycle, the mapped pod-deletion-cost against the marker's applied value, the JSON Patch write mode with ownership's marker and yield, the ContractAbsent, InvalidOverride and AnnotationYielded Events, JSON log lines through OTP logger, the discovery, cost, standing and pod-state metrics, and `/readyz` latching after the first complete discovery cycle. Discovery is turned on with `-knarr discovery true`; a bad install-wide value fails the start naming the key.
+- `max_body_bytes` enforced on the poll path: the install-wide value reaches the poller, and a 200 whose body is longer than it is an invalid reading.
+- A JSON log formatter that never emits a non-JSON line: a report it cannot render becomes a fixed `unformattable` error line, and truncation is by character, not byte.
+
+### Removed
+
+- The S1 probe and its `knarr.io/s1-probe` annotation, replaced by the reconciler as the client's first caller.
+
 ## [0.1.0] - 2026-10-14
 
 ### Added

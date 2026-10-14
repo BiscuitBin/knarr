@@ -31,7 +31,10 @@ fn respond(status: Int, body: String) -> poller.Outcome {
 }
 
 fn read(body: String) -> poller.Reading {
-  poller.decode(respond(200, body))
+  poller.decode(
+    outcome: respond(200, body),
+    max_body_bytes: poller.max_body_bytes,
+  )
 }
 
 fn url(request: request.Request(String)) -> String {
@@ -72,7 +75,12 @@ pub fn poll_sends_the_built_request_and_decodes_the_outcome_test() -> Nil {
     respond(200, "{\"cost\":7,\"accepting\":true}")
   }
 
-  assert poller.poll(endpoint:, version:, send:)
+  assert poller.poll(
+      endpoint:,
+      version:,
+      max_body_bytes: poller.max_body_bytes,
+      send:,
+    )
     == Valid(Status(cost: 7, accepting: True))
 }
 
@@ -104,6 +112,7 @@ pub fn poll_of_an_unserved_path_is_not_found_test() -> Nil {
   assert poller.poll(
       endpoint: Endpoint(..endpoint, path: "/knarr/v2/status"),
       version:,
+      max_body_bytes: poller.max_body_bytes,
       send:,
     )
     == NotFound
@@ -167,7 +176,10 @@ pub fn decode_accepts_a_body_of_exactly_the_cap_test() -> Nil {
 pub fn decode_ignores_the_content_type_test() -> Nil {
   let body = bit_array.from_string("{\"cost\":3,\"accepting\":true}")
   let with = fn(headers) {
-    poller.decode(Ok(response.Response(status: 200, headers:, body:)))
+    poller.decode(
+      outcome: Ok(response.Response(status: 200, headers:, body:)),
+      max_body_bytes: poller.max_body_bytes,
+    )
   }
 
   assert with([#("content-type", "text/plain")])
@@ -180,13 +192,21 @@ pub fn decode_ignores_the_content_type_test() -> Nil {
 // StatusEndpoint.NotFoundReading: a 404 is not_found whatever its body
 // carries, an HTML page or more than config.max_body_bytes among them.
 pub fn decode_reads_every_404_as_not_found_test() -> Nil {
-  assert poller.decode(respond(404, "")) == NotFound
-  assert poller.decode(respond(
-      404,
-      "<html><body><h1>404 Not Found</h1></body></html>",
-    ))
+  assert poller.decode(
+      outcome: respond(404, ""),
+      max_body_bytes: poller.max_body_bytes,
+    )
     == NotFound
-  assert poller.decode(respond(404, string.repeat("x", 5000))) == NotFound
+  assert poller.decode(
+      outcome: respond(404, "<html><body><h1>404 Not Found</h1></body></html>"),
+      max_body_bytes: poller.max_body_bytes,
+    )
+    == NotFound
+  assert poller.decode(
+      outcome: respond(404, string.repeat("x", 5000)),
+      max_body_bytes: poller.max_body_bytes,
+    )
+    == NotFound
 }
 
 // ------------------------------------------------------- InvalidReading ---
@@ -196,8 +216,16 @@ pub fn decode_reads_every_404_as_not_found_test() -> Nil {
 pub fn decode_reads_other_statuses_as_invalid_test() -> Nil {
   let body = "{\"cost\":1,\"accepting\":true}"
 
-  assert poller.decode(respond(302, body)) == Invalid
-  assert poller.decode(respond(500, body)) == Invalid
+  assert poller.decode(
+      outcome: respond(302, body),
+      max_body_bytes: poller.max_body_bytes,
+    )
+    == Invalid
+  assert poller.decode(
+      outcome: respond(500, body),
+      max_body_bytes: poller.max_body_bytes,
+    )
+    == Invalid
 }
 
 // StatusEndpoint.InvalidReading: a 200 longer than config.max_body_bytes is
@@ -207,6 +235,19 @@ pub fn decode_reads_a_body_over_the_cap_as_invalid_test() -> Nil {
 
   assert string.byte_size(body) == 4097
   assert read(body) == Invalid
+}
+
+// StatusEndpoint.ValidReading and config Installed: the cap is the one the
+// caller passes, the install-wide max_body_bytes, not a constant of the
+// module; a body over a lower cap is invalid and one within it is valid.
+pub fn decode_enforces_the_cap_it_is_given_test() -> Nil {
+  let over =
+    poller.decode(outcome: respond(200, padded(100)), max_body_bytes: 64)
+  let within =
+    poller.decode(outcome: respond(200, padded(64)), max_body_bytes: 64)
+
+  assert over == Invalid
+  assert within == Valid(Status(cost: 1, accepting: True))
 }
 
 // StatusEndpoint.InvalidReading: the body must be a JSON object.
@@ -274,14 +315,31 @@ pub fn decode_reads_trailing_whitespace_as_valid_test() -> Nil {
 // StatusEndpoint.Transport: decode maps each failure to the reading of the
 // same name.
 pub fn decode_maps_each_transport_failure_to_its_reading_test() -> Nil {
-  assert poller.decode(Error(Refused)) == Failed(Refused)
-  assert poller.decode(Error(TimedOut)) == Failed(TimedOut)
-  assert poller.decode(Error(Unreachable)) == Failed(Unreachable)
+  assert poller.decode(
+      outcome: Error(Refused),
+      max_body_bytes: poller.max_body_bytes,
+    )
+    == Failed(Refused)
+  assert poller.decode(
+      outcome: Error(TimedOut),
+      max_body_bytes: poller.max_body_bytes,
+    )
+    == Failed(TimedOut)
+  assert poller.decode(
+      outcome: Error(Unreachable),
+      max_body_bytes: poller.max_body_bytes,
+    )
+    == Failed(Unreachable)
 }
 
 // StatusEndpoint.Transport: poll passes a failed send through decode.
 pub fn poll_of_a_failed_send_is_the_failure_test() -> Nil {
-  assert poller.poll(endpoint:, version:, send: fn(_) { Error(TimedOut) })
+  assert poller.poll(
+      endpoint:,
+      version:,
+      max_body_bytes: poller.max_body_bytes,
+      send: fn(_) { Error(TimedOut) },
+    )
     == Failed(TimedOut)
 }
 
@@ -435,10 +493,25 @@ pub fn reading_is_a_kind_and_an_optional_status_test() -> Nil {
 
   assert one == Valid(Status(cost: 1, accepting: True))
   assert one != Valid(Status(cost: 2, accepting: True))
-  assert poller.decode(Error(Refused)) != poller.decode(Error(TimedOut))
+  assert poller.decode(
+      outcome: Error(Refused),
+      max_body_bytes: poller.max_body_bytes,
+    )
+    != poller.decode(
+      outcome: Error(TimedOut),
+      max_body_bytes: poller.max_body_bytes,
+    )
   assert status(one) == Some(Status(cost: 1, accepting: True))
-  assert status(poller.decode(respond(404, ""))) == None
-  assert status(poller.decode(Error(Unreachable))) == None
+  assert status(poller.decode(
+      outcome: respond(404, ""),
+      max_body_bytes: poller.max_body_bytes,
+    ))
+    == None
+  assert status(poller.decode(
+      outcome: Error(Unreachable),
+      max_body_bytes: poller.max_body_bytes,
+    ))
+    == None
 }
 
 // contract-signature.StatusEndpoint.draining: (reading) -> Boolean. The
@@ -455,5 +528,11 @@ pub fn snapshot_status_request_test() -> Nil {
     respond(404, "")
   }
 
-  assert poller.poll(endpoint:, version:, send:) == NotFound
+  assert poller.poll(
+      endpoint:,
+      version:,
+      max_body_bytes: poller.max_body_bytes,
+      send:,
+    )
+    == NotFound
 }

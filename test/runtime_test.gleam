@@ -7,7 +7,7 @@ fn recover(root: runtime.Runtime, same_port same_port: Bool) -> Bool
 
 pub fn listener_recovers_and_preserves_metrics_test() -> Nil {
   let started =
-    runtime.start(port: 0, bind: "127.0.0.1", poller: False, probe: None)
+    runtime.start(port: 0, bind: "127.0.0.1", poller: False, discovery: None)
     |> should.be_ok
   assert recover(started.data, same_port: False)
 }
@@ -18,7 +18,12 @@ fn start_on_free_port(start: fn(Int) -> result) -> runtime.Runtime
 pub fn fixed_port_listener_recovers_on_the_same_port_test() -> Nil {
   let started =
     start_on_free_port(fn(port) {
-      runtime.start(port: port, bind: "127.0.0.1", poller: False, probe: None)
+      runtime.start(
+        port: port,
+        bind: "127.0.0.1",
+        poller: False,
+        discovery: None,
+      )
     })
   assert recover(started, same_port: True)
 }
@@ -28,7 +33,7 @@ fn occupied_port(start: fn(Int) -> result) -> Bool
 
 pub fn occupied_port_fails_startup_test() -> Nil {
   assert occupied_port(fn(port) {
-    runtime.start(port: port, bind: "127.0.0.1", poller: False, probe: None)
+    runtime.start(port: port, bind: "127.0.0.1", poller: False, discovery: None)
   })
 }
 

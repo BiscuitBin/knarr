@@ -1,5 +1,5 @@
--module(s1_probe_ffi).
--export([read_file/1, sha256_hex12/1, unix_seconds/0, log_notice/1]).
+-module(reconciler_ffi).
+-export([read_file/1, sha256_hex12/1, unix_seconds/0, unix_milliseconds/0, rfc3339/1]).
 
 read_file(Path) ->
   case file:read_file(Path) of
@@ -14,6 +14,8 @@ sha256_hex12(Data) ->
 
 unix_seconds() -> erlang:system_time(second).
 
-log_notice(Line) ->
-  logger:notice("~s", [Line]),
-  nil.
+unix_milliseconds() -> erlang:system_time(millisecond).
+
+%% RFC 3339 UTC to the second, the form ownership's Recorded marker holds.
+rfc3339(Seconds) ->
+  unicode:characters_to_binary(calendar:system_time_to_rfc3339(Seconds, [{offset, "Z"}])).

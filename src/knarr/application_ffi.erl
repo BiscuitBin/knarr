@@ -2,30 +2,74 @@
 -behaviour(application).
 -export([start/2, stop/1, await_shutdown/0]).
 
+%% The install-wide values and their defaults (config Installed): each is
+%% OTP application configuration, `-knarr <key> <value>` in ERL_FLAGS, read
+%% once here and checked by config.installed. A value outside its range or
+%% not of its type fails the start, which exits the VM unsuccessfully naming
+%% the key (knarr Readiness).
 start(_Type, _Args) ->
-  metrics_ffi:startup(),
-  Port = application:get_env(knarr, port, 8080),
-  Bind = unicode:characters_to_binary(application:get_env(knarr, bind, "0.0.0.0")),
-  case 'knarr@runtime':start(Port, Bind, true, probe()) of
-    {ok, {started, Pid, _Runtime}} -> {ok, Pid};
-    {error, Reason} -> {error, Reason}
+  case 'knarr@config':installed(values()) of
+    {error, {installed_error, Key, Reason}} ->
+      {error, {invalid_config, Key, Reason}};
+    {ok, Installed} ->
+      observability_ffi:install(level(Installed)),
+      metrics_ffi:startup(),
+      observability_ffi:log(info, <<"started">>,
+        [{field, <<"version">>, iolist_to_binary(json:encode(metrics_ffi:version()))}]),
+      Port = application:get_env(knarr, port, 8080),
+      Bind = unicode:characters_to_binary(application:get_env(knarr, bind, "0.0.0.0")),
+      case 'knarr@runtime':start(Port, Bind, true, discovery(Installed)) of
+        {ok, {started, Pid, _Runtime}} -> {ok, Pid};
+        {error, Reason} -> {error, Reason}
+      end
   end.
 
-%% The S1 probe (ticket 14) is off unless `-knarr s1_probe true`. On, it
-%% reads the in-cluster environment the pod carries; a missing variable
+values() ->
+  [
+    {<<"status_port">>, application:get_env(knarr, status_port, 8080)},
+    {<<"status_path">>, text(application:get_env(knarr, status_path, "/knarr/v1/status"))},
+    {<<"max_body_bytes">>, application:get_env(knarr, max_body_bytes, 4096)},
+    {<<"thresholds">>, application:get_env(knarr, thresholds, [300, 900, 1800, 3600])},
+    {<<"threshold_margin">>, application:get_env(knarr, threshold_margin, 60)},
+    {<<"unknown_polls">>, application:get_env(knarr, unknown_polls, 3)},
+    {<<"absent_after">>, application:get_env(knarr, absent_after, 300)},
+    {<<"poll_interval">>, application:get_env(knarr, poll_interval, 30)},
+    {<<"poll_timeout">>, application:get_env(knarr, poll_timeout, 5)},
+    {<<"patch_interval">>, application:get_env(knarr, patch_interval, 60)},
+    {<<"list_interval">>, application:get_env(knarr, list_interval, 60)},
+    {<<"poll_concurrency">>, application:get_env(knarr, poll_concurrency, 64)},
+    {<<"log_level">>, text(application:get_env(knarr, log_level, info))}
+  ].
+
+%% A string value arrives as a charlist from ERL_FLAGS (`'"/x"'`) or as an
+%% atom (`-knarr log_level warning`); either reads as text. Anything else is
+%% left as it is, for config.installed to refuse by type.
+text(Value) when is_atom(Value) -> atom_to_binary(Value, utf8);
+text(Value) when is_list(Value) ->
+  case unicode:characters_to_binary(Value) of
+    Binary when is_binary(Binary) -> Binary;
+    _ -> Value
+  end;
+text(Value) -> Value.
+
+%% The log level is the seventh field of the Installed record, an atom the
+%% Gleam Level enum shares with logger.
+level({installed, _Defaults, _MaxBody, _Unknown, _Absent, _List, _Concurrency, Level}) -> Level.
+
+%% Discovery is off unless `-knarr discovery true` (knarr NoPodEffects). On,
+%% it reads the in-cluster environment the pod carries; a missing variable
 %% fails the start, and so the VM, visibly.
-probe() ->
-  case application:get_env(knarr, s1_probe, false) of
+discovery(Installed) ->
+  case application:get_env(knarr, discovery, false) of
     true ->
       Mount = "/var/run/secrets/kubernetes.io/serviceaccount/",
-      {some, 'knarr@s1_probe':config(
+      {some, 'knarr@reconciler':config(
         required("KUBERNETES_SERVICE_HOST"),
         binary_to_integer(required("KUBERNETES_SERVICE_PORT")),
         optional("KNARR_NAMESPACE_FILE", Mount ++ "namespace"),
         optional("KNARR_TOKEN_FILE", Mount ++ "token"),
         optional("KNARR_CA_FILE", Mount ++ "ca.crt"),
-        required("POD_NAME"),
-        30000)};
+        Installed)};
     _ -> none
   end.
 

@@ -35,7 +35,7 @@ const pod_list_body =
         \"name\": \"knarr-7d4b9c-abcde\",
         \"namespace\": \"default\",
         \"uid\": \"6f1c\",
-        \"annotations\": {\"knarr.io/s1-probe\": \"1760000000\"},
+        \"annotations\": {\"controller.kubernetes.io/pod-deletion-cost\": \"300\"},
         \"labels\": {\"app.kubernetes.io/name\": \"knarr\"},
         \"ownerReferences\": [
           {\"apiVersion\": \"apps/v1\", \"kind\": \"ReplicaSet\", \"name\": \"knarr-7d4b9c\", \"uid\": \"rs-1\", \"controller\": true, \"blockOwnerDeletion\": true}
@@ -70,7 +70,7 @@ const patched_pod_body =
   \"metadata\": {
     \"name\": \"knarr-7d4b9c-abcde\",
     \"uid\": \"6f1c\",
-    \"annotations\": {\"knarr.io/s1-probe\": \"1760000060\"}
+    \"annotations\": {\"controller.kubernetes.io/pod-deletion-cost\": \"900\"}
   }
 }"
 
@@ -134,9 +134,11 @@ const event =
     at: "2026-10-12T05:00:00Z",
   )
 
-// The probe's first write on a pod with no annotations map.
+// Ownership's first write on a pod with no annotations map (WriteMode): the
+// value and the marker travel in one patch, which the reconciler sends as
+// given.
 const document =
-  "[{\"op\":\"test\",\"path\":\"/metadata/deletionTimestamp\",\"value\":null},{\"op\":\"test\",\"path\":\"/metadata/annotations\",\"value\":null},{\"op\":\"add\",\"path\":\"/metadata/annotations\",\"value\":{\"knarr.io/s1-probe\":\"1760000060\"}}]"
+  "[{\"op\":\"test\",\"path\":\"/metadata/deletionTimestamp\",\"value\":null},{\"op\":\"test\",\"path\":\"/metadata/annotations\",\"value\":null},{\"op\":\"add\",\"path\":\"/metadata/annotations\",\"value\":{\"controller.kubernetes.io/pod-deletion-cost\":\"300\",\"knarr.io/applied\":\"{\\\"at\\\":\\\"2026-10-13T10:00:00Z\\\",\\\"pod-deletion-cost\\\":{\\\"applied\\\":\\\"300\\\",\\\"at\\\":\\\"2026-10-13T10:00:00Z\\\"}}\"}}]"
 
 fn ok(status: Int, body: String) -> response.Response(String) {
   response.new(status) |> response.set_body(body)
@@ -382,7 +384,9 @@ pub fn decode_pod_page_reads_every_field_the_client_uses_test() -> Nil {
           name: "knarr-7d4b9c-abcde",
           uid: "6f1c",
           annotations: Some(
-            dict.from_list([#("knarr.io/s1-probe", "1760000000")]),
+            dict.from_list([
+              #("controller.kubernetes.io/pod-deletion-cost", "300"),
+            ]),
           ),
           deletion_timestamp: None,
           pod_ip: Some("10.244.0.7"),
@@ -521,7 +525,9 @@ pub fn decode_patched_pod_reads_the_pod_the_apiserver_returns_test() -> Nil {
     == Ok(Pod(
       name: "knarr-7d4b9c-abcde",
       uid: "6f1c",
-      annotations: Some(dict.from_list([#("knarr.io/s1-probe", "1760000060")])),
+      annotations: Some(
+        dict.from_list([#("controller.kubernetes.io/pod-deletion-cost", "900")]),
+      ),
       deletion_timestamp: None,
       pod_ip: None,
       ready: False,
@@ -724,7 +730,9 @@ pub fn patch_pod_sends_the_built_request_and_decodes_the_reply_test() -> Nil {
     )
     |> should.be_ok
   assert pod.annotations
-    == Some(dict.from_list([#("knarr.io/s1-probe", "1760000060")]))
+    == Some(
+      dict.from_list([#("controller.kubernetes.io/pod-deletion-cost", "900")]),
+    )
 }
 
 pub fn patch_pod_keeps_the_error_send_returned_test() -> Nil {

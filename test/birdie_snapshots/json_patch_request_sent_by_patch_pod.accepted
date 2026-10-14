@@ -9,4 +9,4 @@ accept: application/json
 authorization: Bearer test-token
 content-type: application/json-patch+json
 
-[{"op":"test","path":"/metadata/deletionTimestamp","value":null},{"op":"test","path":"/metadata/annotations","value":null},{"op":"add","path":"/metadata/annotations","value":{"knarr.io/s1-probe":"1760000060"}}]
+[{"op":"test","path":"/metadata/deletionTimestamp","value":null},{"op":"test","path":"/metadata/annotations","value":null},{"op":"add","path":"/metadata/annotations","value":{"controller.kubernetes.io/pod-deletion-cost":"300","knarr.io/applied":"{\"at\":\"2026-10-13T10:00:00Z\",\"pod-deletion-cost\":{\"applied\":\"300\",\"at\":\"2026-10-13T10:00:00Z\"}}"}}]

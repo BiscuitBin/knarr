@@ -163,16 +163,8 @@
                 },
                 "env": [
                   {
-                    "name": "POD_NAME",
-                    "valueFrom": {
-                      "fieldRef": {
-                        "fieldPath": "metadata.name"
-                      }
-                    }
-                  },
-                  {
                     "name": "ERL_FLAGS",
-                    "value": "-knarr s1_probe true"
+                    "value": "-knarr discovery true"
                   }
                 ]
               }

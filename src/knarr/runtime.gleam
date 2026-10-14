@@ -10,7 +10,7 @@ import gleam/otp/supervision
 import knarr/diagnostics
 import knarr/metrics
 import knarr/poller_http
-import knarr/s1_probe
+import knarr/reconciler
 import mist
 
 pub type State
@@ -32,17 +32,22 @@ fn mark_ready(state: State) -> Nil
 fn set_port(state: State, port: Int) -> Nil
 
 /// Starts the root supervisor: the listener first, then, with `poller`, the
-/// poller's httpc profile, then, with `probe`, the S1 probe, each of those
-/// two under its own supervisor. Child ids count the children present from 0, so the
-/// application, which turns `poller` on, has the profile at id 1 and any
-/// probe at id 2. The profile is one per VM, since httpc names its tables
-/// after it, so a second root in the same VM, as the tests start beside the
-/// application, runs without it.
+/// poller's httpc profile, then, with `discovery`, the reconciler, each of
+/// those two under its own supervisor. Child ids count the children present
+/// from 0, so the application, which turns `poller` on, has the profile at
+/// id 1 and any reconciler at id 2. The profile is one per VM, since httpc
+/// names its tables after it, so a second root in the same VM, as the tests
+/// start beside the application, runs without it.
+///
+/// Without `discovery`, as the gate runs knarr, readiness is marked once the
+/// tree starts; with it, the reconciler marks readiness at the end of its
+/// first discovery cycle in which every LIST succeeded (knarr Readiness,
+/// observability Probes Readiness).
 pub fn start(
   port port: Int,
   bind bind: String,
   poller poller: Bool,
-  probe probe: Option(s1_probe.Config),
+  discovery discovery: Option(reconciler.Config),
 ) -> actor.StartResult(Runtime) {
   let state = new_state()
   let child =
@@ -67,13 +72,22 @@ pub fn start(
     True -> supervisor.add(root, poller_http.supervised())
     False -> root
   }
-  let root = case probe {
-    Some(config) -> supervisor.add(root, s1_probe.supervised(config))
+  let root = case discovery {
+    Some(config) ->
+      supervisor.add(
+        root,
+        reconciler.supervised(
+          reconciler.Config(..config, mark_ready: fn() { mark_ready(state) }),
+        ),
+      )
     None -> root
   }
   case supervisor.start(root) {
     Ok(started) -> {
-      mark_ready(state)
+      case discovery {
+        None -> mark_ready(state)
+        Some(_) -> Nil
+      }
       Ok(actor.Started(started.pid, Runtime(started.pid, state)))
     }
     Error(error) -> Error(error)
