@@ -4,6 +4,10 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ## [Unreleased]
 
+### Changed
+
+- `deploy/release` pins the digest of 0.1.0, the first published release.
+
 ## [0.1.0] - 2026-10-14
 
 ### Added

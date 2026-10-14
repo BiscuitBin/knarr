@@ -10,6 +10,8 @@
 
 **From 28:** [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md); 37's hand-back for the route as it ran.
 
+**From 37:** the route as it ran, in [37's hand-back](37-first-release-v0-1-0.md#what-each-later-ticket-needs). Date the changelog heading by the UTC day the tag will be pushed. Ruleset `25048585` already exists, and the package's visibility needs no step: it has been public since its first push. The run waits at the `release` environment for as long as the approval takes, and the image's `created` label is stamped when `publish` builds, after the approval, not when the tag is pushed. After the run, `just release-pin <digest>` pins the overlay in a follow-up pull request. From pull request #35's review: rather than copy [preflight.sh](../evidence/37/preflight.sh), promote it into `scripts/release/` behind a `just` recipe that takes the tag and the commit, written test first. 37's scripts and transcripts stay as they ran.
+
 **MVP critical path:** yes. 39 installs this release.
 
 **Status:** needs-human, round 2. Every step below that changes something outside the worktree needs the maintainer's explicit approval, one action at a time.
