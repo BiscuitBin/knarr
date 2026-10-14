@@ -51,6 +51,7 @@ flowchart TD
     T44["44 Renovate activation"]:::human
     T45["45 Scan the image's runtime environment"]:::offpath
     T46["46 Spec-then-build: poll schedule, patcher"]
+    T47["47 Discovery cleanup hand-off"]
 
     T01 --> T02
     T01 --> T03
@@ -142,6 +143,10 @@ flowchart TD
     T32 --> T40
     T37 --> T40
     T46 --> T40
+    T32 --> T47
+    T46 --> T47
+    T47 --> T40
+    T47 --> T33
     T31 --> T39
     T32 --> T39
     T33 --> T39
@@ -173,9 +178,10 @@ A wave is the earliest point a ticket can start if every lane runs in parallel: 
 | 8 | [21](issues/21-elicit-unknown-unreachable-policy.md), [23](issues/23-elicit-cleanup-staleness-restart.md), [37](issues/37-first-release-v0-1-0.md) |
 | 9 | [31](issues/31-spec-then-build-reconcile-core.md), [32](issues/32-spec-then-build-ownership-lifecycle.md), [34](issues/34-user-guides.md), [38](issues/38-attestations-sbom-arm64.md) |
 | 10 | [46](issues/46-spec-then-build-poll-schedule-and-patcher.md) |
-| 11 | [33](issues/33-keda-harness-success-criterion.md), [40](issues/40-mvp-release.md) |
-| 12 | [39](issues/39-gke-production-rollout.md) |
+| 11 | [47](issues/47-discovery-cleanup-hand-off.md) |
+| 12 | [33](issues/33-keda-harness-success-criterion.md), [40](issues/40-mvp-release.md) |
+| 13 | [39](issues/39-gke-production-rollout.md) |
 
-The longest chains are thirteen tickets: 01, 02, 03, 06 or 07, 09, 17, 18, 20, 21, 31, 46, then 33 or 40, then 39. Tickets 30 to 34 are the follow-ups ticket 17 drafted; 31 to 34 are round 2. Tickets 36 to 40 are the follow-ups ticket 28 drafted, all round 2; 37, 39 and 40 also wait for a maintainer session, and 39 for GKE Standard access. Tickets 41 and 42 are the follow-ups ticket 14 drafted. Ticket 43 is the follow-up ticket 18 drafted. Tickets 44 and 45 are the follow-ups ticket 27 drafted, both off the MVP path; 44 waits for a maintainer session, and 45 needs none. Ticket 46 is the follow-up ticket 24 drafted.
+The longest chains are fourteen tickets: 01, 02, 03, 06 or 07, 09, 17, 18, 20, 21, 31, 46, 47, then 33 or 40, then 39. Tickets 30 to 34 are the follow-ups ticket 17 drafted; 31 to 34 are round 2. Tickets 36 to 40 are the follow-ups ticket 28 drafted, all round 2; 37, 39 and 40 also wait for a maintainer session, and 39 for GKE Standard access. Tickets 41 and 42 are the follow-ups ticket 14 drafted. Ticket 43 is the follow-up ticket 18 drafted. Tickets 44 and 45 are the follow-ups ticket 27 drafted, both off the MVP path; 44 waits for a maintainer session, and 45 needs none. Ticket 46 is the follow-up ticket 24 drafted. Ticket 47 is the follow-up ticket 31 drafted after merging 23.
 
 When a ticket's **Blocked by** line changes, update both the diagram and this table.

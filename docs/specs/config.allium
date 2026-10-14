@@ -19,7 +19,8 @@
 -- 2026-10-12. Override defaults and ranges come from 18, 20 and 24; the
 -- override 25 may add stays as the open question below, and 21 and 23 added
 -- none (reconcile Window and Absent; lifecycle Restart NoExpiry). Ticket 31
--- builds discovery and the parse.
+-- built discovery and the parse on 2026-10-13, and stated under Installed
+-- what a bad install-wide value does.
 -- Amended by ticket 23 on 2026-10-13: leaving is retired, since lifecycle's
 -- Cleanup derives what left the target set from each cycle's state with no
 -- memory, and the open question 23 owned closed with no override.
@@ -308,10 +309,22 @@ contract Configuration {
         -- owning module states: worker_contract's status_path, status_port
         -- and max_body_bytes, cost_mapping's thresholds and
         -- threshold_margin, reconcile's unknown_polls and absent_after, and
-        -- budget's ten. The caller reads them once
-        -- into Defaults; this module declares no config of its own, since
+        -- budget's ten, and observability's log_level. The caller reads
+        -- them once, at application start and in every configuration, with
+        -- or without a discovery cycle, into Defaults and the values the
+        -- processes take; this module declares no config of its own, since
         -- the prefix is fixed by Prefix and every overridable value already
-        -- lives in its owning module's block.
+        -- lives in its owning module's block. A value that is not of its
+        -- key's type, or is outside the range its owning module states,
+        -- fails the application start, which exits unsuccessfully naming
+        -- the key (knarr Readiness): no default is substituted for a bad
+        -- install-wide value and nothing runs on it, unlike a Deployment's
+        -- override, whose fallback InvalidValue states. A key that is not
+        -- set takes its default. Ticket 31 reads worker_contract's three,
+        -- cost_mapping's two, reconcile's two, observability's one and
+        -- budget's poll_interval, poll_timeout, patch_interval,
+        -- list_interval and poll_concurrency, and leaves budget's other five
+        -- to ticket 46 under this same rule.
     @invariant Pure
         -- Every signature is a function of its arguments alone: the
         -- install-wide values arrive in defaults and the LIST results in

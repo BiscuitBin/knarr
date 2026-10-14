@@ -20,7 +20,8 @@ pub const status_path = "/knarr/v1/status"
 /// The contract's default port: config.status_port.
 pub const status_port = 8080
 
-/// The longest body a valid reading may have: config.max_body_bytes.
+/// The default of the longest body a valid reading may have:
+/// config.max_body_bytes. The install-wide value is passed to `decode`.
 pub const max_body_bytes = 4096
 
 /// Where one pod is polled: its pod IP, of either family, and the port and
@@ -82,8 +83,12 @@ pub fn request(
 
 /// Reads an outcome as ValidReading, NotFoundReading, InvalidReading and
 /// Transport say. A 200 body is parsed as JSON whatever its Content-Type,
-/// and only once it is within `max_body_bytes`.
-pub fn decode(outcome: Outcome) -> Reading {
+/// and only once it is within `max_body_bytes`, the install-wide value
+/// (config Installed).
+pub fn decode(
+  outcome outcome: Outcome,
+  max_body_bytes max_body_bytes: Int,
+) -> Reading {
   case outcome {
     Error(transport) -> Failed(transport)
     Ok(response.Response(status: 404, ..)) -> NotFound
@@ -132,9 +137,9 @@ pub fn draining(reading: Reading) -> Bool {
 pub fn poll(
   endpoint endpoint: Endpoint,
   version version: String,
+  max_body_bytes max_body_bytes: Int,
   send send: fn(Request(String)) -> Outcome,
 ) -> Reading {
-  request(endpoint:, version:)
-  |> send
-  |> decode
+  let outcome = request(endpoint:, version:) |> send
+  decode(outcome:, max_body_bytes:)
 }

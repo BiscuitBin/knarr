@@ -20,10 +20,11 @@
 -- where the patches, LISTs and polls are sent; the client (ticket 41) the
 -- Event create. Tickets 19 and
 -- 25 add their own rows under the conventions here when they settle
--- (LaterRows); 21 added knarr_pods_unknown on 2026-10-13 (Standing), and 23
+-- (LaterRows); 21 added knarr_pods_unknown on 2026-10-13 (Standing); 23
 -- added no row on 2026-10-13 (LaterRows), naming the source of the
 -- deployment label on a cleanup (Labels) and when a Deployment's cleanup is
--- done (SeriesLife).
+-- done (SeriesLife); and 31 added the InvalidOverride Event and the lines
+-- it emits the same day (Events InvalidOverride, Logs Lines).
 
 ------------------------------------------------------------
 -- Value Types
@@ -303,6 +304,17 @@ contract Events {
         -- The Event ownership's Event raises for a yield has the reason
         -- AnnotationYielded. Its target, content, message and cadence are
         -- ownership's.
+    @invariant InvalidOverride
+        -- When a Deployment's override key reads invalid (config
+        -- InvalidValue), knarr makes one create attempt of an Event with
+        -- the reason InvalidOverride whose involvedObject is the Deployment
+        -- by name and uid and whose message is config's message, at the
+        -- cadence InvalidValue states: on entry per key, when the key first
+        -- reads invalid and again when its invalid value text changes, and
+        -- once more for each invalid key after a restart. Its line, under
+        -- AlsoLogged, carries deployment, key, value and reason. Ticket 31
+        -- added this row on 2026-10-13 under LaterRows, since ticket 30's
+        -- table carried no row for ticket 19's Event.
     @invariant ContractAbsent
         -- When a pod enters the contract-absent state (Cadence: state
         -- contract_absent), knarr makes one create attempt of an Event with
@@ -419,6 +431,25 @@ contract Logs {
         -- OnEntry says: once on entry in this process, none while the state
         -- stays, again on re-entry, and once for each current state after a
         -- restart.
+    @invariant Lines
+        -- The lines the reconcile core emits (ticket 31), by msg and level,
+        -- so an operator and a proof can grep for them. error: "token
+        -- unreadable" and "namespace unreadable", with reason, when a
+        -- cycle's file read fails (k8s_client TokenReload); "list failed",
+        -- with resource, pods, replicasets or deployments, and either
+        -- status, for a refused LIST, or error, the transport failure such
+        -- as "tls_alert unknown_ca", when a LIST fails. warning: "unknown
+        -- key", with deployment and key, once per discovery cycle for each
+        -- key config's unknown returns; "invalid override", "contract
+        -- absent" and "annotation yielded", each with reason and the
+        -- Event's fields (AlsoLogged); "event create failed", with reason
+        -- and status or error; "not ready with cost", with deployment, pod
+        -- and applied (StateLines). info: "started", once, with version;
+        -- "token changed", with sha256 and expires_at; "discovery", once
+        -- per cycle in which every LIST succeeded, with deployments and
+        -- pods, the counts knarr_targets carries. debug: "poll", with deployment, pod, port,
+        -- path, reading and, for a valid reading, cost and accepting;
+        -- "patch", with deployment, pod, purpose, keys and status or error.
     @invariant NeverLogged
         -- No line carries the service-account token or the Authorization
         -- header; k8s_client's TokenReload logs a token change only as the
@@ -445,9 +476,10 @@ contract Probes {
         -- /readyz answers 503 until the first discovery cycle in which every
         -- LIST of it succeeds, then 200 for the life of the process: the
         -- latch is never released. A configuration that runs no discovery
-        -- cycle, as the gate runs knarr (knarr Lifecycle NoPodEffects), is
-        -- ready once the supervision tree starts. The responses themselves
-        -- are knarr's Diagnostics Health and Readiness.
+        -- cycle, one without the discovery setting knarr's NoPodEffects
+        -- names, as the gate runs knarr, is ready once the supervision tree
+        -- starts. The responses themselves are knarr's Diagnostics Health
+        -- and Readiness.
 }
 
 ------------------------------------------------------------
@@ -457,3 +489,9 @@ contract Probes {
 config {
     log_level: Level = info
 }
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+open question "Tiers and reconcile NoPodIp: a target pod without a pod IP has no reading and no state, and the tier gauge counts it on no series, while knarr_targets counts it; whether knarr_pods should carry it on tier \"0\", as a pod knarr has not written, or the gauges should exclude it as they exclude a terminating pod."

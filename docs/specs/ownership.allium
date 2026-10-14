@@ -309,3 +309,9 @@ contract Ownership {
         -- annotations a cleanup releases, and that the times decide
         -- nothing, are lifecycle's.
 }
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+open question "Pod identity in the patch preconditions (ticket 31's review, for ticket 32): WriteMode's tests name the pod's state and never its uid, so a patch built from one pod's view is accepted by a pod deleted and recreated under the same name before it lands whenever the replacement passes the same tests. Once knarr has written a pod, the marker test of its raw string fails on such a replacement, and a yield or a removal always carries one; only a first write, testing a null marker or a null map, stays open, and a target pod's name is its ReplicaSet's with a random five-character suffix, so the window needs a name collision or a pod created by hand under that name inside one cycle. Whether every patch also tests that /metadata/uid equals the uid of the pod it was built from, which WriteMode's one exception for the deletionTimestamp test would then extend to, with the uid passed to patch, yield, cleanup and rejected."

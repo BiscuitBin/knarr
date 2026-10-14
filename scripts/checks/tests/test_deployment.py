@@ -85,10 +85,7 @@ def test_token_is_projected_with_the_shortest_expiry_and_read_only():
         "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
         "readOnly": True,
     }
-    assert {"name": "POD_NAME", "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}} in (
-        container["env"]
-    )
-    assert {"name": "ERL_FLAGS", "value": "-knarr s1_probe true"} in container["env"]
+    assert container["env"] == [{"name": "ERL_FLAGS", "value": "-knarr discovery true"}]
 
 
 def test_wrong_ca_variant_only_redirects_the_ca_file():
@@ -194,12 +191,8 @@ spec:
       automountServiceAccountToken: false
       containers:
       - env:
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
         - name: ERL_FLAGS
-          value: -knarr s1_probe true
+          value: -knarr discovery true
         image: knarr:local
         imagePullPolicy: Never
         livenessProbe:

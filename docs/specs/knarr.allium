@@ -39,7 +39,9 @@ contract Diagnostics {
         -- stays true for the life of the process (observability Probes
         -- Readiness). In a configuration that runs no discovery cycle, as
         -- the gate runs it (NoPodEffects), ready is true once the
-        -- supervision tree starts. A failed startup exits unsuccessfully.
+        -- supervision tree starts. A failed startup exits unsuccessfully;
+        -- an install-wide value outside its range is one (config
+        -- Installed).
     @invariant Metrics
         -- GET /metrics returns 200 and Prometheus text exposition including
         -- knarr_startups_total, incremented once per application startup,
@@ -68,11 +70,17 @@ contract Lifecycle {
         -- The root tolerates two restarts in five seconds. Exhausting this
         -- tolerance stops the application and exits the VM unsuccessfully.
     @invariant NoPodEffects
-        -- With the s1_probe configuration set, the skeleton reads only pods
-        -- in its own namespace and writes only the knarr.io/s1-probe
-        -- annotation on its own pod, through the k8s_client contract. It
-        -- changes no other Kubernetes object. Without that configuration,
-        -- as the gate runs it, it reads and changes nothing.
+        -- With the discovery configuration set, which the Deployment sets
+        -- through OTP application configuration as Listening sets the bind
+        -- address, knarr lists the pods, ReplicaSets and Deployments of its
+        -- own namespace, polls the pods config's targets names, and writes
+        -- only the annotations ownership's Owned and Recorded name, on live
+        -- pods, through the k8s_client contract; it creates the Events
+        -- observability's Events names and changes no other Kubernetes
+        -- object. Without that configuration, as the gate runs it, it reads
+        -- and changes nothing. Ticket 31 replaced the S1 probe's wording
+        -- here on 2026-10-13, when the reconciler became the client's
+        -- caller.
 }
 
 entity Runtime {

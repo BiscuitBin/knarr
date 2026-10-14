@@ -1,0 +1,68 @@
+name: Reconcile proof
+
+# Ticket 31's reconciler proof on kind, the successor of ticket 14's S1
+# proof: the native TLS evidence, the reconciler driving a fake worker's
+# cost across the first threshold and back, and the wrong-CA negative case.
+# It is the committed evidence's source on native linux/amd64, where the
+# ARM host cannot build the image. Non-required, like ci.yml's smoke job,
+# and never in ci.yml's check job. The transcripts under
+# .scratch/bootstrap/evidence/31/ are committed, so this workflow runs on a
+# push to main that changes the paths it proves, on workflow_dispatch, whose
+# log is where a fresh transcript is cut from, and on a pull request only
+# while it carries the cluster-s1 label: adding the label runs it, and each
+# push to a labelled pull request runs it again. Adding any other label does
+# not, and an unlabelled pull request never waits on a cluster.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/reconcile-proof.yml
+      - .github/actions/setup/**
+      - .scratch/bootstrap/evidence/14/tls/**
+      - .scratch/bootstrap/evidence/14/wrong-ca.sh
+      - .scratch/bootstrap/evidence/31/**
+      - Dockerfile
+      - .dockerignore
+      - Justfile
+      - deploy/base/**
+      - deploy/wrong-ca/**
+      - fixtures/fake_worker/**
+      - src/knarr/**
+      - scripts/checks/cluster.py
+
+permissions: {}
+
+concurrency:
+  group: reconcile-proof-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  cluster-s1:
+    name: Kind reconciler proof (non-required)
+    runs-on: ubuntu-24.04
+    if: >-
+      github.event_name != 'pull_request'
+      || (contains(github.event.pull_request.labels.*.name, 'cluster-s1')
+      && (github.event.action != 'labeled' || github.event.label.name == 'cluster-s1'))
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    env:
+      KNARR_CLUSTER: kind
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          cluster: "true"
+      - run: sh .scratch/bootstrap/evidence/14/tls/run.sh "$PWD" "$RUNNER_TEMP/tls"
+      - run: sh .scratch/bootstrap/evidence/31/reconcile-kind.sh "$PWD" "$RUNNER_TEMP/reconcile-kind"
+      - run: sh .scratch/bootstrap/evidence/14/wrong-ca.sh "$PWD" "$RUNNER_TEMP/wrong-ca"
+      - if: failure()
+        run: just cluster-diagnostics
+      - if: always()
+        run: just cluster-down

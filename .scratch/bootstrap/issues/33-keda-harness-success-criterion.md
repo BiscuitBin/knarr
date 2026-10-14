@@ -6,7 +6,7 @@
 
 **Non-goals:** The GKE acceptance run ([39](39-gke-production-rollout.md)). Load beyond the v1 scale target from 24. The budget clauses themselves: [46](46-spec-then-build-poll-schedule-and-patcher.md) builds them.
 
-**Blocked by:** 24, 29, 31, 32, 46
+**Blocked by:** 24, 29, 31, 32, 46, 47
 
 **From 17:** [Decision 0009](../../../docs/decisions/0009-allium-objective-map.md), map row for §9.16.
 

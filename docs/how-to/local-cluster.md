@@ -77,9 +77,9 @@ grants `list` and `patch` on pods, `list` on Deployments and ReplicaSets and
 `create` on events, the verbs the `Verbs` clause of
 [k8s_client.allium](../specs/k8s_client.allium) names, bound to the `knarr`
 ServiceAccount by a RoleBinding; token automount stays disabled, and a projected volume supplies a
-600-second token, the cluster CA and the namespace to the S1 probe
+600-second token, the cluster CA and the namespace to the reconciler
 ([Decision 0013](../decisions/0013-in-cluster-client.md)). The Deployment
-turns that probe on with `ERL_FLAGS=-knarr s1_probe true`; the gate's test
+turns discovery on with `ERL_FLAGS=-knarr discovery true`; the gate's test
 runs leave it off, so they make no API call. `just deploy <image> wrong-ca`
 deploys the negative-TLS variant from `deploy/wrong-ca/`, which needs a
 `knarr-wrong-ca` ConfigMap holding an unrelated `ca.crt`; the ticket 14
