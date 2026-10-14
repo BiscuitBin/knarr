@@ -401,6 +401,12 @@ fn event_of(request: Request(String)) -> #(String, String, String) {
   json.parse(request.body, decoder) |> should.be_ok
 }
 
+/// The captured log lines whose msg is `msg`.
+fn lines(harness: Harness, msg: String) -> List(String) {
+  list_of(harness.table, "logs")
+  |> list.filter(string.contains(_, "\"msg\":\"" <> msg <> "\""))
+}
+
 /// The fixed clock values the tests use, as RFC 3339 times.
 fn at(seconds: Int) -> String {
   case seconds {
@@ -486,8 +492,12 @@ pub fn nothing_is_due_between_crossings_test() -> Nil {
   stop_actor(pid(actor))
 }
 
-// Loop.Rejected422: a 422 keeps the patch's operations until the next LIST,
-// which classifies them, and the write is simply rebuilt.
+// Loop.Rejected422 and ownership Rejected: a 422 keeps the patch's
+// operations until the next LIST, which classifies them, and the write is
+// simply rebuilt. observability Events Rejected and Catalogue Patches: the
+// LIST shows the view unchanged, so every test would have passed and the
+// 422 is a rejection, raised as PatchRejected with status 422 before the
+// rebuilt patch and counted once.
 pub fn a_422_is_left_to_the_next_list_test() -> Nil {
   let harness = harness("422", [pod("1")])
   put(harness.table, "patch_status", "422")
@@ -499,11 +509,42 @@ pub fn a_422_is_left_to_the_next_list_test() -> Nil {
   put(harness.table, "patch_status", "200")
   tick(harness:, actor:, at: 1300)
   lists(harness)
+  let #(reason, message, kind) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  assert kind == "Pod"
+  assert string.contains(message, "rejected knarr's patch with 422;")
   let second = patch_of(next(harness), "1")
   assert string.contains(first, "\"500\"")
   assert string.contains(second, "\"500\"")
   assert string.contains(second, at(1300))
   quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"422\",purpose=\"apply\"} 1\n",
+  )
+  stop_actor(pid(actor))
+}
+
+// Loop.Rejected422 and ownership Rejected: a 422 whose next LIST shows a
+// changed view, here a foreign value under the cost key, failed its
+// precondition and is no rejection: no Event and no count (observability
+// Catalogue Patches).
+pub fn a_422_whose_view_changed_is_no_rejection_test() -> Nil {
+  let harness = harness("422-moved", [pod("1")])
+  put(harness.table, "patch_status", "422")
+  let actor = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  set_pods(harness.table, [PodFixture(..pod("1"), annotations: foreign())])
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  quiet(harness)
+  assert !string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"422-moved\"",
+  )
   stop_actor(pid(actor))
 }
 
@@ -795,6 +836,11 @@ fn yielded() -> String {
   |> json.to_string
 }
 
+/// A pod carrying the cost key with no marker: foreign (ownership Adoption).
+fn foreign() -> String {
+  json.object([#(cost_key, json.string("7"))]) |> json.to_string
+}
+
 // ownership Adoption, Yield and Event: a conflict is yielded first, the
 // Event is sent after the yield is accepted, and the write that follows is
 // built from the yield's response.
@@ -837,12 +883,13 @@ pub fn a_conflict_is_yielded_and_its_event_raised_after_the_patch_test() -> Nil 
   stop_actor(pid(actor))
 }
 
-// ownership Event and Loop.Rejected422: a yield the apiserver refuses with a
-// 422 raises no Event and ends the pod's turn, and the next LIST sees the
-// conflict again and yields again. The operations the 422 refused are kept
-// for that LIST's classification; ticket 32 gives the classification its
-// signal, so until then nothing here can tell them apart from forgotten ones.
-pub fn a_refused_yield_raises_no_event_and_is_rebuilt_from_the_next_list_test() -> Nil {
+// ownership Event, Rejected and Loop.Rejected422: a yield the apiserver
+// refuses with a 422 raises no AnnotationYielded and ends the pod's turn.
+// The next LIST shows the conflict unchanged, so the kept operations
+// classify as a rejection: PatchRejected with 422 for purpose yield
+// (observability Events Rejected) precedes the yield sent again, and the
+// accepted yield raises AnnotationYielded and ends the run.
+pub fn a_yield_refused_with_422_is_classified_by_the_next_list_and_yielded_again_test() -> Nil {
   let harness =
     harness("refused-yield", [
       PodFixture(..pod("1"), annotations: conflicting()),
@@ -862,11 +909,231 @@ pub fn a_refused_yield_raises_no_event_and_is_rebuilt_from_the_next_list_test() 
   )
   tick(harness:, actor:, at: 1300)
   lists(harness)
+  let #(reason, message, kind) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  assert kind == "Pod"
+  assert message
+    == "knarr.io/applied: the apiserver rejected knarr's patch with 422; the previous annotations stay and knarr tries again no sooner than the patch interval"
   let yield = patch_of(next(harness), "1")
   assert string.contains(yield, "\\\"yielded\\\":\\\"999\\\"")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "AnnotationYielded"
   quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"refused-yield\",purpose=\"yield\"} 1\n",
+  )
+  stop_actor(pid(actor))
+}
+
+// ownership Rejected and observability Events Rejected: a 403 on a yield is
+// a rejection at once, PatchRejected for purpose yield on the Pod, counted
+// under purpose yield; the yield was not accepted, so no AnnotationYielded
+// and no yield counted.
+pub fn a_403_on_a_yield_raises_patch_rejected_for_the_yield_test() -> Nil {
+  let harness =
+    harness("rejected-yield", [
+      PodFixture(..pod("1"), annotations: conflicting()),
+    ])
+  put(harness.table, "patch_status", "403")
+  let actor = start(harness)
+
+  lists(harness)
+  let yield = patch_of(next(harness), "1")
+  assert string.contains(yield, "\\\"yielded\\\":\\\"999\\\"")
+  let #(reason, message, kind) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  assert kind == "Pod"
+  assert message
+    == "knarr.io/applied: the apiserver rejected knarr's patch with 403; the previous annotations stay and knarr tries again no sooner than the patch interval"
+  quiet(harness)
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    "knarr_patch_rejections_total{deployment=\"rejected-yield\",purpose=\"yield\"} 1\n",
+  )
+  assert !string.contains(
+    exposition,
+    "knarr_yields_total{deployment=\"rejected-yield\"",
+  )
+  stop_actor(pid(actor))
+}
+
+// ownership Rejected; observability Events Rejected, AlsoLogged, Cadence
+// OnEntry, Logs Lines and Catalogue Patches: a 403 is a rejection at once.
+// The first of a run raises one PatchRejected Event on the Pod with the
+// patch's keys and the status, logs the "patch rejected" line with the
+// Event's fields, and counts; a second 403 in the run counts and raises
+// nothing; an accepted patch ends the run, so the next 403 raises again.
+pub fn a_403_raises_one_patch_rejected_event_per_run_test() -> Nil {
+  let harness = harness("rejected", [pod("1")])
+  put(harness.table, "patch_status", "403")
+  capture_logs(harness.table)
+  let actor = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, message, kind) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  assert kind == "Pod"
+  assert message
+    == "controller.kubernetes.io/pod-deletion-cost, knarr.io/applied: the apiserver rejected knarr's patch with 403; the previous annotations stay and knarr tries again no sooner than the patch interval"
+  quiet(harness)
+  let counter = fn(value) {
+    "knarr_patch_rejections_total{deployment=\"rejected\",purpose=\"apply\"} "
+    <> value
+    <> "\n"
+  }
+  assert string.contains(metrics.collect(), counter("1"))
+  let rejected = lines(harness, "patch rejected")
+  assert list.length(rejected) == 1
+  assert list.all(rejected, fn(line) {
+    string.ends_with(
+      line,
+      "\"level\":\"warning\",\"msg\":\"patch rejected\",\"reason\":\"PatchRejected\",\"deployment\":\"rejected\",\"pod\":\"1\",\"purpose\":\"apply\",\"status\":403,\"keys\":[\"controller.kubernetes.io/pod-deletion-cost\",\"knarr.io/applied\"]}\n",
+    )
+  })
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert string.contains(metrics.collect(), counter("2"))
+  assert list.length(lines(harness, "patch rejected")) == 1
+  put(harness.table, "patch_status", "200")
+  tick(harness:, actor:, at: 1330)
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  put(harness.table, "patch_status", "403")
+  tick(harness:, actor:, at: 1360)
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  quiet(harness)
+  assert string.contains(metrics.collect(), counter("3"))
+  assert list.length(lines(harness, "patch rejected")) == 2
+  release_logs()
+  stop_actor(pid(actor))
+}
+
+// observability Cadence Restart and Events Rejected: the run is in memory
+// only, so a restarted process raises PatchRejected once more on its next
+// rejection; SeriesLife: its counter starts again at 0.
+pub fn a_restart_raises_patch_rejected_once_more_test() -> Nil {
+  let harness = harness("rejected-restart", [pod("1")])
+  put(harness.table, "patch_status", "403")
+  let actor = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  quiet(harness)
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  stop_actor(pid(actor))
+
+  let actor = start(harness)
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"rejected-restart\",purpose=\"apply\"} 1\n",
+  )
+  stop_actor(pid(actor))
+}
+
+// ownership Adoption; observability Logs Lines, StateLines, Cadence OnEntry
+// and Restart, Standing: a foreign annotation logs the "foreign annotation"
+// line with its key and the value found once on entry, none while it
+// stays, again after a restart; it raises no Event and counts on
+// knarr_annotations as foreign.
+pub fn a_foreign_annotation_is_logged_on_entry_and_again_after_a_restart_test() -> Nil {
+  let harness =
+    harness("foreign", [PodFixture(..pod("1"), annotations: foreign())])
+  capture_logs(harness.table)
+  let actor = start(harness)
+
+  lists(harness)
+  quiet(harness)
+  let foreign = lines(harness, "foreign annotation")
+  assert list.length(foreign) == 1
+  assert list.all(foreign, fn(line) {
+    string.ends_with(
+      line,
+      "\"level\":\"warning\",\"msg\":\"foreign annotation\",\"deployment\":\"foreign\",\"pod\":\"1\",\"annotation\":\"pod-deletion-cost\",\"key\":\"controller.kubernetes.io/pod-deletion-cost\",\"value\":\"7\"}\n",
+    )
+  })
+  assert string.contains(
+    metrics.collect(),
+    "knarr_annotations{deployment=\"foreign\",annotation=\"pod-deletion-cost\",standing=\"foreign\"} 1\n",
+  )
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  quiet(harness)
+  assert list.length(lines(harness, "foreign annotation")) == 1
+  stop_actor(pid(actor))
+
+  let actor = start(harness)
+  lists(harness)
+  quiet(harness)
+  assert list.length(lines(harness, "foreign annotation")) == 2
+  release_logs()
+  stop_actor(pid(actor))
+}
+
+// observability Cadence OnEntry and reconcile Terminating: a terminating
+// pod is in no state: a foreign value on it logs no line and counts on no
+// standing gauge, and a rejection run on it ends, so the pod raises
+// PatchRejected again once it is live again; it counts only in
+// knarr_targets{kind="pods"}.
+pub fn a_terminating_pod_leaves_every_state_test() -> Nil {
+  let harness =
+    harness("terminating", [
+      PodFixture(..pod("1"), annotations: foreign(), terminating: True),
+      pod("2"),
+    ])
+  put(harness.table, "patch_status", "403")
+  capture_logs(harness.table)
+  let actor = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "2")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  quiet(harness)
+  assert lines(harness, "foreign annotation") == []
+  let exposition = metrics.collect()
+  assert string.contains(exposition, "knarr_targets{kind=\"pods\"} 2\n")
+  assert !string.contains(
+    exposition,
+    "knarr_annotations{deployment=\"terminating\"",
+  )
+  set_pods(harness.table, [
+    PodFixture(..pod("1"), annotations: foreign(), terminating: True),
+    PodFixture(..pod("2"), terminating: True),
+  ])
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  quiet(harness)
+  set_pods(harness.table, [
+    PodFixture(..pod("1"), annotations: foreign(), terminating: True),
+    pod("2"),
+  ])
+  tick(harness:, actor:, at: 1330)
+  lists(harness)
+  patch_of(next(harness), "2")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  quiet(harness)
+  assert lines(harness, "foreign annotation") == []
+  release_logs()
   stop_actor(pid(actor))
 }
 
