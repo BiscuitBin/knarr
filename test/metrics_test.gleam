@@ -65,17 +65,38 @@ pub fn poll_duration_histogram_carries_the_fixed_buckets_test() -> Nil {
   assert bucket(exposition:, metric:, le: "60") == top
   assert bucket(exposition:, metric:, le: "+Inf") == inf + 1
   assert string.contains(exposition, "knarr_poll_duration_seconds_count ")
-  let bounds = [
-    "0.01", "0.025", "0.05", "0.1", "0.25", "0.5", "1", "2.5", "5", "10", "30",
-    "60", "+Inf",
-  ]
-  list.each(bounds, fn(le) {
-    assert bucket(exposition:, metric:, le:) >= 0
-  })
+  // Exactly the fixed bounds, no more and no fewer.
+  assert bounds(exposition:, metric:)
+    == [
+      "0.01", "0.025", "0.05", "0.1", "0.25", "0.5", "1", "2.5", "5", "10", "30",
+      "60", "+Inf",
+    ]
 
-  // SeriesLife: removing the histogram's one series is a call that returns,
-  // not a crash on a kind `remove` does not know.
+  // SeriesLife: removing the histogram's one series takes its buckets,
+  // count and sum out of the exposition.
   metrics.remove(metric, [])
+  let exposition = metrics.collect()
+  assert bounds(exposition:, metric:) == []
+  assert !string.contains(exposition, metric <> "_count ")
+  assert !string.contains(exposition, metric <> "_sum ")
+}
+
+/// The `le` bound of every bucket line of the histogram, in exposition order.
+fn bounds(
+  exposition exposition: String,
+  metric metric: String,
+) -> List(String) {
+  let prefix = metric <> "_bucket{le=\""
+  exposition
+  |> string.split("\n")
+  |> list.filter(fn(line) { string.starts_with(line, prefix) })
+  |> list.map(fn(line) {
+    line
+    |> string.drop_start(string.length(prefix))
+    |> string.split("\"")
+    |> list.first
+    |> result.unwrap("")
+  })
 }
 
 /// The count of a histogram's bucket `le`, -1 when absent.
@@ -163,6 +184,9 @@ pub fn reset_wipes_the_deployment_labelled_budget_series_test() -> Nil {
   metrics.set(observability.patches_pending, [deployment], 1)
   metrics.inc(observability.patches_total, [deployment, "cleanup", "error"])
   metrics.inc(observability.polls_skipped_total, [deployment])
+  // An install-wide series, no deployment label, survives the reset.
+  metrics.inc("knarr_events_total", ["metrics-reset", "created"])
+  metrics.inc("knarr_events_total", ["metrics-reset", "created"])
   let exposition = metrics.collect()
   assert string.contains(
     exposition,
@@ -176,8 +200,31 @@ pub fn reset_wipes_the_deployment_labelled_budget_series_test() -> Nil {
   metrics.reset_deployment_series()
   let exposition = metrics.collect()
   assert !string.contains(exposition, "deployment=\"metrics-reset\"")
+  assert string.contains(
+    exposition,
+    "knarr_events_total{reason=\"metrics-reset\",result=\"created\"} 2\n",
+  )
   assert metrics.label_names(observability.polls_skipped_total)
     == ["deployment"]
+
+  // Declared again, so each series counts from 0 and sets afresh.
+  metrics.inc(observability.patches_total, [deployment, "cleanup", "error"])
+  metrics.inc(observability.polls_skipped_total, [deployment])
+  metrics.set(observability.patches_pending, [deployment], 3)
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    "knarr_patches_total{deployment=\"metrics-reset\",purpose=\"cleanup\",result=\"error\"} 1\n",
+  )
+  assert string.contains(
+    exposition,
+    "knarr_polls_skipped_total{deployment=\"metrics-reset\"} 1\n",
+  )
+  assert string.contains(
+    exposition,
+    "knarr_patches_pending{deployment=\"metrics-reset\"} 3\n",
+  )
+  metrics.reset_deployment_series()
 }
 
 // Catalogue.Labels: the label names of every metric come from the one
