@@ -1,0 +1,17 @@
+# 48: Detect a patch that landed on a replacement pod
+
+**Context:** Ticket [32](32-spec-then-build-ownership-lifecycle.md) settled the pod-identity question at the end of [ownership.allium](../../../docs/specs/ownership.allium) on 2026-10-14 under `Precondition`: the patch tests name the pod's state and never its uid, so a first write, which tests a null marker or a null map, can be accepted by a pod deleted and recreated under the same name inside one cycle. The loop heals it at the next cycle, and no uid test is added to the patch. The patch response carries the patched pod's uid, since k8s_client's `patch_pod` returns the patched pod as the newest view (k8s_client `Client` `Verbs`), so comparing it with the uid of the view the patch was built from detects the case at no precondition cost, once the patcher [46](46-spec-then-build-poll-schedule-and-patcher.md) builds owns the response.
+
+**What to build:** In the patcher's result handling, compare the uid of the pod `patch_pod` returns with the uid of the view the patch was built from, for every accepted patch that returns a usable Pod, apply, yield and cleanup alike; an accepted patch whose 200 body does not decode (the reconciler's `AcceptedUnseen`, k8s_client `UndecodableBody`) carries no uid and is undetectable through this seam, so it is handled as an ordinary acceptance, with no mismatch invented and no retry. On a mismatch: log one warning line, msg "patch landed on a replacement pod", with deployment, pod, purpose and the expected and found uids, the field names settled with `tend` under observability `Logs` `Lines`; count one counter, named under observability `Catalogue` `Naming` and `Labels`, for example `knarr_patches_misplaced_total{deployment, purpose}`, with its row added under `LaterRows` and `SeriesLife`; raise no Event. Add a clause under ownership `Precondition` naming the detection, then the tests and the code, in the order the `gleam-change` skill sets.
+
+**Non-goals:** A uid test in the patch, decided against in ownership `Precondition`. Any change to what the loop does after the detection: the next cycle heals it as `Precondition` says. The patcher's result handling itself, which 46 builds.
+
+**Blocked by:** 32, 46
+
+**MVP critical path:** no. The window needs a name collision or a pod made by hand under a target's name inside one cycle, and the loop heals it without the detection.
+
+**Status:** ready-for-agent, round 2
+
+- [ ] The line and the counter are stated with `tend` under observability `Logs` `Lines`, `Catalogue` `Naming`, `Labels`, `SeriesLife` and `LaterRows`, and a clause under ownership `Precondition` names the detection; `just check-specs` reports no diagnostic and `just analyse-specs` no finding.
+- [ ] The patcher compares the two uids on every accepted patch that returns a usable Pod and acts only on a mismatch. Tests: equal uids make no line and no count; a mismatch makes one line and one count and no Event create; an accepted patch with an undecodable body makes no line and no count; the comparison reads only the response and the view, nothing else (ownership `Pure` for the comparison itself).
+- [ ] Each clause has a test that traces to it, `just check` passes, and the hand-back gives the `plan-spec` obligation count of each module touched.

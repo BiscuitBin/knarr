@@ -268,6 +268,24 @@ pub fn rejected_message_of_a_cleanup_leaving_two_annotations_test() -> Nil {
     == "controller.kubernetes.io/pod-deletion-cost, cluster-autoscaler.kubernetes.io/safe-to-evict: the apiserver rejected knarr's cleanup with 422; controller.kubernetes.io/pod-deletion-cost=1800, cluster-autoscaler.kubernetes.io/safe-to-evict=false stay on the pod until removed, for example kubectl annotate pod emails-7d9f-abcde controller.kubernetes.io/pod-deletion-cost- cluster-autoscaler.kubernetes.io/safe-to-evict-"
 }
 
+// Events.CleanupRejected: when left is empty, as for a cleanup that would
+// have rewritten the marker keeping other records, the message says the
+// record stays and names no command.
+pub fn rejected_message_of_a_cleanup_leaving_nothing_names_no_command_test() -> Nil {
+  assert observability.rejected_message(rejected(Cleanup))
+    == "controller.kubernetes.io/pod-deletion-cost, cluster-autoscaler.kubernetes.io/safe-to-evict: the apiserver rejected knarr's cleanup with 422; the record stays and knarr tries again no sooner than the patch interval"
+}
+
+// Events.Rejected: a 422 classified as a rejection reports 422, for a patch
+// and for a cleanup.
+pub fn rejected_message_of_a_classified_422_reports_422_test() -> Nil {
+  let apply = RejectedEvent(..rejected(Apply), status: 422)
+  let cleanup = RejectedEvent(..rejected(Cleanup), status: 422)
+
+  assert string.contains(observability.rejected_message(apply), "with 422")
+  assert string.contains(observability.rejected_message(cleanup), "with 422")
+}
+
 const absent =
   AbsentEvent(
     deployment_name: "emails",
@@ -300,6 +318,8 @@ pub fn event_functions_are_pure_test() -> Nil {
     == observability.reason(rejected(Cleanup))
   assert observability.rejected_message(rejected(Apply))
     == observability.rejected_message(rejected(Apply))
+  assert observability.rejected_message(rejected(Cleanup))
+    == observability.rejected_message(rejected(Cleanup))
   assert observability.absent_message(absent)
     == observability.absent_message(absent)
 }
@@ -322,6 +342,12 @@ const not_ready =
     annotation: None,
     state: NotReadyWithCost,
   )
+
+const rejected_entry =
+  Entry(pod_name: "emails-7d9f-abcde", annotation: None, state: Rejected)
+
+const cleanup_entry =
+  Entry(pod_name: "emails-7d9f-abcde", annotation: None, state: CleanupRejected)
 
 // Cadence.OnEntry: an entry seen does not hold is announced.
 pub fn entered_announces_a_new_entry_test() -> Nil {
@@ -377,16 +403,53 @@ pub fn entered_announces_foreign_per_annotation_test() -> Nil {
     == [foreign_evict]
 }
 
-// Cadence.OnEntry: a pod in two states at once is two entries.
+// Cadence.OnEntry and Events.Rejected: a pod keeps one run per reason, so a
+// cleanup_rejected entry is announced while the same pod's rejected entry is
+// seen; a pod in two states at once is two entries.
 pub fn entered_tells_the_states_of_one_pod_apart_test() -> Nil {
-  let rejected_entry = Entry(..absent_entry, state: Rejected)
-  let cleanup_entry = Entry(..absent_entry, state: CleanupRejected)
-
   assert observability.entered(seen: [rejected_entry], current: [
       rejected_entry,
       cleanup_entry,
     ])
     == [cleanup_entry]
+}
+
+// Cadence.OnEntry and Events.Rejected: the first rejection of a run enters
+// rejected, which is announced.
+pub fn entered_announces_the_first_rejection_of_a_run_test() -> Nil {
+  assert observability.entered(seen: [], current: [rejected_entry])
+    == [rejected_entry]
+}
+
+// Cadence.OnEntry and Events.Rejected: a second rejection in the same run
+// stays in rejected and is not announced again.
+pub fn entered_is_silent_for_a_second_rejection_in_a_run_test() -> Nil {
+  assert observability.entered(seen: [rejected_entry], current: [rejected_entry])
+    == []
+}
+
+// Cadence.OnEntry and Events.Rejected: an accepted patch ends the run and
+// clears the entry, so the next rejection re-enters rejected and is
+// announced again.
+pub fn entered_announces_a_rejection_after_an_accepted_patch_test() -> Nil {
+  let after_the_accepted_patch =
+    observability.entered(seen: [rejected_entry], current: [])
+  assert after_the_accepted_patch == []
+
+  assert observability.entered(seen: [], current: [rejected_entry])
+    == [rejected_entry]
+}
+
+// Cadence.Restart: seen is empty after a restart, so the rejected,
+// cleanup_rejected and foreign entries current holds are all announced once
+// more, in current's order.
+pub fn entered_announces_rejected_cleanup_rejected_and_foreign_after_a_restart_test() -> Nil {
+  assert observability.entered(seen: [], current: [
+      rejected_entry,
+      cleanup_entry,
+      foreign_cost,
+    ])
+    == [rejected_entry, cleanup_entry, foreign_cost]
 }
 
 // Cadence.Pure: entered gives the same answer every time.
@@ -626,6 +689,7 @@ pub fn metric_names_follow_the_naming_convention_test() -> Nil {
   assert observability.pods_unknown == "knarr_pods_unknown"
   assert observability.pods_contract_absent == "knarr_pods_contract_absent"
   assert observability.yields_total == "knarr_yields_total"
+  assert observability.patch_rejections_total == "knarr_patch_rejections_total"
   assert observability.last_discovery_timestamp_seconds
     == "knarr_last_discovery_timestamp_seconds"
   assert observability.discovery_duration_seconds

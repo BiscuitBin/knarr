@@ -59,6 +59,33 @@ def test_role_grants_exactly_the_verbs_the_client_uses():
     assert binding["subjects"] == [{"kind": "ServiceAccount", "name": "knarr"}]
 
 
+def test_one_replica_without_leader_election_cannot_scale_or_touch_a_template():
+    """lifecycle Restart Replica and ownership Objects.
+
+    knarr runs as one replica under strategy Recreate with no leader
+    election, so no Lease or other coordination resource is rendered, and
+    the Role grants no verb on deployments or replicasets beyond list, so
+    knarr cannot change a replica count or a pod template; its only write
+    is a patch on pods.
+    """
+    items = resources()
+    by_kind = {item["kind"]: item for item in items}
+    spec = by_kind["Deployment"]["spec"]
+    assert spec["replicas"] == 1
+    assert spec["strategy"] == {"type": "Recreate"}
+    assert "Lease" not in by_kind
+    assert not any(item["apiVersion"].startswith("coordination.k8s.io") for item in items)
+    writes = {
+        (group, resource, verb)
+        for rule in by_kind["Role"]["rules"]
+        for group in rule["apiGroups"]
+        for resource in rule["resources"]
+        for verb in rule["verbs"]
+        if verb in {"create", "update", "patch", "delete", "deletecollection"}
+    }
+    assert writes == {("", "pods", "patch"), ("", "events", "create")}
+
+
 def test_token_is_projected_with_the_shortest_expiry_and_read_only():
     by_kind = {item["kind"]: item for item in resources()}
     pod = by_kind["Deployment"]["spec"]["template"]["spec"]

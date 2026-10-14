@@ -8,6 +8,8 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 - The reconcile loop: discovery of opted-in Deployments by three LISTs matched by owner chain, one poll of every target pod per cycle, the mapped pod-deletion-cost against the marker's applied value, the JSON Patch write mode with ownership's marker and yield, the ContractAbsent, InvalidOverride and AnnotationYielded Events, JSON log lines through OTP logger, the discovery, cost, standing and pod-state metrics, and `/readyz` latching after the first complete discovery cycle. Discovery is turned on with `-knarr discovery true`; a bad install-wide value fails the start naming the key.
 - `max_body_bytes` enforced on the poll path: the install-wide value reaches the poller, and a 200 whose body is longer than it is an invalid reading.
+- The rejection signals: a patch the apiserver rejects with 400 or 403, or a 422 the next LIST classifies as a rejection, counts on `knarr_patch_rejections_total{deployment, purpose}`, raises one `PatchRejected` Event on the Pod per rejection run (`CleanupRejected` for a cleanup, in a run of its own) and logs a warning line; a foreign annotation logs one warning line on entry and raises no Event.
+- The pure cleanup contracts: ownership's `cleanup` builds the patch that releases owned annotations and drops their records, removing the marker when none remains, and the new `lifecycle` module derives what each pod's View makes due and when a Deployment's cleanup is done. The discovery hand-off that builds the Views and sends the cleanup is ticket 47's.
 - A JSON log formatter that never emits a non-JSON line: a report it cannot render becomes a fixed `unformattable` error line, and truncation is by character, not byte.
 
 ### Changed
