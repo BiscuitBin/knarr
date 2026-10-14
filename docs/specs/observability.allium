@@ -82,7 +82,7 @@ value Entry {
 }
 
 -- One field of a log line: its name and the JSON text of its value, a quoted
--- and escaped string, an integer or a boolean.
+-- and escaped string, an integer, a boolean or an array of strings.
 value Field {
     name: String
     value: String
@@ -132,9 +132,14 @@ contract Catalogue {
         -- content type are knarr's Diagnostics.
     @invariant Labels
         -- A per-workload metric carries the label deployment, the
-        -- Deployment's name, which an install bounds at about 50 values
-        -- (budget's scale target), plus labels whose values are the small
-        -- fixed sets this module names. No metric carries a pod label or a
+        -- Deployment's name, about 50 values at budget's scale target, which
+        -- is a sizing assumption and not a limit knarr enforces, plus labels
+        -- whose values are the fixed sets this module names. tier ranges
+        -- over drained and 0 to the length of the Deployment's effective
+        -- threshold list, whose length config's Keys does not cap (ticket
+        -- 19), so its value count, like deployment's, is a sizing
+        -- assumption and not a limit knarr enforces; every other label set
+        -- is fixed here. No metric carries a pod label or a
         -- namespace label: an install is one namespace (§9.18), and per-pod
         -- detail lives in Events and log lines. A label name that also names
         -- a log field means the same thing in both (Logs Format).
@@ -194,8 +199,14 @@ contract Catalogue {
         -- knarr_annotations{deployment, annotation, standing} is a gauge of
         -- the owned annotations on the Deployment's pods by ownership's
         -- standing, annotation being Owned.name and standing owned,
-        -- conflict, yielded or foreign; unowned is not counted. Its foreign
-        -- series are the gauge ownership's Adoption requires.
+        -- conflict, yielded or foreign; unowned is not counted. An
+        -- annotation counts on a pod exactly when reconcile asks its standing
+        -- under ownership's Adoption: when the Deployment enables it, and
+        -- otherwise only while the marker holds a record for it, so a value
+        -- an opt-out leaves counts until cleanup removes it, and a
+        -- safe-to-evict on a pod whose Deployment never enabled it counts
+        -- nowhere. Its foreign series are the gauge ownership's Adoption
+        -- requires.
         -- knarr_yields_total{deployment, annotation} counts every yield
         -- patch accepted. knarr_pods_not_ready_with_cost{deployment} is the
         -- gauge worker_contract's ReadinessWarning requires, and
@@ -220,10 +231,14 @@ contract Catalogue {
         -- 1, 2.5, 5, 10, 30 and 60 seconds and +Inf. They are not derived
         -- from config.
     @invariant SeriesLife
-        -- A Deployment leaving the target set removes every series labelled
-        -- with it, counters included: retire returns the series it is given
-        -- less every one whose deployment label is that name, so a
-        -- Deployment that returns starts its counters at 0. A terminating
+        -- A Deployment's series live while knarr acts on its pods. Once the
+        -- Deployment has left the target set and nothing for its pods is
+        -- pending, in flight or awaiting cleanup (ticket 23), every series
+        -- labelled with it is removed, counters included, so a late
+        -- response or an opt-out cleanup is counted before the series go:
+        -- retire returns the series it is given less every one whose
+        -- deployment label is that name, and a Deployment that returns
+        -- starts its counters at 0. A terminating
         -- pod counts only in knarr_targets; the tier, standing and pod-state
         -- gauges exclude it. Every count is in memory: a restart starts the
         -- counters at 0, and the per-Deployment gauges carry no series until
@@ -269,9 +284,12 @@ contract Events {
         -- On the first rejection of a run for a pod, knarr makes one create
         -- attempt of an Event on the Pod by name and uid, with reason's
         -- value for it: PatchRejected for purpose apply or yield and
-        -- CleanupRejected for cleanup. A run starts with that rejection and
-        -- ends with the next accepted patch to the pod; a rejection in the
-        -- same run raises nothing more. A rejection is known as Catalogue's
+        -- CleanupRejected for cleanup. A pod keeps one run per reason: a run
+        -- starts with a rejection of its reason and ends with the next
+        -- accepted patch to the pod, which ends both; a rejection raises
+        -- nothing more while its own reason's run lasts, so a cleanup
+        -- rejected after a PatchRejected still raises CleanupRejected. A
+        -- rejection is known as Catalogue's
         -- Patches says, a 400 or 403 at once and a 422 when the next LIST
         -- classifies it. The run is in memory only (Cadence: states rejected
         -- and cleanup_rejected), so a restart raises it once more on the next
@@ -330,12 +348,16 @@ contract Logs {
         -- render writes the members time, as RFC 3339 UTC with milliseconds
         -- (2026-10-12T09:30:00.123Z), level, as Level's literal, and msg, in
         -- that order, then each field in the order given, flat, no
-        -- whitespace, and a newline. A field's name is one of deployment,
-        -- pod, annotation (Owned.name), reading, cost, accepting, standing,
-        -- purpose, status, reason, applied, found, retry_after_seconds,
-        -- pause_seconds and scope, appears at most once and is present only
-        -- when it applies; a name that is also a metric label means the
-        -- same thing.
+        -- whitespace, and a newline. These names are the shared vocabulary
+        -- and mean the same on every line: deployment, pod, annotation (one
+        -- Owned.name), reading, cost, accepting, standing, purpose, status,
+        -- reason, applied, found, retry_after_seconds, pause_seconds and
+        -- scope; a name that is also a metric label means the same thing. A
+        -- line whose owner needs more uses further flat snake_case names,
+        -- among them port and path for a poll, keys for the full annotation
+        -- keys of a patch, as an array of strings, and sha256 and
+        -- expires_at for a token change. A field appears at most once and
+        -- only when it applies.
     @invariant Levels
         -- error: knarr cannot do its job, as when the token or the
         -- namespace is unreadable, a LIST fails or a process crashes.
@@ -376,10 +398,12 @@ contract Probes {
         -- (budget Restart) and fix nothing. A stalled loop is an alert on
         -- knarr_last_discovery_timestamp_seconds, not a liveness failure.
     @invariant Readiness
-        -- /readyz answers 503 until the first discovery cycle in which both
-        -- LISTs succeed, then 200 for the life of the process: the latch is
-        -- never released. The responses themselves are knarr's Diagnostics
-        -- Health and Readiness.
+        -- /readyz answers 503 until the first discovery cycle in which every
+        -- LIST of it succeeds, then 200 for the life of the process: the
+        -- latch is never released. A configuration that runs no discovery
+        -- cycle, as the gate runs knarr (knarr Lifecycle NoPodEffects), is
+        -- ready once the supervision tree starts. The responses themselves
+        -- are knarr's Diagnostics Health and Readiness.
 }
 
 ------------------------------------------------------------
