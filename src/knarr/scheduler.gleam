@@ -1,0 +1,617 @@
+//// The scheduler process: budget's PollSchedule (docs/specs/budget.allium)
+//// run under supervision. It keeps every target pod's place on the poll
+//// ladder, queues the due polls under the concurrency bound and sends each
+//// through a worker started under the poll-worker factory, which polls
+//// through the injected `poll` and answers on a subject this process owns.
+//// Every decision is budget's; the clock and the draw are injected, each
+//// timer carries the identity of what it wakes, and every reading leaves
+//// through the injected `polled` sink, so this module never names the
+//// reconciler. Nothing here reaches Erlang but through gleam_otp and
+//// gleam_erlang.
+
+import gleam/bool
+import gleam/dict.{type Dict}
+import gleam/erlang/process.{type Name, type Pid, type Subject}
+import gleam/int
+import gleam/list
+import gleam/option.{type Option, None, Some}
+import gleam/order.{type Order, Eq}
+import gleam/otp/actor
+import gleam/otp/factory_supervisor
+import gleam/otp/supervision
+import gleam/set
+import gleam/string
+import knarr/budget.{type Schedule, Schedule}
+import knarr/metrics
+import knarr/observability.{type Field, type Level}
+import knarr/poller.{type Endpoint}
+import knarr/reconcile.{type Reading}
+
+/// One target pod with a pod IP as the LIST showed it, with the poll
+/// interval of its Deployment.
+pub type Joiner {
+  Joiner(
+    pod_name: String,
+    deployment: String,
+    interval_s: Int,
+    endpoint: Endpoint,
+  )
+}
+
+/// What the scheduler hands the reconciler for one returned poll: the
+/// reading as reconcile consumes it, and the clock at delivery.
+pub type Polled {
+  Polled(
+    pod_name: String,
+    deployment: String,
+    endpoint: Endpoint,
+    reading: Reading,
+    at_ms: Int,
+  )
+}
+
+pub type Config {
+  Config(
+    /// This process's name; the reconciler sends `Listed` to it.
+    self: Name(Message),
+    /// The poll-worker factory's name, started by `workers_supervised`.
+    workers: Name(factory_supervisor.Message(Job, Nil)),
+    /// One poll of a worker. Production passes `poller.poll` over
+    /// `poller_http.send`; a test passes a closure.
+    poll: fn(Endpoint) -> poller.Reading,
+    /// The clock, in unix milliseconds.
+    now: fn() -> Int,
+    /// A draw from 0 to one below the bound given; production passes
+    /// `int.random`.
+    random: fn(Int) -> Int,
+    /// Where every delivered reading goes: the reconciler's guarded send.
+    polled: fn(Polled) -> Nil,
+    /// config.poll_timeout, in seconds.
+    poll_timeout_s: Int,
+    /// config.poll_jitter_percent.
+    jitter_percent: Int,
+    /// config.poll_concurrency.
+    concurrency: Int,
+  )
+}
+
+/// The argument the factory's template takes: one poll to run, and the
+/// subject to answer on.
+pub type Job {
+  Job(
+    pod_name: String,
+    endpoint: Endpoint,
+    poll: fn(Endpoint) -> poller.Reading,
+    now: fn() -> Int,
+    reply: Subject(Message),
+  )
+}
+
+pub type Message {
+  /// From the reconciler after every successful discovery cycle: every
+  /// target pod's name, and the joiners, the targets with a pod IP, each
+  /// with its interval.
+  Listed(listed: List(String), joining: List(Joiner))
+  /// The single due-time timer, or a test moving the clock.
+  Wake
+  /// From a worker: the reading and the wall time the poll took.
+  Returned(
+    pod_name: String,
+    worker: Pid,
+    reading: poller.Reading,
+    elapsed_ms: Int,
+  )
+  /// The per-flight watchdog: the worker did not return within twice the
+  /// timeout and a second.
+  Deadline(pod_name: String, worker: Pid)
+  /// A worker exited, from `process.select_monitors`.
+  Down(process.Down)
+}
+
+/// One scheduled pod: its place on the ladder and what a poll of it needs.
+type Entry {
+  Entry(
+    schedule: Schedule,
+    deployment: String,
+    interval_s: Int,
+    endpoint: Endpoint,
+  )
+}
+
+/// One poll sent and not yet returned.
+type Flight {
+  Flight(worker: Pid, monitor: process.Monitor, deadline: process.Timer)
+}
+
+type State {
+  State(
+    config: Config,
+    self: Subject(Message),
+    /// The plain subject workers answer on: a send to it after this process
+    /// died is dropped, where a send to the name would crash the worker.
+    replies: Subject(Message),
+    /// By pod name. The queue is derived: every entry outstanding with no
+    /// flight, oldest due first.
+    schedules: Dict(String, Entry),
+    /// By pod name; `sent` is its size.
+    flights: Dict(String, Flight),
+    wake: Option(process.Timer),
+  )
+}
+
+/// The poll-worker factory as a child of the reconciler's set, named so the
+/// scheduler finds it again after a restart. Its children are temporary: a
+/// worker that crashed is reported by the monitor, not polled again.
+pub fn workers_supervised(
+  name: Name(factory_supervisor.Message(Job, Nil)),
+) -> supervision.ChildSpecification(factory_supervisor.Supervisor(Job, Nil)) {
+  factory_supervisor.worker_child(worker)
+  |> factory_supervisor.named(name)
+  |> factory_supervisor.restart_strategy(supervision.Temporary)
+  |> factory_supervisor.supervised
+}
+
+/// Starts the scheduler with no schedule: the first `Listed` builds it
+/// (budget Restart). The selector takes the name, the workers' reply
+/// subject and the monitors.
+pub fn start(config: Config) -> actor.StartResult(Subject(Message)) {
+  actor.new_with_initialiser(1000, fn(self) {
+    let replies = process.new_subject()
+    let selector =
+      process.new_selector()
+      |> process.select(self)
+      |> process.select(replies)
+      |> process.select_monitors(Down)
+    metrics.set(observability.poll_queue_depth, [], 0)
+    actor.initialised(State(
+      config:,
+      self:,
+      replies:,
+      schedules: dict.new(),
+      flights: dict.new(),
+      wake: None,
+    ))
+    |> actor.selecting(selector)
+    |> actor.returning(self)
+    |> Ok
+  })
+  |> actor.named(config.self)
+  |> actor.on_message(on_message)
+  |> actor.start
+}
+
+fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
+  case message {
+    Listed(listed:, joining:) -> join(state:, listed:, joining:)
+    Wake -> State(..state, wake: None)
+    Returned(pod_name:, worker:, reading:, elapsed_ms:) ->
+      returned(state:, pod_name:, worker:, reading:, elapsed_ms:)
+    Deadline(pod_name:, worker:) -> overdue(state:, pod_name:, worker:)
+    Down(process.ProcessDown(pid:, ..)) -> crashed(state, pid)
+    Down(process.PortDown(..)) -> state
+  }
+  |> settle
+}
+
+// ------------------------------------------------------------- The LIST ---
+
+/// The schedules after a LIST (budget Leaving, Phase): a joiner with no
+/// entry gets its phase from a fresh draw, one already scheduled keeps its
+/// ladder and takes the Deployment, interval and endpoint the LIST now
+/// shows, and `budget.on_list` drops every pod the LIST no longer shows,
+/// its queued poll with it and its flight's reply made unknown. A
+/// Deployment with no pod left loses its skipped-poll series.
+fn join(
+  state state: State,
+  listed listed: List(String),
+  joining joining: List(Joiner),
+) -> State {
+  let now = state.config.now()
+  let fresh =
+    joining
+    |> list.filter(fn(one) { !dict.has_key(state.schedules, one.pod_name) })
+    |> list.map(fn(one) {
+      budget.phase(
+        pod_name: one.pod_name,
+        now:,
+        interval: one.interval_s,
+        random: state.config.random(one.interval_s),
+      )
+    })
+  let survivors =
+    budget.on_list(
+      schedules: dict.values(state.schedules)
+        |> list.map(fn(entry) { entry.schedule }),
+      listed:,
+      joining: fresh,
+    )
+  let joiners =
+    joining |> list.map(fn(one) { #(one.pod_name, one) }) |> dict.from_list
+  let schedules =
+    list.fold(survivors, dict.new(), fn(acc, schedule) {
+      let pod_name = schedule.pod_name
+      case dict.get(joiners, pod_name), dict.get(state.schedules, pod_name) {
+        Ok(joiner), _ ->
+          dict.insert(
+            acc,
+            pod_name,
+            Entry(
+              schedule:,
+              deployment: joiner.deployment,
+              interval_s: joiner.interval_s,
+              endpoint: joiner.endpoint,
+            ),
+          )
+        Error(Nil), Ok(entry) ->
+          dict.insert(acc, pod_name, Entry(..entry, schedule:))
+        Error(Nil), Error(Nil) -> acc
+      }
+    })
+  let dropped =
+    state.schedules
+    |> dict.to_list
+    |> list.filter(fn(pair) { !dict.has_key(schedules, pair.0) })
+  let flights =
+    list.fold(dropped, state.flights, fn(flights, pair) {
+      case dict.get(flights, pair.0) {
+        Ok(flight) -> {
+          release(flight)
+          dict.delete(flights, pair.0)
+        }
+        Error(Nil) -> flights
+      }
+    })
+  let remaining =
+    schedules
+    |> dict.values
+    |> list.map(fn(entry) { entry.deployment })
+    |> set.from_list
+  dropped
+  |> list.map(fn(pair) { { pair.1 }.deployment })
+  |> list.unique
+  |> list.filter(fn(deployment) { !set.contains(remaining, deployment) })
+  |> list.each(fn(deployment) {
+    metrics.remove(observability.polls_skipped_total, [deployment])
+  })
+  State(..state, schedules:, flights:)
+}
+
+// ---------------------------------------------------------- The returns ---
+
+/// A worker's answer: delivered when it is the flight's worker, discarded
+/// when the pod left the schedule, or left and rejoined, while it was out
+/// (budget Leaving).
+fn returned(
+  state state: State,
+  pod_name pod_name: String,
+  worker worker: Pid,
+  reading reading: poller.Reading,
+  elapsed_ms elapsed_ms: Int,
+) -> State {
+  case dict.get(state.flights, pod_name) {
+    Ok(flight) if flight.worker == worker -> {
+      release(flight)
+      let reading = reconcile.reading(reading)
+      let seconds = case reading.kind {
+        reconcile.TimedOut -> int.to_float(state.config.poll_timeout_s)
+        _ -> int.to_float(elapsed_ms) /. 1000.0
+      }
+      State(..state, flights: dict.delete(state.flights, pod_name))
+      |> deliver(pod_name:, reading:, seconds:)
+    }
+    _ -> state
+  }
+}
+
+/// The watchdog fired for a flight still out: the worker broke
+/// `poller_http.send`'s bound and is killed, and the pod's reading is
+/// timed_out at the timeout (worker_contract Transport).
+fn overdue(
+  state state: State,
+  pod_name pod_name: String,
+  worker worker: Pid,
+) -> State {
+  case dict.get(state.flights, pod_name) {
+    Ok(flight) if flight.worker == worker -> {
+      release(flight)
+      process.kill(worker)
+      State(..state, flights: dict.delete(state.flights, pod_name))
+      |> timed_out(pod_name)
+    }
+    _ -> state
+  }
+}
+
+/// A worker exited before it answered: its pod's reading is timed_out. A
+/// pid with no flight, as one already answered, is nothing.
+fn crashed(state: State, pid: Pid) -> State {
+  let flight =
+    state.flights
+    |> dict.to_list
+    |> list.find(fn(pair) { { pair.1 }.worker == pid })
+  case flight {
+    Ok(#(pod_name, flight)) -> {
+      release(flight)
+      State(..state, flights: dict.delete(state.flights, pod_name))
+      |> timed_out(pod_name)
+    }
+    Error(Nil) -> state
+  }
+}
+
+fn timed_out(state: State, pod_name: String) -> State {
+  deliver(
+    state:,
+    pod_name:,
+    reading: reconcile.Reading(
+      kind: reconcile.TimedOut,
+      cost: None,
+      draining: False,
+    ),
+    seconds: int.to_float(state.config.poll_timeout_s),
+  )
+}
+
+/// Stops watching a flight: its deadline and its monitor, which also drops a
+/// `Down` already in the mailbox.
+fn release(flight: Flight) -> Nil {
+  process.cancel_timer(flight.deadline)
+  process.demonitor_process(flight.monitor)
+}
+
+/// One reading delivered: observed on the duration histogram, handed to the
+/// sink, and the pod no longer outstanding, with every rung that passed
+/// while its poll was out skipped (budget Jitter, NoOverlap).
+fn deliver(
+  state state: State,
+  pod_name pod_name: String,
+  reading reading: Reading,
+  seconds seconds: Float,
+) -> State {
+  case dict.get(state.schedules, pod_name) {
+    Ok(entry) -> {
+      metrics.observe(observability.poll_duration_seconds, seconds)
+      let now = state.config.now()
+      state.config.polled(Polled(
+        pod_name:,
+        deployment: entry.deployment,
+        endpoint: entry.endpoint,
+        reading:,
+        at_ms: now,
+      ))
+      let entry =
+        Entry(..entry, schedule: Schedule(..entry.schedule, outstanding: False))
+        |> skip_passed(config: state.config, now:)
+      State(..state, schedules: dict.insert(state.schedules, pod_name, entry))
+    }
+    Error(Nil) -> state
+  }
+}
+
+// --------------------------------------------------------------- Settle ---
+
+/// After every message: the due polls join the queue, the queue is served
+/// under the bound, the gauge is set and the timer re-armed for the next
+/// due time.
+fn settle(state: State) -> actor.Next(State, Message) {
+  let now = state.config.now()
+  let state = state |> mark(now) |> dispatch(now)
+  metrics.set(observability.poll_queue_depth, [], list.length(queue(state)))
+  actor.continue(State(..state, wake: rearm(state, now)))
+}
+
+/// An entry whose due time has come joins the queue; one whose next rung
+/// came while its poll is in flight skips that rung (budget NoOverlap); one
+/// waiting in the queue keeps the due time it is served by.
+fn mark(state: State, now: Int) -> State {
+  let schedules =
+    dict.map_values(state.schedules, fn(pod_name, entry) {
+      let schedule = entry.schedule
+      use <- bool.guard(schedule.next_due > now, entry)
+      case schedule.outstanding, dict.has_key(state.flights, pod_name) {
+        False, _ ->
+          Entry(..entry, schedule: Schedule(..schedule, outstanding: True))
+        True, True -> skip_passed(entry:, config: state.config, now:)
+        True, False -> entry
+      }
+    })
+  State(..state, schedules:)
+}
+
+/// The queue served oldest due first while budget admits (Concurrency). A
+/// worker the factory refused leaves its poll queued for the next settle.
+fn dispatch(state: State, now: Int) -> State {
+  case queue(state) {
+    [] -> state
+    [entry, ..] -> {
+      let admitted =
+        budget.admit(
+          schedule: entry.schedule,
+          now:,
+          sent: dict.size(state.flights),
+          concurrency: state.config.concurrency,
+        )
+      use <- bool.guard(!admitted, state)
+      case send(state:, entry:, now:) {
+        Some(state) -> dispatch(state, now)
+        None -> state
+      }
+    }
+  }
+}
+
+/// One poll sent: a worker under the factory, monitored and given its
+/// deadline, and the ladder climbed to the rung after the one this poll
+/// consumed, skipping any that passed while it waited in the queue.
+fn send(state state: State, entry entry: Entry, now now: Int) -> Option(State) {
+  let config = state.config
+  let pod_name = entry.schedule.pod_name
+  let job =
+    Job(
+      pod_name:,
+      endpoint: entry.endpoint,
+      poll: config.poll,
+      now: config.now,
+      reply: state.replies,
+    )
+  case
+    factory_supervisor.get_by_name(config.workers)
+    |> factory_supervisor.start_child(job)
+  {
+    Ok(started) -> {
+      let monitor = process.monitor(started.pid)
+      let deadline =
+        process.send_after(
+          state.self,
+          config.poll_timeout_s * 2000 + 1000,
+          Deadline(pod_name:, worker: started.pid),
+        )
+      let flight = Flight(worker: started.pid, monitor:, deadline:)
+      let entry =
+        Entry(..entry, schedule: next_rung(entry, config))
+        |> skip_passed(config:, now:)
+      Some(
+        State(
+          ..state,
+          flights: dict.insert(state.flights, pod_name, flight),
+          schedules: dict.insert(state.schedules, pod_name, entry),
+        ),
+      )
+    }
+    Error(error) -> {
+      log(observability.Warning, "poll worker not started", [
+        observability.string_field(name: "pod", value: pod_name),
+        observability.string_field(name: "reason", value: start_error(error)),
+      ])
+      None
+    }
+  }
+}
+
+fn start_error(error: actor.StartError) -> String {
+  case error {
+    actor.InitTimeout -> "init_timeout"
+    actor.InitFailed(reason) -> reason
+    actor.InitExited(_) -> "init_exited"
+  }
+}
+
+@external(erlang, "observability_ffi", "log")
+fn log(level: Level, msg: String, fields: List(Field)) -> Nil
+
+/// The entries outstanding and not sent, oldest due first, by name among
+/// equals.
+fn queue(state: State) -> List(Entry) {
+  state.schedules
+  |> dict.values
+  |> list.filter(fn(entry) {
+    entry.schedule.outstanding
+    && !dict.has_key(state.flights, entry.schedule.pod_name)
+  })
+  |> list.sort(by_due)
+}
+
+fn by_due(a: Entry, b: Entry) -> Order {
+  case int.compare(a.schedule.next_due, b.schedule.next_due) {
+    Eq -> string.compare(a.schedule.pod_name, b.schedule.pod_name)
+    other -> other
+  }
+}
+
+/// The one timer, re-armed for the earliest due time that a timer serves:
+/// an entry not outstanding, or one in flight whose next rung would be
+/// skipped. A queued entry is served by a return, not a timer.
+fn rearm(state: State, now: Int) -> Option(process.Timer) {
+  case state.wake {
+    Some(timer) -> {
+      process.cancel_timer(timer)
+      Nil
+    }
+    None -> Nil
+  }
+  let earliest =
+    state.schedules
+    |> dict.values
+    |> list.filter(fn(entry) {
+      !entry.schedule.outstanding
+      || dict.has_key(state.flights, entry.schedule.pod_name)
+    })
+    |> list.map(fn(entry) { entry.schedule.next_due })
+    |> list.reduce(int.min)
+  case earliest {
+    Ok(due) -> Some(process.send_after(state.self, int.max(0, due - now), Wake))
+    Error(Nil) -> None
+  }
+}
+
+// ----------------------------------------------------------- The ladder ---
+
+/// The rung after the one a sent poll consumed (budget Jitter).
+fn next_rung(entry: Entry, config: Config) -> Schedule {
+  budget.next(
+    schedule: entry.schedule,
+    now: entry.schedule.next_due,
+    interval: entry.interval_s,
+    jitter_percent: config.jitter_percent,
+    random: config.random(
+      budget.jitter_bound(
+        interval: entry.interval_s,
+        jitter_percent: config.jitter_percent,
+      )
+      + 1,
+    ),
+  )
+}
+
+/// Every rung at or before now skipped, each counted on
+/// knarr_polls_skipped_total, so the next poll is due on the first rung
+/// after now (budget Jitter, NoOverlap). `budget.advance` climbs the same
+/// ladder but always moves one rung and counts nothing, so this loop is the
+/// scheduler's own. An interval outside config's range moves one rung at
+/// most, so the loop ends.
+fn skip_passed(
+  entry entry: Entry,
+  config config: Config,
+  now now: Int,
+) -> Entry {
+  use <- bool.guard(entry.schedule.next_due > now, entry)
+  metrics.inc(observability.polls_skipped_total, [entry.deployment])
+  let entry = Entry(..entry, schedule: next_rung(entry, config))
+  case entry.interval_s <= 0 {
+    True -> entry
+    False -> skip_passed(entry:, config:, now:)
+  }
+}
+
+// ----------------------------------------------------------- The worker ---
+
+type Go {
+  Go
+}
+
+/// One poll under the factory: an actor whose initialiser sends itself
+/// `Go`, so `start_child` returns at once, and whose one message runs the
+/// poll, answers on the scheduler's subject and stops.
+fn worker(job: Job) -> actor.StartResult(Nil) {
+  actor.new_with_initialiser(1000, fn(self) {
+    process.send(self, Go)
+    actor.initialised(job) |> actor.returning(Nil) |> Ok
+  })
+  |> actor.on_message(run)
+  |> actor.start
+}
+
+fn run(job: Job, _go: Go) -> actor.Next(Job, Go) {
+  let started = job.now()
+  let reading = job.poll(job.endpoint)
+  process.send(
+    job.reply,
+    Returned(
+      pod_name: job.pod_name,
+      worker: process.self(),
+      reading:,
+      elapsed_ms: job.now() - started,
+    ),
+  )
+  actor.stop()
+}
