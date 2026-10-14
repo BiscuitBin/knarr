@@ -6,6 +6,7 @@
 //// out. Timestamps are unix milliseconds; durations and draws are seconds.
 
 import gleam/bool
+import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -247,6 +248,24 @@ pub fn advance_draws_afresh_for_every_rung_test() -> Nil {
       draw: fn(_) { 0 },
     ).next_due
     == 60_000
+  // The draw is made once per rung, not once and reused: from due 0 to past
+  // 60 s with draw 0 takes three rungs (30, 60, 90), so three draws.
+  let draws = process.new_subject()
+  assert budget.advance(
+      schedule: due("w", 0),
+      now: 60_000,
+      interval: 30,
+      jitter_percent: 10,
+      draw: fn(n) {
+        process.send(draws, n)
+        0
+      },
+    ).next_due
+    == 90_000
+  assert process.receive(draws, 0) == Ok(4)
+  assert process.receive(draws, 0) == Ok(4)
+  assert process.receive(draws, 0) == Ok(4)
+  assert process.receive(draws, 0) == Error(Nil)
 }
 
 // PollSchedule.Jitter: for any interval 5 to 300, jitter 0 to 100 and
@@ -264,10 +283,33 @@ pub fn next_never_shortens_the_gap_property_test() -> Nil {
   let schedule = due("w", 30_000)
   let moved =
     budget.next(schedule:, now: 30_000, interval:, jitter_percent:, random:)
-  let bound = budget.jitter_bound(interval:, jitter_percent:)
+  // The bound as the clause states it, jitter_percent of the interval
+  // rounded down, computed here rather than taken from budget.jitter_bound.
+  let bound = { interval * jitter_percent } / 100
 
+  assert budget.jitter_bound(interval:, jitter_percent:) == bound
   assert moved.next_due >= schedule.next_due + interval * 1000
   assert moved.next_due <= schedule.next_due + { interval + bound } * 1000
+}
+
+// PollSchedule.Jitter: an interval of 0, outside config's range, advances one
+// rung and returns rather than looping (a guard beyond the clause).
+pub fn advance_ends_for_a_zero_interval_test() -> Nil {
+  assert budget.advance(
+      schedule: due("w", 0),
+      now: 1000,
+      interval: 0,
+      jitter_percent: 0,
+      draw: fn(_) { 0 },
+    ).next_due
+    == 0
+}
+
+// PollSchedule.Jitter: the bound rounds down, so 10 percent of 19 s is 1 s.
+pub fn jitter_bound_rounds_down_test() -> Nil {
+  assert budget.jitter_bound(interval: 19, jitter_percent: 10) == 1
+  assert budget.jitter_bound(interval: 5, jitter_percent: 10) == 0
+  assert budget.jitter_bound(interval: 300, jitter_percent: 100) == 300
 }
 
 // -------------------------------------------------- NoOverlap, Concurrency ---
@@ -686,6 +728,34 @@ pub fn a_success_ends_the_run_and_leaves_until_test() -> Nil {
       cap: 60,
     )
     == Pause(until: 120_000, consecutive: 0)
+  assert budget.pause(
+      pause: paused,
+      status: 299,
+      retry_after: None,
+      now: 1000,
+      initial: 1,
+      cap: 60,
+    )
+    == Pause(until: 120_000, consecutive: 0)
+  // 199 and 300 are not successes: the run stands.
+  assert budget.pause(
+      pause: paused,
+      status: 199,
+      retry_after: None,
+      now: 1000,
+      initial: 1,
+      cap: 60,
+    )
+    == paused
+  assert budget.pause(
+      pause: paused,
+      status: 300,
+      retry_after: None,
+      now: 1000,
+      initial: 1,
+      cap: 60,
+    )
+    == paused
   // The next 429 restarts the run at 1 second, which does not pass the
   // until still standing.
   assert budget.pause(
@@ -869,6 +939,26 @@ pub fn at_most_five_per_second_plus_the_burst_in_any_window_test() -> Nil {
       _ -> Nil
     }
   })
+}
+
+// WriteBudget.Threshold: the bound is reached, not just respected: the burst
+// spent just before a whole second and 5 at every whole second after it put
+// exactly 5·60 + 10 = 310 attempts in one 60-second window.
+pub fn the_worst_window_reaches_exactly_the_bound_test() -> Nil {
+  let #(_, sent) =
+    int.range(from: 0, to: 61, with: #(full, []), run: fn(acc, second) {
+      let #(bucket, sent) = acc
+      let now = case second {
+        0 -> 999
+        _ -> second * 1000
+      }
+      let bucket = budget.refill(bucket:, now:, rate_per_second: 5, burst: 10)
+      spend(bucket:, now:, sent:)
+    })
+  let in_window = list.count(sent, fn(t) { t >= 999 && t < 60_999 })
+
+  assert in_window == 310
+  assert list.length(sent) == 310
 }
 
 /// Attempts at `now` while `allow` says so, each spending a token.

@@ -125,7 +125,9 @@ pub fn next(
 
 /// `next` applied once per rung, each with a fresh draw from `draw`, until the
 /// due time is after now, so a rung already passed is skipped (Jitter). Not a
-/// contract signature: it is the loop the clause tells the caller to run.
+/// contract signature: it is the loop the clause tells the caller to run. An
+/// interval of 0 or less, outside config's range, moves one rung only, so the
+/// loop ends.
 pub fn advance(
   schedule schedule: Schedule,
   now now: Int,
@@ -141,7 +143,7 @@ pub fn advance(
       jitter_percent:,
       random: draw(jitter_bound(interval:, jitter_percent:) + 1),
     )
-  case moved.next_due > now {
+  case moved.next_due > now || interval <= 0 {
     True -> moved
     False -> advance(schedule: moved, now:, interval:, jitter_percent:, draw:)
   }
