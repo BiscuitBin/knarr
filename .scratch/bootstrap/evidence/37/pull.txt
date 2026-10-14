@@ -1,0 +1,50 @@
+date: 2026-10-14T04:47:33Z
+image: ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+commit: 283a7d489d07d81bd3a9c393ce10be11ad71303f
+host daemon: 29.4.0 linux/arm64
+docker:29.4.0-dind: sha256:a6dd5322747a95cd8e3207bd8d415a8fd20ec34e9c00f06dc019cbd912013489 docker@sha256:a6dd5322747a95cd8e3207bd8d415a8fd20ec34e9c00f06dc019cbd912013489
+
+== a fresh daemon: docker run -d --privileged docker:29.4.0-dind
+inner daemon: 29.4.0 linux/arm64, up after 1 s
+ok   inner images before the pull: 0
+ok   inner docker config files (no credentials): 0
+
+== docker pull --platform linux/amd64 ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7: Pulling from steven-cutting/knarr
+d6b2f7582cf5: Pulling fs layer
+a60ef8ec184e: Pulling fs layer
+42ed850e36eb: Pulling fs layer
+86b9f61ea396: Pulling fs layer
+7ce5a6ef78c3: Pulling fs layer
+61f70ba02274: Pulling fs layer
+61f70ba02274: Download complete
+86b9f61ea396: Download complete
+d6b2f7582cf5: Download complete
+42ed850e36eb: Download complete
+a60ef8ec184e: Download complete
+86b9f61ea396: Pull complete
+a60ef8ec184e: Pull complete
+7ce5a6ef78c3: Download complete
+42ed850e36eb: Pull complete
+7ce5a6ef78c3: Pull complete
+61f70ba02274: Pull complete
+d6b2f7582cf5: Pull complete
+Digest: sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+Status: Downloaded newer image for ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+
+== docker image inspect
+labels: {"org.opencontainers.image.created":"2026-10-14T04:17:00Z","org.opencontainers.image.revision":"283a7d489d07d81bd3a9c393ce10be11ad71303f","org.opencontainers.image.source":"https://github.com/steven-cutting/knarr","org.opencontainers.image.version":"0.1.0"}
+ok   org.opencontainers.image.version: 0.1.0
+ok   org.opencontainers.image.revision: 283a7d489d07d81bd3a9c393ce10be11ad71303f
+ok   org.opencontainers.image.source: https://github.com/steven-cutting/knarr
+info org.opencontainers.image.created: 2026-10-14T04:17:00Z
+ok   platform: linux/amd64
+ok   repo digests: ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+REPOSITORY                     TAG       DIGEST                                                                    IMAGE ID       CREATED          SIZE
+ghcr.io/steven-cutting/knarr   <none>    sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7   97262e02b632   30 minutes ago   381MB
+
+== docker rm -fv
+ok   containers left: 0
+
+pulled by digest on a daemon that never built it; labels match 0.1.0 and the tagged commit

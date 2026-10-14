@@ -12,13 +12,73 @@
 
 **MVP critical path:** yes. The MVP installs a published release.
 
-**Status:** needs-human, round 2. Every step below changes something outside the worktree and needs the maintainer's explicit approval, one action at a time.
+**Status:** done. `v0.1.0` is published as `ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7`. See [the hand-back notes](#hand-back-notes) and [the evidence](../evidence/37/README.md).
 
-- [ ] The `release` environment 36 created still has the maintainer as its required reviewer and "Prevent self-review" **off**; the hand-back records the settings as `gh api repos/steven-cutting/knarr/environments/release` shows them before the tag is pushed.
-- [ ] **Authorization required:** a tag ruleset on `v*` restricts updates and deletions. The hand-back records it as `gh api repos/steven-cutting/knarr/rulesets` shows it.
-- [ ] A release pull request moves `## [Unreleased]` into `## [0.1.0] - <date>` in `CHANGELOG.md`, leaves `gleam.toml` at `0.1.0`, and merges like any other.
-- [ ] **Authorization required:** the maintainer tags the merge commit with an annotated `v0.1.0` and pushes the tag. The `verify` job passes its three guards.
-- [ ] **Authorization required:** the maintainer approves the `release` deployment. The `publish` job logs in, finds `0.1.0` absent, pushes `0.1.0`, `0.1` and `sha-<7>` (no `latest`), and prints the digest in its summary. The hand-back records what the existence guard answered for the package that did not exist yet (0012 expects `absent`, HTTP 404) and the run's URL.
-- [ ] **Authorization required:** the package is made public once, by hand. The hand-back records that an anonymous `curl -sI` of the manifest answers 200 with the same `Docker-Content-Digest`.
-- [ ] From a machine that never built the image (a fresh kind node or a clean container), `docker pull ghcr.io/steven-cutting/knarr@sha256:<digest>` succeeds, and the labels show `org.opencontainers.image.version=0.1.0` and the tagged commit. The hand-back records the digest as the rehearsal's evidence; 39 installs 40's, not this one.
-- [ ] A second push of the same tag is not attempted; instead the hand-back quotes the workflow's existence guard refusing in a dry reasoning line, or, if the maintainer wants it proven, a `workflow_dispatch` rerun that fails on `present` is recorded and the trigger removed again.
+- [x] The `release` environment 36 created still has the maintainer as its required reviewer and "Prevent self-review" **off**; the hand-back records the settings as `gh api repos/steven-cutting/knarr/environments/release` shows them before the tag is pushed. [settings.txt](../evidence/37/settings.txt), at 03:30Z.
+- [x] **Authorization required:** a tag ruleset on `v*` restricts updates and deletions. The hand-back records it as `gh api repos/steven-cutting/knarr/rulesets` shows it. Ruleset `25048585`, in [settings.txt](../evidence/37/settings.txt) and [ruleset-response.json](../evidence/37/ruleset-response.json).
+- [x] A release pull request moves `## [Unreleased]` into `## [0.1.0] - <date>` in `CHANGELOG.md`, leaves `gleam.toml` at `0.1.0`, and merges like any other. Pull request #33, merged as `283a7d4`; [preflight.txt](../evidence/37/preflight.txt).
+- [x] **Authorization required:** the maintainer tags the merge commit with an annotated `v0.1.0` and pushes the tag. The `verify` job passes its three guards. [run.txt](../evidence/37/run.txt).
+- [x] **Authorization required:** the maintainer approves the `release` deployment. The `publish` job logs in, finds `0.1.0` absent, pushes `0.1.0`, `0.1` and `sha-<7>` (no `latest`), and prints the digest in its summary. The hand-back records what the existence guard answered for the package that did not exist yet (0012 expects `absent`, HTTP 404) and the run's URL. `absent (http 404)`, in [run 38506839202](https://github.com/steven-cutting/knarr/actions/runs/38506839202); [run.txt](../evidence/37/run.txt).
+- [x] **Authorization required:** the package is made public once, by hand. The hand-back records that an anonymous `curl -sI` of the manifest answers 200 with the same `Docker-Content-Digest`. No hand change was needed: the package was public from the workflow's first push. With an anonymous token, every tag and the digest answer 200 with the run's digest ([public.txt](../evidence/37/public.txt); [below](#visibility-and-the-anonymous-check)).
+- [x] From a machine that never built the image (a fresh kind node or a clean container), `docker pull ghcr.io/steven-cutting/knarr@sha256:<digest>` succeeds, and the labels show `org.opencontainers.image.version=0.1.0` and the tagged commit. The hand-back records the digest as the rehearsal's evidence; 39 installs 40's, not this one. A fresh `docker:29.4.0-dind` daemon; [pull.txt](../evidence/37/pull.txt).
+- [x] A second push of the same tag is not attempted; instead the hand-back quotes the workflow's existence guard refusing in a dry reasoning line, or, if the maintainer wants it proven, a `workflow_dispatch` rerun that fails on `present` is recorded and the trigger removed again. The dry line, [below](#a-second-push-reasoned-dry); [public.txt](../evidence/37/public.txt).
+
+## Hand-back notes
+
+Done on 2026-10-14 (UTC). Every step that left the worktree was authorized by the maintainer, one action at a time. [The evidence README](../evidence/37/README.md) lists each one.
+
+### What changed
+
+- Pull request #33, the release pull request, merged as `283a7d489d07d81bd3a9c393ce10be11ad71303f`. `CHANGELOG.md` moved its entries unchanged under `## [0.1.0] - 2026-10-14`, with an empty `## [Unreleased]` above. Its intro and the changelog links in `README.md` and `docs/README.md` stopped calling the entries unreleased. The heading first said 2026-10-13, the local date. UTC had already reached 2026-10-14, the only day the tag could be pushed, so a second commit moved it before the merge. `gleam.toml` stayed at `0.1.0`.
+- This pull request pins [`deploy/release`](../../../deploy/release/kustomization.yaml) to 0.1.0's digest with `just release-pin`, and its comment no longer calls the digest a placeholder: it says the pin lands on `main` after the tag, so at a release's own tag the overlay still holds the previous digest. The `release-pin` recipe's comment says each release runs it. `CHANGELOG.md` records the pin under `[Unreleased]`. [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md) carries "Amended by ticket 37" notes, ticket 36's second box is ticked, and [`evidence/37/`](../evidence/37/README.md) holds the scripts and transcripts. `_typos.toml` ignores a 12-hex layer id followed by a colon and a space, as `docker pull` prints it in `pull.txt` (`61f70ba02274: Pull complete`).
+- `release.yml` and `scripts/release/lib.sh` are unchanged. The run showed no defect in either.
+
+### The settings
+
+Before the tag, at 03:30Z, [settings.txt](../evidence/37/settings.txt) read ticket 36's `release` environment unchanged: id `23921538204`, one `required_reviewers` rule whose one reviewer is the maintainer (user `8365892`), `prevent_self_review` false, no wait timer, and GitHub's defaults `can_admins_bypass: true` and `deployment_branch_policy: null`. It read no tag and no release.
+
+The tag ruleset was created with [ruleset.json](../evidence/37/ruleset.json) as ruleset `25048585`, "release tags". It is active, targets tags matching `refs/tags/v*`, and restricts updates and deletions. It has no creation rule, which would have refused the first tag push. It has no bypass actors, so GitHub answered `"current_user_can_bypass": "never"`: the maintainer cannot move or delete a `v*` tag either. As an administrator, the maintainer can still edit or disable the ruleset.
+
+### The run
+
+- The maintainer tagged `283a7d4` with an annotated `v0.1.0` and pushed it. [Run 38506839202](https://github.com/steven-cutting/knarr/actions/runs/38506839202) started at 03:33:10Z. `git cat-file -t v0.1.0` prints `tag`, and `git ls-remote` shows the same tag object on the remote, peeled to `283a7d4`.
+- `verify` passed in 4 s: `tag v0.1.0 at 283a7d489d07d81bd3a9c393ce10be11ad71303f: version 0.1.0, an ancestor of origin/main, in the changelog`.
+- The run waited at the `release` environment for 43 minutes. The approvals endpoint reads `approved by steven-cutting (user 8365892) for release (23921538204)`: the maintainer approved their own tag's deployment, which "Prevent self-review" off allows. The approval comment was "test".
+- `publish` ran from 04:16:55Z to 04:17:36Z. It logged in (`Login Succeeded`), and its moved-tag step passed, the first live run of that step. The existence guard then printed `ghcr.io/steven-cutting/knarr:0.1.0 is absent (http 404): pushing`. That is 0012's expected answer for a package that did not exist yet, from a push-scope token taken after login.
+- buildx named and pushed `0.1.0`, `0.1` and `sha-283a7d4`, and no `latest`. The digest is `sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7`.
+
+### Visibility and the anonymous check
+
+0012 expected a package that does not inherit the repository's visibility, made public once by hand. It was public from the workflow's first push, and nobody changed it.
+
+- At 04:33:15Z, before anyone had opened the package's settings, [public-private.txt](../evidence/37/public-private.txt) asked ghcr.io for an anonymous pull token, expecting the 403 that ticket 28 saw for a package it could not see. ghcr.io answered 200, and the script stopped there.
+- At about 04:43Z the maintainer opened `github.com/users/steven-cutting/packages/container/knarr/settings`, changed nothing, and saw the package public and linked to `steven-cutting/knarr`.
+- At 04:47:31Z, [public.txt](../evidence/37/public.txt), with no credentials: a bare `curl -sI` of the manifest answers 401, as it does for any ghcr.io package, because a registry client fetches an anonymous token first. With that token, `0.1.0`, `0.1`, `sha-283a7d4` and the digest itself each answer 200 with `Docker-Content-Digest: sha256:97262e02…22c7` and content type `application/vnd.docker.distribution.manifest.v2+json`, one manifest and not an index. `latest` answers 404, and `tags/list` holds exactly `0.1.0`, `0.1` and `sha-283a7d4`.
+
+Why GHCR created the package public is not established here. [sources.txt](../evidence/28/sources.txt) records what GitHub's documentation said on 2026-10-09, and this run observed something else. Pinning the cause would take one authorized fetch of that page. Nothing depends on it now: the package exists, and its visibility persists across later pushes.
+
+### The pull
+
+[pull.txt](../evidence/37/pull.txt), at 04:47:33Z: a fresh `docker:29.4.0-dind` container (`sha256:a6dd5322…3489`), its daemon 29.4.0, with 0 images and no docker config before the pull. `docker pull --platform linux/amd64 ghcr.io/steven-cutting/knarr@sha256:97262e02…22c7` downloaded all six layers from ghcr.io. The image's labels read `org.opencontainers.image.version=0.1.0`, `revision=283a7d489d07d81bd3a9c393ce10be11ad71303f`, `source=https://github.com/steven-cutting/knarr` and `created=2026-10-14T04:17:00Z`, on `linux/amd64`. Then `docker rm -fv` left no container. The host is arm64, so the pull names the platform, and nothing ran the image.
+
+### A second push, reasoned dry
+
+A second run for `v0.1.0` cannot start from a push. Pushing the same tag object again changes nothing, and moving or deleting the tag is refused by ruleset `25048585`. That leaves a re-run from the Actions page, which repeats `publish`'s existence guard. The guard's own function, run against the real registry with an anonymous token in [public.txt](../evidence/37/public.txt), reads `present (1, http 200)` for `0.1.0`, so the workflow would stop the run with:
+
+```text
+::error::ghcr.io/steven-cutting/knarr:0.1.0 exists (http 200): a release is published once; bump the version
+```
+
+The workflow asks with a push-scope token taken after login, not an anonymous one. For a public package both see the same manifest. No re-run was attempted, and no `workflow_dispatch` trigger was added.
+
+### What was verified, and what was not
+
+- Verified: the release guards on the merge commit before the tag; the environment and the ruleset before the tag; `verify` and `publish` green on the first live run; the guard's `absent` (404); exactly three tags and no `latest`; one digest agreeing across buildx's `--metadata-file`, every tag's `Docker-Content-Digest` and a pull by digest; anonymous reads of every tag; a pull by digest on a daemon that never built the image, with the labels; `just release-pin` and `just deployment-check` on the real digest, and `test_deployment.py` and `test_release_pin.py` (37 passed) on the pinned overlay; and `just check`, which ended with "All checks passed and the worktree is unchanged." on this pull request's tree, with lychee checking the evidence's links and their fragments.
+- Not verified: the ruleset refusing a moved or deleted tag (it was not attempted; ruleset `25048585` as GitHub returned it is the evidence); the guard's `present` inside the workflow, only its function against the registry; the step summary's text, which the API does not return (the log's `digest=` line carries the same digest); why the package was created public; a pull from a GKE node (39); the image running, since nothing runs the amd64 image on this host; attestations (38).
+
+### What each later ticket needs
+
+- **34:** the install guide installs `deploy/release` at a release tag. At `v0.1.0`'s commit the overlay still holds the placeholder. The real pin landed after the tag, on `main`, as every pin will: the digest exists only once the run has pushed. The guide should say that an install uses the overlay from `main` after the pin, or the digest from the release's run. The package is public, so the overlay needs no `imagePullSecrets`.
+- **38:** this run pushed with buildx's docker driver ("pushing … with docker") and stored one Docker schema 2 manifest. With attestations on, the pinned digest becomes an index's, and `just release-pin` and `test_deployment.py` already accept any `sha256:` digest. The attestation goes to the same public package.
+- **39:** installs 40's digest, not this one. GKE nodes pull anonymously, since the package is public. A pull from a GKE node is still unverified.
+- **40:** the route has now run once, with each step above. Date the changelog heading by the UTC day the tag is pushed. Before tagging, run a copy of [preflight.sh](../evidence/37/preflight.sh) in 40's own evidence, with its tag changed, on the merge commit. 37's scripts and transcripts stay as they ran. The ruleset already exists, and the package's visibility needs no step. `settings.sh` expects no tag, so 40's copy needs that expectation changed before it can record 40's settings. After the run, `just release-pin <digest>` pins the overlay in a follow-up pull request, as here. The run waits at the environment for as long as the approval takes (43 minutes here), and the image's `created` label is stamped when `publish` builds, after the approval, not when the tag is pushed: 04:17:00Z against 03:33Z here.

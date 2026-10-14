@@ -1,0 +1,33 @@
+date: 2026-10-14T04:47:31Z
+curl 8.7.1 (x86_64-apple-darwin25.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.68.0
+image: ghcr.io/steven-cutting/knarr
+digest: sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+commit: 283a7d489d07d81bd3a9c393ce10be11ad71303f
+mode: public
+
+== an anonymous pull token: GET https://ghcr.io/token?scope=repository:steven-cutting/knarr:pull&service=ghcr.io
+ok   token: http: 200
+token: granted (not printed)
+info HEAD 0.1.0 with no token: http 401
+
+== the manifest by each tag release.yml pushed, and by digest
+ok   HEAD 0.1.0: http, Docker-Content-Digest: 200 sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+     content-type: application/vnd.docker.distribution.manifest.v2+json
+ok   HEAD 0.1: http, Docker-Content-Digest: 200 sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+     content-type: application/vnd.docker.distribution.manifest.v2+json
+ok   HEAD sha-283a7d4: http, Docker-Content-Digest: 200 sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+     content-type: application/vnd.docker.distribution.manifest.v2+json
+ok   HEAD sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7: http, Docker-Content-Digest: 200 sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+     content-type: application/vnd.docker.distribution.manifest.v2+json
+ok   HEAD latest: http: 404
+
+== GET https://ghcr.io/v2/steven-cutting/knarr/tags/list
+{"name":"steven-cutting/knarr","tags":["0.1.0","0.1","sha-283a7d4"]}
+ok   tags: 0.1,0.1.0,sha-283a7d4
+
+== a second push of v0.1.0, reasoned dry: the existence guard against the real registry
+ok   probe_tag 0.1.0: present (1, http 200)
+the workflow's guard would stop the run with:
+  ::error::ghcr.io/steven-cutting/knarr:0.1.0 exists (http 200): a release is published once; bump the version
+
+public: every tag pulls anonymously at the run digest

@@ -4,9 +4,10 @@
 # install per namespace (OVERVIEW §9.18), and the Role's verbs and the
 # RoleBinding belong in the base. `just deployment-check` renders both and
 # fails on any other difference.
-# The digest is a placeholder of the right shape until the first release;
-# `just release-pin sha256:<64 hex>` replaces it with the digest release.yml
-# prints in its run summary.
+# The digest is 0.1.0's, the first release (ticket 37). A release's digest
+# exists only once its run has pushed, so `just release-pin sha256:<64 hex>`
+# pins it on main after the tag: at a release's own tag this file still holds
+# the previous digest, and an install there takes the digest from the run.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -14,7 +15,7 @@ resources:
 images:
   - name: knarr
     newName: ghcr.io/steven-cutting/knarr
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    digest: sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
 patches:
   - path: pull-policy.yaml
     target:

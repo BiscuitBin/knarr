@@ -25,7 +25,9 @@ extend-exclude = [
 # Kubernetes ends a generated pod or node name with five characters from its
 # vowel-free alphabet (apimachinery's rand.String), as in ticket 15's
 # transcripts: exp4-absent-65c847859b-pn74f, ng-a-k9bql. They are not words.
-extend-ignore-re = ["-[bcdfghjklmnpqrstvwxz2456789]{5}\\b"]
+# docker pull prints each layer's 12-hex short id before its progress, as in
+# ticket 37's pull.txt: 61f70ba02274: Pull complete. It is not a word either.
+extend-ignore-re = ["-[bcdfghjklmnpqrstvwxz2456789]{5}\\b", "\\b[0-9a-f]{12}: "]
 
 [default.extend-words]
 # AIMD: additive increase, multiplicative decrease (docs/DEFERRED.md).
