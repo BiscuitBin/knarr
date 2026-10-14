@@ -128,6 +128,11 @@ Noted, not fixed, each with its owner:
 - `fan_out` waits per batch rather than on one deadline with a sliding window, and `view` is recomputed for a pod several times per cycle; both go with the fan-out when 46 builds the schedule.
 - `reconcile.ReadingKind` and `observability.ReadingKind` are two enums with one conversion between them; each is its own module's value type in the specifications, so they stay.
 
+A second, adversarial review (Codex, `gpt-6-astra`) of the committed branch returned two findings, both noted rather than fixed:
+
+- A patch tests the pod's state and never its uid, so a pod deleted and recreated under the same name before the patch lands accepts one built from the pod it replaced. Real and narrow: the marker test of its raw string fails on a replacement once knarr has written the pod, and a yield or a removal always carries one, so only a first write is open, and a target pod's name ends in a random five-character suffix. Closing it changes `WriteMode`, so it is the open question at the end of `ownership.allium`, for 32; `just plan-spec docs/specs/ownership.allium` still gives 28 obligations. The per-pod memory, `State.pods`, is keyed by `pod.name` too and would move to the uid with it.
+- A 400 or 403 on a patch is logged at debug and folded into `OtherFailure`, and `classify_kept` drops `rejected`'s verdict, so a persistent rejection raises no signal. That is this ticket's scope as specified: observability `Levels` and `Lines` put the `patch` line at debug, ownership `Rejected` and reconcile `Rejected422` give the rejection's log, Event and metric to 32, and 40 is blocked by 32, so no release ships without them. 32's `From 31` names the seam.
+
 ### What later tickets need
 
 - **46:** `reconciler.gleam`'s `fan_out` and `send_patch` are the seam; `config.installed` already reads five of the ten budget values; see 46's `From 31`.
