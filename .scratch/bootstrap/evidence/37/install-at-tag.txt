@@ -1,0 +1,32 @@
+date: 2026-10-14T06:51:42Z
+tag: v0.1.0
+digest: sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+kustomize: v5.8.2
+kubectl: Client Version: v1.34.3 Kustomize Version: v5.7.1
+the worktree's deploy/release/kustomization.yaml: sha256 8901e98d431d67d54aba59d1ecead533916b3d495a67f05932cf4a293327d4de
+
+== the local v0.1.0
+ok   git cat-file -t v0.1.0: tag
+ok   v0.1.0 object, as run.txt read it on the remote: ab3a17c57918bfa55e9611e8efc912d884c548b9
+ok   v0.1.0^{commit}: 283a7d489d07d81bd3a9c393ce10be11ad71303f
+info pin-digest.sh blob: afcea643b5d04ee7273a5c5519a15ff86ccdab8b at v0.1.0, afcea643b5d04ee7273a5c5519a15ff86ccdab8b in the worktree
+
+== git archive v0.1.0 deploy scripts/release, into a temporary directory
+ok   deploy/release/kustomization.yaml at v0.1.0: digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+ok   kustomize build, as tagged: image: ghcr.io/steven-cutting/knarr@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+== sh scripts/release/pin-digest.sh sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7, in the copy
+ok   pin-digest.sh prints: ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+-- diff deploy/release/kustomization.yaml, as tagged and pinned
+17c17
+<     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+---
+>     digest: sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+ok   lines removed, added: 1, 1
+ok   kustomize build, pinned: image: ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+ok   kubectl kustomize, pinned: image: ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+
+== the worktree
+ok   the worktree's deploy/release/kustomization.yaml: sha256: 8901e98d431d67d54aba59d1ecead533916b3d495a67f05932cf4a293327d4de
+
+at v0.1.0 the overlay names the placeholder; pinned in place, it names 0.1.0's digest

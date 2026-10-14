@@ -10,6 +10,10 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 - `max_body_bytes` enforced on the poll path: the install-wide value reaches the poller, and a 200 whose body is longer than it is an invalid reading.
 - A JSON log formatter that never emits a non-JSON line: a report it cannot render becomes a fixed `unformattable` error line, and truncation is by character, not byte.
 
+### Changed
+
+- `deploy/release` pins the digest of 0.1.0, the first published release.
+
 ### Removed
 
 - The S1 probe and its `knarr.io/s1-probe` annotation, replaced by the reconciler as the client's first caller.

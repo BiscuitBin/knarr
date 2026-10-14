@@ -17,10 +17,13 @@
 -- leaves the target set is lifecycle's (ticket 23).
 -- Owner: ticket 19 settled every §9.1 question here with the maintainer on
 -- 2026-10-12. Override defaults and ranges come from 18, 20 and 24; the
--- overrides 23 and 25 may add stay as the open questions below, and 21 added
--- none (reconcile Window and Absent). Ticket 31 built discovery and the
--- parse on 2026-10-13, and stated under Installed what a bad install-wide
--- value does.
+-- override 25 may add stays as the open question below, and 21 and 23 added
+-- none (reconcile Window and Absent; lifecycle Restart NoExpiry). Ticket 31
+-- built discovery and the parse on 2026-10-13, and stated under Installed
+-- what a bad install-wide value does.
+-- Amended by ticket 23 on 2026-10-13: leaving is retired, since lifecycle's
+-- Cleanup derives what left the target set from each cycle's state with no
+-- memory, and the open question 23 owned closed with no override.
 
 ------------------------------------------------------------
 -- Value Types
@@ -122,7 +125,6 @@ contract Configuration {
     unknown: (labels: List<Label>, annotations: List<Annotation>?) -> List<String>
     message: (invalid: Invalid) -> String
     targets: (deployments: List<Deployment>, replicasets: List<ReplicaSet>, pods: List<Pod>, defaults: Defaults) -> List<Target>
-    leaving: (previous: List<Target>, current: List<Target>, pods: List<Pod>) -> List<String>
 
     @invariant Prefix
         -- Every key knarr reads on a Deployment, and the one key of its own
@@ -193,7 +195,9 @@ contract Configuration {
         -- complete. No other install-wide value has an override: not the
         -- timeout, jitter, concurrency, LIST interval, bucket, back-off,
         -- max_body_bytes, or reconcile's unknown_polls and absent_after
-        -- (reconcile Window and Absent). Overrides are read from
+        -- (reconcile Window and Absent); lifecycle has no staleness or
+        -- expiry value to override (lifecycle Restart NoExpiry, ticket 23).
+        -- Overrides are read from
         -- metadata.annotations only; a label under the prefix other than
         -- knarr.io/enabled is never read as an override and is an unknown
         -- key under Unknown.
@@ -237,13 +241,11 @@ contract Configuration {
         -- pod re-added to the schedule; a changed patch interval from the
         -- pod's next attempt; changed thresholds or margin from the pod's
         -- next reading. The pods of a Deployment that opted out, or that
-        -- was deleted, leave the target set at that cycle: leaving returns
-        -- the pod names in previous and not in current that the cycle's
-        -- pod LIST still shows, so a pod that is simply gone is not named,
-        -- and lifecycle's cleanup reads the list (ticket 23); nothing here
-        -- writes to them, and a named pod whose deletionTimestamp is set is
-        -- still not patched, under k8s_client's NoPatchWhileTerminating. On
-        -- the first cycle previous is empty and leaving returns nothing.
+        -- was deleted, leave the target set at that cycle, and nothing here
+        -- names or writes to them: lifecycle's Cleanup derives what to
+        -- remove from each cycle's pod LIST against the target set, with no
+        -- memory of the cycle before (ticket 23), so an opt-out made while
+        -- knarr was down is found like any other.
     @invariant InvalidValue
         -- A key whose value does not parse under Syntax or is outside its
         -- range or cross-value rule under Keys and Effective is invalid:
@@ -338,5 +340,4 @@ contract Configuration {
 -- Open Questions
 ------------------------------------------------------------
 
-open question "§9.1 Overrides from 23: whether the staleness and expiry values lifecycle settles (ticket 23) gain a per-Deployment override, with its default and range, under the same rule as every override here."
 open question "§9.1 Overrides from 25: whether the safe-to-evict threshold safe_to_evict settles (ticket 25) gains a per-Deployment override, with its default and range, under the same rule as every override here."

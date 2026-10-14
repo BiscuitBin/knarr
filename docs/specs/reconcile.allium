@@ -13,12 +13,15 @@
 -- built. What a reading is is
 -- worker_contract's (§9.4a); the mapped value is cost_mapping's (§9.5); the
 -- patch is ownership's (§9.10); whether a due write may go now is budget's
--- (§9.8); the Event, gauge and line names are observability's (§9.14); what
--- the marker's write times mean across a downtime, and cleanup, are
--- lifecycle's (§9.12, ticket 23).
+-- (§9.8); the Event, gauge and line names are observability's (§9.14); the
+-- marker's write times are informational, and cleanup is lifecycle's
+-- (§9.12, ticket 23).
 -- Owner: ticket 21 settled every §9.6 question here with the maintainer on
 -- 2026-10-13. Ticket 31 built it with the decided loop (Loop), and runs it
 -- in a thin driver that 46 replaces with budget's schedule and bucket (Cycle).
+-- Amended by ticket 23 on 2026-10-13: Neutral and Restart name lifecycle's
+-- answer, no expiry and the record a neutral removal leaves falling to
+-- cleanup.
 
 ------------------------------------------------------------
 -- Value Types
@@ -122,13 +125,17 @@ contract Fallback {
         -- apply (observability Purpose); a safe-to-evict record the
         -- Deployment no longer enables is among them, so a value an opt-out
         -- left is removed here when the pod goes neutral before lifecycle's
-        -- cleanup reaches it. The patch is due at once on entry and sent as
-        -- budget's PerPod, Bucket and Pending allow. The marker stays, with a
-        -- null applied record for each removed annotation (ownership
+        -- cleanup reaches it, and the null record this leaves still falls
+        -- to that cleanup, which drops it from the marker (lifecycle
+        -- Cleanup Scope and Marker). The patch is due at once on entry and
+        -- sent as budget's PerPod, Bucket and Pending allow. The marker
+        -- stays, with a null applied record for each removed annotation
+        -- (ownership
         -- Applied), and the pod stays managed: a rejected neutral write is
         -- a rejection with purpose apply (ownership Rejected, observability
         -- Events Rejected), and purpose cleanup is lifecycle's alone, for a
-        -- pod or an annotation that leaves knarr's management (ticket 23).
+        -- pod or an annotation that leaves knarr's management (lifecycle
+        -- Cleanup Scope, ticket 23).
         -- The removal is dropped for every owned annotation whose record
         -- is null or missing (ownership WriteMode), and no patch is sent to
         -- a terminating pod (k8s_client NoPatchWhileTerminating), so a pod
@@ -212,9 +219,12 @@ contract Fallback {
         -- discovery cycle at which observability's SeriesLife rebuilds the
         -- pod-state gauges. This follows budget's Restart,
         -- config's InvalidValue memory and observability's Cadence Restart.
-        -- The marker's at and each record's at are not read here; what they
-        -- mean across a downtime, and whether a value a restarted knarr
-        -- finds on a marked pod has expired, are lifecycle's (ticket 23).
+        -- The marker's at and each record's at are not read here, and
+        -- decide nothing anywhere: they are informational, and a value a
+        -- restarted knarr
+        -- finds on a marked pod never expires by age; this window, elapsing
+        -- again in the new process, is its only expiry (lifecycle Restart
+        -- NoExpiry and Informational, ticket 23).
     @invariant NotReadyWithCost
         -- worker_contract's ReadinessWarning counts a pod only while its
         -- reading is known: a pod is in observability's not_ready_with_cost

@@ -1,0 +1,9 @@
+date: 2026-10-14T04:33:15Z
+curl 8.7.1 (x86_64-apple-darwin25.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.68.0
+image: ghcr.io/steven-cutting/knarr
+digest: sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+commit: 283a7d489d07d81bd3a9c393ce10be11ad71303f
+mode: private
+
+== an anonymous pull token: GET https://ghcr.io/token?scope=repository:steven-cutting/knarr:pull&service=ghcr.io
+FAIL: token: http: read '200', wanted '403'
