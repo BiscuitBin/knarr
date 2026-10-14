@@ -20,7 +20,7 @@
 
 **MVP critical path:** yes. This is the loop the MVP runs.
 
-**Status:** built before ticket 23 settled; every box is done, the discovery work the `From 23` paragraph adds waits on 32's `lifecycle` module, and the kind proof's CI run is owed. See [the hand-back notes](#hand-back-notes).
+**Status:** built before ticket 23 settled; every box is done, the discovery work the `From 23` paragraph adds moved to [47](47-discovery-cleanup-hand-off.md), after 32 and 46, and the kind proof's CI run is owed. See [the hand-back notes](#hand-back-notes).
 
 - [x] Discovery is a periodic cycle of three LISTs scoped to knarr's namespace, the Deployment LIST selected on `knarr.io/enabled=true` and the ReplicaSet and pod LISTs unselected, with pods matched to their Deployment by the owner chain's controller uids and one install per namespace (config `OptIn` and `Discovery`, §4.1, §9.18). Its cadence is budget's `config.list_interval`, 60 seconds by default and install-configurable from 10 to 600, on its own timer, independent of the poll interval (budget `ListCadence`).
 - [x] Each target carries its Deployment's effective settings from config `parse` against the install-wide `Defaults` (config `Effective` and `Installed`); an invalid key falls to its default with one Event on the Deployment on entry, keyed to the invalid value text and kept in process only, and an unknown key under the prefix is logged once per cycle (config `InvalidValue` and `Unknown`, names from 30). The `Configuration` contract has a test per invariant, by value: `opted_in` for `"true"`, `"True"`, `""` and absent; each of the six keys at its range edges, with whitespace, a sign, a leading zero, a unit and an empty string; the thresholds list with a trailing comma, a duplicate and a non-increasing member; a thresholds override that undercuts the default margin (margin 0, one `Invalid`); a poll-interval override not above the timeout; `safe-to-evict` as `"true"`, `"false"` and absent; `targets` with a pod whose ReplicaSet is orphaned, a bare pod, a recreated Deployment of the same name, and a rollout with two ReplicaSets.
@@ -141,7 +141,7 @@ Ticket 23 settled lifecycle after this was built. Merging `main` on 2026-10-14 b
 
 To match, `leaving` is gone: `config.leaving`, its three tests and its obligation note, the reconciler's `pods leaving` line, and that line in observability `Lines`. The opt-out test asserts that no such line appears and that the series still retire (`an_opt_out_names_no_pods_and_retires_the_series_test`, red before the removal). `just plan-spec` after: config 24 (25 before, the retired signature), ownership 29 (23's `cleanup`), observability 30, reconcile 18, lifecycle 8. `just test`: 438 tests, no failures.
 
-Not built here, because it calls lifecycle's `Cleanup` contract, which 32 builds:
+Not built here, because it calls lifecycle's `Cleanup` contract, which 32 builds, and sends through 46's pending set; [47](47-discovery-cleanup-hand-off.md) builds it after both:
 
 - The `From 23` discovery work: a `View` for every pod the unselected pod LIST shows, handed to `Cleanup` `due` at each cycle in which every LIST succeeded, and its Removals sent with purpose `cleanup`, each carrying its `deployment`.
 - `done` in `SeriesLife`: a Deployment's series still retire once it leaves the target set, with nothing waiting on cleanup.
@@ -151,5 +151,6 @@ Not built here, because it calls lifecycle's `Cleanup` contract, which 32 builds
 ### What later tickets need
 
 - **46:** `reconciler.gleam`'s `fan_out` and `send_patch` are the seam; `config.installed` already reads five of the ten budget values; see 46's `From 31`.
-- **32:** `ownership.gleam` and its tests exist; the rejection and foreign signals, the `rejected` and `cleanup_rejected` entries through `entered`, and lifecycle remain, ownership's `cleanup` among them; the discovery work 31's `From 23` names waits on that lifecycle module (see After merging main); see 32's `From 31`.
+- **32:** `ownership.gleam` and its tests exist; the rejection and foreign signals, the `rejected` and `cleanup_rejected` entries through `entered`, and lifecycle remain, ownership's `cleanup` among them; the discovery work 31's `From 23` names is 47's, after this ticket; see 32's `From 31`.
+- **47:** the `From 23` discovery work, the four items under After merging main, with 32's `Cleanup` and 46's pending set; see 47's `From 31`.
 - **The kind proof's CI run is owed:** label the pull request `cluster-s1` or dispatch `reconcile-proof.yml`, then commit the transcript beside `evidence/31/reconcile-kind.sh`.
