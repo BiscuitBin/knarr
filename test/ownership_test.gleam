@@ -1099,6 +1099,17 @@ pub fn cleanup_left_with_none_returns_no_operations_test() -> Nil {
       at:,
     )
     == []
+  // A null applied record compares equal to an absent annotation, but a
+  // marker holding a record sits in a map: with no map nothing is released.
+  assert ownership.cleanup(
+      marker: Marker(Some("unused"), Some(at), [
+        Entry(pdc, AppliedRecord(None, earlier)),
+      ]),
+      annotations: None,
+      owned: [pdc],
+      at:,
+    )
+    == []
 }
 
 // Ownership.Released: both annotations released at once: two tests, two
@@ -1123,6 +1134,43 @@ pub fn cleanup_releases_both_annotations_at_once_test() -> Nil {
       Operation(Remove, ste_path, None),
       Operation(Remove, marker_path, None),
     ]
+}
+
+// Ownership.Released: an annotation named twice in owned is released once,
+// so the operations are exactly those of a single request; a second remove
+// of the same path would fail the patch.
+pub fn cleanup_releases_a_duplicate_request_once_test() -> Nil {
+  let view =
+    annotations([
+      #(marker_key, both_applied_raw),
+      #(pdc_key, "300"),
+      #(ste_key, "false"),
+    ])
+
+  assert ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [pdc, pdc],
+      at: later,
+    )
+    == ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [pdc],
+      at: later,
+    )
+  assert ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [ste, pdc, ste],
+      at: later,
+    )
+    == ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [ste, pdc],
+      at: later,
+    )
 }
 
 // Ownership.Released: the operations are in this order: the deletionTimestamp
@@ -1315,6 +1363,37 @@ pub fn left_of_a_write_patch_is_empty_test() -> Nil {
   assert ownership.left(operations:, annotations: view) == []
   assert ownership.left(operations: [], annotations: view) == []
   assert ownership.left(operations: [], annotations: None) == []
+}
+
+// observability Events CleanupRejected: the marker fallback is decided from
+// the removal paths alone: operations that remove an owned key and the
+// marker, against a map lacking that key, leave nothing, never the marker;
+// and a marker-only removal against a map without the marker leaves
+// nothing.
+pub fn left_falls_back_to_the_marker_only_when_no_owned_key_is_removed_test() -> Nil {
+  let operations = [
+    deletion_test,
+    Operation(Test, marker_path, Some(applied_300_quoted)),
+    Operation(Test, pdc_path, Some("\"300\"")),
+    Operation(Remove, pdc_path, None),
+    Operation(Remove, marker_path, None),
+  ]
+
+  assert ownership.left(
+      operations:,
+      annotations: annotations([#(marker_key, applied_300_raw)]),
+    )
+    == []
+  assert ownership.left(
+      operations: [Operation(Remove, marker_path, None)],
+      annotations: annotations([#("app", "worker")]),
+    )
+    == []
+  assert ownership.left(
+      operations: [Operation(Remove, marker_path, None)],
+      annotations: None,
+    )
+    == []
 }
 
 // -------------------------------------------------------------- Document ---

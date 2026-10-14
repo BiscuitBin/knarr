@@ -419,7 +419,8 @@ fn discovered(
           Memory(state: reconcile.initial(), kept: None, runs: []),
         )
       let cycle = polled_line(cycle:, target:, endpoint:, reading:)
-      let #(memory, cycle) = classify_kept(cycle:, target:, pod:, memory:)
+      let #(memory, cycle) =
+        classify_kept(cycle:, deployment: target.deployment_name, pod:, memory:)
       let memory =
         Memory(
           ..memory,
@@ -462,7 +463,40 @@ fn discovered(
     list.fold(gone, #(state.gauges, cycle.counters), fn(acc, deployment) {
       #(retire(acc.0, deployment), retire(acc.1, deployment))
     })
+  // The gauges and the announcements above read `pods_after` alone, so the
+  // runs retained here for pods outside the target set affect nothing else.
+  let memories = retain_runs(previous: state.pods, current: memories, pods:)
   State(..state, targets:, pods: memories, seen:, invalid:, gauges:, counters:)
+}
+
+/// The memories of this cycle plus the rejection runs of every pod the
+/// unselected pod LIST still shows live but the cycle did not poll: a run
+/// lasts while the pod is listed and not terminating, whether or not its
+/// Deployment is a target this cycle (observability Cadence OnEntry), so a
+/// Deployment that opts out and back in announces no second Event; ticket
+/// 47's cleanup_rejected run rides on this. Only the runs are kept: the
+/// reading state of a pod that was not polled is not, and a pod that is
+/// terminating or no longer listed drops everything.
+fn retain_runs(
+  previous previous: Dict(String, Memory),
+  current current: Dict(String, Memory),
+  pods pods: List(Pod),
+) -> Dict(String, Memory) {
+  list.fold(pods, current, fn(memories, pod) {
+    case
+      pod.deletion_timestamp,
+      dict.has_key(memories, pod.name),
+      dict.get(previous, pod.name)
+    {
+      None, False, Ok(Memory(runs: [_, ..] as runs, ..)) ->
+        dict.insert(
+          memories,
+          pod.name,
+          Memory(state: reconcile.initial(), kept: None, runs:),
+        )
+      _, _, _ -> memories
+    }
+  })
 }
 
 /// The invalid-override Events on entry and the unknown-key lines once per
@@ -559,7 +593,7 @@ fn polled_line(
 /// the 422 was a rejection with status 422 (ownership Rejected).
 fn classify_kept(
   cycle cycle: Cycle,
-  target target: Target,
+  deployment deployment: String,
   pod pod: Pod,
   memory memory: Memory,
 ) -> #(Memory, Cycle) {
@@ -577,7 +611,7 @@ fn classify_kept(
         True ->
           rejection(
             cycle:,
-            target:,
+            deployment:,
             pod:,
             memory:,
             operations:,
@@ -598,10 +632,12 @@ fn classify_kept(
 /// raises nothing. The run ends with the pod's next accepted patch, which
 /// `accepted` records. The function is purpose-agnostic: ticket 47 calls
 /// it with `observability.Cleanup`, and `left` is then `ownership.left`
-/// over the cleanup's operations against `pod`'s annotations.
+/// over the cleanup's operations against `pod`'s annotations. `deployment`
+/// is the label observability Labels names: the Deployment's name for a
+/// target, `lifecycle.deployment_of` for a pod that is not one.
 fn rejection(
   cycle cycle: Cycle,
-  target target: Target,
+  deployment deployment: String,
   pod pod: Pod,
   memory memory: Memory,
   operations operations: List(Operation),
@@ -610,25 +646,28 @@ fn rejection(
 ) -> #(Memory, Cycle) {
   let cycle =
     count(cycle:, name: observability.patch_rejections_total, labels: [
-      target.deployment_name,
+      deployment,
       observability.purpose_label(purpose),
     ])
-  let #(state, msg, left) = case purpose {
+  let #(state, msg) = case purpose {
     observability.Apply | observability.Yield -> #(
       observability.Rejected,
       "patch rejected",
-      [],
     )
     observability.Cleanup -> #(
       observability.CleanupRejected,
       "cleanup rejected",
-      ownership.left(operations:, annotations: pod.annotations),
     )
   }
   let entry = Entry(pod_name: pod.name, annotation: None, state:)
   case observability.entered(seen: memory.runs, current: [entry]) {
     [] -> #(memory, cycle)
     _ -> {
+      let left = case purpose {
+        observability.Apply | observability.Yield -> []
+        observability.Cleanup ->
+          ownership.left(operations:, annotations: pod.annotations)
+      }
       let event =
         observability.RejectedEvent(
           pod_name: pod.name,
@@ -639,10 +678,7 @@ fn rejection(
           left:,
         )
       let fields = [
-        observability.string_field(
-          name: "deployment",
-          value: target.deployment_name,
-        ),
+        observability.string_field(name: "deployment", value: deployment),
         observability.string_field(name: "pod", value: pod.name),
         observability.string_field(
           name: "purpose",
@@ -819,44 +855,13 @@ fn yields(
           purpose: observability.Yield,
         )
       {
-        Ok(pod) -> {
-          let cycle =
-            count(cycle:, name: observability.yields_total, labels: [
-              target.deployment_name,
-              conflict.owned.name,
-            ])
-          let cycle =
-            raise(
-              cycle:,
-              involved: k8s_client.PodObject(name: pod.name, uid: pod.uid),
-              reason: observability.annotation_yielded,
-              message: ownership.message(event),
-              msg: "annotation yielded",
-              fields: [
-                observability.string_field(
-                  name: "deployment",
-                  value: target.deployment_name,
-                ),
-                observability.string_field(name: "pod", value: pod.name),
-                observability.string_field(
-                  name: "annotation",
-                  value: conflict.owned.name,
-                ),
-                observability.string_field(
-                  name: "applied",
-                  value: absent(event.applied),
-                ),
-                observability.string_field(
-                  name: "found",
-                  value: absent(event.found),
-                ),
-              ],
-            )
+        Ok(patched) -> {
+          let cycle = yielded(cycle:, target:, pod:, conflict:, event:)
           yields(
             cycle:,
             target:,
-            pod:,
-            marker: ownership.read(pod.annotations),
+            pod: patched,
+            marker: ownership.read(patched.annotations),
             conflicts: rest,
             memory: accepted(memory),
           )
@@ -875,17 +880,60 @@ fn yields(
         Error(Rejected(status)) ->
           Error(rejection(
             cycle:,
-            target:,
+            deployment: target.deployment_name,
             pod:,
             memory:,
             operations:,
             purpose: observability.Yield,
             status:,
           ))
+        // Accepted without a view: the yield is reported as any accepted
+        // one, the runs end, and the pod's turn ends with them, the next
+        // LIST supplying the view the next yield and the apply need
+        // (reconcile Sequence).
+        Error(AcceptedUnseen) ->
+          Error(#(
+            accepted(memory),
+            yielded(cycle:, target:, pod:, conflict:, event:),
+          ))
         Error(OtherFailure) -> Error(#(memory, cycle))
       }
     }
   }
+}
+
+/// The report of one accepted yield: counted on knarr_yields_total
+/// (observability Catalogue Standing) and raised as AnnotationYielded on the
+/// Pod from the pre-yield view (ownership Event).
+fn yielded(
+  cycle cycle: Cycle,
+  target target: Target,
+  pod pod: Pod,
+  conflict conflict: OwnedView,
+  event event: ownership.ConflictEvent,
+) -> Cycle {
+  let cycle =
+    count(cycle:, name: observability.yields_total, labels: [
+      target.deployment_name,
+      conflict.owned.name,
+    ])
+  raise(
+    cycle:,
+    involved: k8s_client.PodObject(name: pod.name, uid: pod.uid),
+    reason: observability.annotation_yielded,
+    message: ownership.message(event),
+    msg: "annotation yielded",
+    fields: [
+      observability.string_field(
+        name: "deployment",
+        value: target.deployment_name,
+      ),
+      observability.string_field(name: "pod", value: pod.name),
+      observability.string_field(name: "annotation", value: conflict.owned.name),
+      observability.string_field(name: "applied", value: absent(event.applied)),
+      observability.string_field(name: "found", value: absent(event.found)),
+    ],
+  )
 }
 
 /// The due writes may_write allows, in one patch (reconcile Desired, Due;
@@ -956,7 +1004,7 @@ fn write(
           let #(memory, cycle) =
             rejection(
               cycle:,
-              target:,
+              deployment: target.deployment_name,
               pod:,
               memory:,
               operations:,
@@ -965,17 +1013,23 @@ fn write(
             )
           #(pod, memory, cycle)
         }
+        // Accepted without a view: the runs end and the next LIST supplies
+        // the pod.
+        Error(AcceptedUnseen) -> #(pod, accepted(memory), cycle)
         Error(OtherFailure) -> #(pod, memory, cycle)
       }
   }
 }
 
 /// Why a patch returned no pod: the 422 a failed precondition returns, the
-/// 400 or 403 that is a rejection at once (ownership Rejected), or anything
-/// else, which the next LIST sorts out (ownership Precondition).
+/// 400 or 403 that is a rejection at once (ownership Rejected), a 200
+/// whose body gives no usable view, which is still an accepted patch
+/// (k8s_client Verbs; observability Events Rejected), or anything else,
+/// which the next LIST sorts out (ownership Precondition).
 type PatchFailure {
   PreconditionFailed
   Rejected(status: Int)
+  AcceptedUnseen
   OtherFailure
 }
 
@@ -1033,8 +1087,10 @@ fn send_patch(
             False, "rejected" -> Error(Rejected(failure.status))
             False, _ -> Error(OtherFailure)
           }
-        k8s_client.SendFailed(_) | k8s_client.UndecodableBody(_) ->
-          Error(OtherFailure)
+        // The client decodes a body only after the success-status guard
+        // passed, so an undecodable body answers an accepted patch.
+        k8s_client.UndecodableBody(_) -> Error(AcceptedUnseen)
+        k8s_client.SendFailed(_) -> Error(OtherFailure)
       }
     }
   }
@@ -1245,9 +1301,7 @@ fn foreign_line(
   annotation annotation: Option(String),
 ) -> Nil {
   let owned =
-    list.find([ownership.pod_deletion_cost, ownership.safe_to_evict], fn(o) {
-      Some(o.name) == annotation
-    })
+    list.find(ownership.owned_annotations, fn(o) { Some(o.name) == annotation })
   case owned {
     Ok(owned) -> {
       let value =

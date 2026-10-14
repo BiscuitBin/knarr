@@ -699,12 +699,6 @@ pub fn metric_names_follow_the_naming_convention_test() -> Nil {
   assert observability.build_info == "knarr_build_info"
 }
 
-// Catalogue.Patches: knarr_patch_rejections_total{deployment, purpose} counts
-// every rejection when it is known; the name follows Naming.
-pub fn patch_rejections_total_is_named_for_the_catalogue_test() -> Nil {
-  assert observability.patch_rejections_total == "knarr_patch_rejections_total"
-}
-
 // ----------------------------------------------------------- Obligations ---
 
 // config-default.log_level

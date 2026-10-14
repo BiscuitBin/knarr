@@ -575,9 +575,49 @@ pub fn the_neutral_removal_follows_three_failures_test() -> Nil {
   stop_actor(pid(actor))
 }
 
+// lifecycle Restart NoExpiry and Leftovers, Fallback.Restart and Neutral: a
+// value a restarted knarr finds on a marked pod stands until the reading
+// window elapses again in the new process. Two failed readings before the
+// restart carry nothing over, so the removal is sent only at the new
+// process's third failure, not its first; the marker's at, long past by
+// then, decides nothing (Informational).
+pub fn a_restart_keeps_a_found_value_until_the_window_elapses_again_test() -> Nil {
+  let harness =
+    harness("no-expiry", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "reading:10.0.0.1", "timed_out")
+  let actor = start(harness)
+
+  lists(harness)
+  quiet(harness)
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  quiet(harness)
+  stop_actor(pid(actor))
+
+  let actor = start(harness)
+  lists(harness)
+  quiet(harness)
+  tick(harness:, actor:, at: 2300)
+  lists(harness)
+  quiet(harness)
+  tick(harness:, actor:, at: 2600)
+  lists(harness)
+  let document = patch_of(next(harness), "1")
+  assert string.contains(
+    document,
+    "{\"op\":\"remove\",\"path\":\"/metadata/annotations/controller.kubernetes.io~1pod-deletion-cost\"}",
+  )
+  assert string.contains(document, "\\\"applied\\\":null")
+  quiet(harness)
+  stop_actor(pid(actor))
+}
+
 // Fallback.Absent, observability Events ContractAbsent and Cadence
 // Restart: the Event is raised once on entry, with the port, path and
-// reading, not again while the pod stays, and once more after a restart.
+// reading, not again while the pod stays, and once more after a restart
+// (lifecycle Restart Leftovers: the new process's memory starts empty).
 pub fn contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test() -> Nil {
   let harness = harness("absent", [pod("1")])
   put(harness.table, "reading:10.0.0.1", "not_found")
@@ -619,6 +659,8 @@ pub fn contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test(
 
 // Probes.Readiness: readiness latches only after a cycle in which all three
 // LISTs succeed; a failed LIST ends the cycle with the previous target set.
+// lifecycle Restart Replica and Leftovers: a new process answers /readyz 503
+// until its first discovery cycle in which every LIST of it succeeds.
 pub fn readiness_latches_after_the_first_complete_cycle_test() -> Nil {
   let harness = harness("ready", [pod("1")])
   let deployments = get(harness.table, "deployments") |> should.be_ok
@@ -959,6 +1001,39 @@ pub fn a_403_on_a_yield_raises_patch_rejected_for_the_yield_test() -> Nil {
   stop_actor(pid(actor))
 }
 
+// ownership Event, k8s_client Verbs and observability Catalogue Standing: a
+// yield answered 200 with a body that gives no view is an accepted yield,
+// so AnnotationYielded is raised from the pre-yield view and the yield is
+// counted; the pod's turn ends there (reconcile Sequence), so no apply
+// follows until the next LIST, whose yielded view yields no second time.
+pub fn an_accepted_yield_without_a_view_is_reported_and_ends_the_turn_test() -> Nil {
+  let harness =
+    harness("yield-unseen", [
+      PodFixture(..pod("1"), annotations: conflicting()),
+    ])
+  put(harness.table, "patched:1", "not json")
+  let actor = start(harness)
+
+  lists(harness)
+  let yield = patch_of(next(harness), "1")
+  assert string.contains(yield, "\\\"yielded\\\":\\\"999\\\"")
+  let #(reason, message, kind) = event_of(next(harness))
+  assert reason == "AnnotationYielded"
+  assert kind == "Pod"
+  assert message
+    == "controller.kubernetes.io/pod-deletion-cost: knarr applied 300 and found 999; another writer owns it now and knarr will not write it again on this pod"
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_yields_total{deployment=\"yield-unseen\",annotation=\"pod-deletion-cost\"} 1\n",
+  )
+  set_pods(harness.table, [PodFixture(..pod("1"), annotations: yielded())])
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  quiet(harness)
+  stop_actor(pid(actor))
+}
+
 // ownership Rejected; observability Events Rejected, AlsoLogged, Cadence
 // OnEntry, Logs Lines and Catalogue Patches: a 403 is a rejection at once.
 // The first of a run raises one PatchRejected Event on the Pod with the
@@ -1019,7 +1094,8 @@ pub fn a_403_raises_one_patch_rejected_event_per_run_test() -> Nil {
 
 // observability Cadence Restart and Events Rejected: the run is in memory
 // only, so a restarted process raises PatchRejected once more on its next
-// rejection; SeriesLife: its counter starts again at 0.
+// rejection; SeriesLife and lifecycle Restart Leftovers: its counter starts
+// again at 0.
 pub fn a_restart_raises_patch_rejected_once_more_test() -> Nil {
   let harness = harness("rejected-restart", [pod("1")])
   put(harness.table, "patch_status", "403")
@@ -1045,6 +1121,75 @@ pub fn a_restart_raises_patch_rejected_once_more_test() -> Nil {
   assert string.contains(
     metrics.collect(),
     "knarr_patch_rejections_total{deployment=\"rejected-restart\",purpose=\"apply\"} 1\n",
+  )
+  stop_actor(pid(actor))
+}
+
+// observability Events Rejected and k8s_client Verbs: a 200 whose body
+// gives no usable view is still an accepted patch, so it ends the run; the
+// next 403 raises PatchRejected again. The counter counts both rejections.
+pub fn an_accepted_patch_without_a_view_ends_the_run_test() -> Nil {
+  let harness = harness("rejected-unseen", [pod("1")])
+  put(harness.table, "patch_status", "403")
+  capture_logs(harness.table)
+  let actor = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  quiet(harness)
+  put(harness.table, "patch_status", "200")
+  put(harness.table, "patched:1", "not json")
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  put(harness.table, "patch_status", "403")
+  tick(harness:, actor:, at: 1330)
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"rejected-unseen\",purpose=\"apply\"} 2\n",
+  )
+  assert list.length(lines(harness, "patch rejected")) == 2
+  release_logs()
+  stop_actor(pid(actor))
+}
+
+// observability Cadence OnEntry: a rejection run lasts while the unselected
+// pod LIST shows the pod live, whether or not its Deployment is a target,
+// so a Deployment that opts out for a cycle and back in announces no
+// second PatchRejected; SeriesLife: the opt-out retired the Deployment's
+// series, so the counter starts again at 1.
+pub fn a_run_survives_the_deployment_opting_out_and_back_in_test() -> Nil {
+  let harness = harness("rejected-opt-out", [pod("1")])
+  put(harness.table, "patch_status", "403")
+  let actor = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  quiet(harness)
+  let deployments = get(harness.table, "deployments") |> should.be_ok
+  put(harness.table, "deployments", items([]))
+  tick(harness:, actor:, at: 1300)
+  lists(harness)
+  quiet(harness)
+  assert !string.contains(metrics.collect(), "deployment=\"rejected-opt-out\"")
+  put(harness.table, "deployments", deployments)
+  tick(harness:, actor:, at: 1330)
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"rejected-opt-out\",purpose=\"apply\"} 1\n",
   )
   stop_actor(pid(actor))
 }
@@ -1163,7 +1308,11 @@ pub fn a_recreated_deployment_of_the_same_name_keeps_its_series_test() -> Nil {
 // listener; the root sees the listener at 0 and the reconciler at 1 when
 // the poller profile is off. observability SeriesLife: the restarted process
 // starts its counters at 0 and carries no per-Deployment gauge series until
-// its first full cycle rebuilds them.
+// its first full cycle rebuilds them. lifecycle Restart Replica and
+// Leftovers: a crashlooping knarr raises no Event and starts its counters
+// at 0 on each start, which a_restart_raises_patch_rejected_once_more_test
+// and contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test
+// read from the restarted process.
 pub fn supervisor_restarts_the_reconciler_and_leaves_the_listener_test() -> Nil {
   let harness = harness("restart", [])
   let started =

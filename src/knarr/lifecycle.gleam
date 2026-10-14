@@ -61,10 +61,6 @@ pub type Removal {
   Removal(pod_name: String, name: String, deployment: String)
 }
 
-/// The owned annotations a marker can hold a record for, in the order
-/// `held` lists them.
-const owned_annotations = [ownership.pod_deletion_cost, ownership.safe_to_evict]
-
 /// The Removals a view makes due (Scope): none for a terminating view, else
 /// one per held annotation standing owned whose name is not in `enabled`,
 /// in held order. Derived from the view alone, with no memory of earlier
@@ -113,7 +109,7 @@ pub fn held(
   marker marker: Marker,
   annotations annotations: Option(Dict(String, String)),
 ) -> List(Held) {
-  list.filter_map(owned_annotations, fn(owned) {
+  list.filter_map(ownership.owned_annotations, fn(owned) {
     use record <- result.try(option.to_result(
       ownership.record(marker:, owned:),
       Nil,

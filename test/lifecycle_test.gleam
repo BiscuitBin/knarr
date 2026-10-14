@@ -119,7 +119,8 @@ pub fn due_for_a_pod_with_no_marker_is_none_test() -> Nil {
 }
 
 // Cleanup.Scope: a terminating view makes nothing due, since no patch is
-// sent to a terminating pod and none is awaited.
+// sent to a terminating pod and no new one is awaited; a Removal already
+// outstanding is Done's.
 pub fn due_for_a_terminating_pod_with_an_owned_record_is_none_test() -> Nil {
   let view = View(..non_target([pdc_owned, ste_owned]), terminating: True)
 
@@ -219,6 +220,17 @@ pub fn done_is_false_with_an_outstanding_removal_whose_pod_left_the_list_test() 
 pub fn done_is_true_when_the_only_out_of_scope_view_is_terminating_test() -> Nil {
   let views = [View(..non_target([pdc_owned, ste_owned]), terminating: True)]
 
+  assert lifecycle.done(views:, outstanding: [], deployment: "worker") == True
+}
+
+// Cleanup.Done: a terminating view holds nothing up by itself, but a Removal
+// of its pod still outstanding, pending or in flight, is awaited like any
+// other; once outstanding is empty the Deployment is done.
+pub fn done_awaits_an_outstanding_removal_of_a_terminating_pod_test() -> Nil {
+  let views = [View(..non_target([pdc_owned]), terminating: True)]
+  let outstanding = [removal("pod-deletion-cost")]
+
+  assert lifecycle.done(views:, outstanding:, deployment: "worker") == False
   assert lifecycle.done(views:, outstanding: [], deployment: "worker") == True
 }
 

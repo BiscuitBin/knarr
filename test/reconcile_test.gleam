@@ -313,8 +313,10 @@ pub fn absent_after_range_edges_test() -> Nil {
 
 // --------------------------------------------------------------- Restart ---
 
-// Fallback.Restart: a restart is initial; an absent pod is polled afresh and
-// re-enters once a new run has lasted the window.
+// Fallback.Restart and lifecycle Restart NoExpiry: a restart is initial; an
+// absent pod is polled afresh and re-enters once a new run has lasted the
+// window, so a value the new process finds stands until the window elapses
+// again, never by the age of its write.
 pub fn a_restart_is_initial_test() -> Nil {
   let fresh = reconcile.initial()
 

@@ -174,11 +174,13 @@ contract Ownership {
         -- pod, after which each stands unowned; removing the marker alone
         -- leaves every present value foreign.
     @invariant Objects
-        -- knarr's only write to Kubernetes is a patch on a live Pod object
-        -- (§4). It never patches a Deployment or a ReplicaSet, never a pod
-        -- template, and never spec.replicas: HPA or KEDA owns scaling (§7,
-        -- §9.3). The Role grants no verb that could do any of these: list
-        -- and patch on pods, create on events and list on deployments and
+        -- knarr's only change to a workload object is a patch on a live
+        -- Pod (§4); its one other write is the Event create k8s_client
+        -- makes (Client Verbs), which changes no workload object. It never
+        -- patches a Deployment or a ReplicaSet, never a pod template, and
+        -- never spec.replicas: HPA or KEDA owns scaling (§7, §9.3). The
+        -- Role grants no verb that could do any of these: list and patch
+        -- on pods, create on events and list on deployments and
         -- replicasets, as k8s_client Client Verbs states, and nothing
         -- else. Which paths a patch may name inside the pod is WriteMode's
         -- (metadata.annotations only, §6). Ticket 32 added this clause
@@ -206,7 +208,10 @@ contract Ownership {
         -- write it does not allow is dropped, as is a write of null for an
         -- annotation whose record is null or missing, since there is
         -- nothing to remove; a patch left with no writes returns no
-        -- operations and nothing is sent. Every write that remains is one
+        -- operations and nothing is sent. The standing patch and cleanup
+        -- read is Adoption's by the record's text; a record that does not
+        -- parse as its annotation's value is reconcile's to yield before
+        -- any write (Applied), so neither signature parses it. Every write that remains is one
         -- JSON Patch, content type application/json-patch+json, whose
         -- operations are in this order: a test that
         -- /metadata/deletionTimestamp is null; a test that the marker's

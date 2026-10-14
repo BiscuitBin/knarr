@@ -96,7 +96,9 @@ contract Cleanup {
         -- and lacks safe-to-evict for a target whose Deployment removed
         -- that opt-in; for a terminating view it returns nothing, since no
         -- patch is sent to a terminating pod (k8s_client
-        -- NoPatchWhileTerminating) and none is awaited. A
+        -- NoPatchWhileTerminating) and no new one is awaited; a Removal
+        -- of its pod already pending or in flight is Done's to account
+        -- for. A
         -- held annotation standing conflict or yielded is left as found:
         -- no yield, no Event, the record stays, and a later re-opt-in sees
         -- the conflict and yields then under ownership's Yield. A pod whose
@@ -189,7 +191,11 @@ contract Cleanup {
         -- deployment of the View that made it. It is what observability's
         -- SeriesLife waits for before retiring the Deployment's series once
         -- it is not in the target set, so an opt-out's cleanups are counted
-        -- before the series go; a terminating pod holds nothing up.
+        -- before the series go. A terminating view makes nothing due and
+        -- so holds nothing up by itself; a Removal of its pod that is
+        -- still outstanding is awaited like any other, pending until
+        -- budget's Pending drops it, since due no longer names the pod, or
+        -- in flight until it is answered.
     @invariant Label
         -- A cleanup patch counts on knarr_patches_total and
         -- knarr_patch_rejections_total with purpose cleanup and the
