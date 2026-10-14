@@ -13,11 +13,16 @@
 -- 2026-10-12. The decided invariants, including the rejected patch, are built
 -- by the round-2 spec-then-build ticket 32; the patch content type, its
 -- preconditions and the Event create are the client's (ticket 41). The key
--- prefix is config's (ticket 19); what the write times mean over time is
--- lifecycle's (ticket 23); the Event reason, the gauge and the log line are
+-- prefix is config's (ticket 19); the write times are informational
+-- (lifecycle Restart Informational, ticket 23); the Event reason, the gauge
+-- and the log line are
 -- observability's (ticket 30); safe-to-evict as the second owned annotation
 -- is safe_to_evict's (ticket 25); whether a due write may go now is budget's
 -- (ticket 24).
+-- Amended by ticket 23 on 2026-10-13: cleanup and its Released clause, the
+-- patch lifecycle's Cleanup sends, which drops a record from the marker and
+-- removes the marker when none remains; the write times are informational
+-- (lifecycle Restart Informational).
 
 ------------------------------------------------------------
 -- Value Types
@@ -107,6 +112,7 @@ contract Ownership {
     may_write: (standing: Standing) -> Boolean
     patch: (marker: Marker, annotations: List<Annotation>?, writes: List<Write>, at: Timestamp) -> List<Operation>
     yield: (marker: Marker, annotations: List<Annotation>?, owned: Owned, at: Timestamp) -> List<Operation>
+    cleanup: (marker: Marker, annotations: List<Annotation>?, owned: List<Owned>, at: Timestamp) -> List<Operation>
     document: (operations: List<Operation>) -> String
     rejected: (operations: List<Operation>, annotations: List<Annotation>?, deletion_timestamp: Timestamp?) -> Boolean
     event: (pod_name: String, pod_uid: String, marker: Marker, annotations: List<Annotation>?, owned: Owned) -> ConflictEvent
@@ -132,7 +138,9 @@ contract Ownership {
         -- differs from render of what it reads, which is how a hand edit
         -- that keeps the shape but not the form shows, no entries and no
         -- at; an edit that keeps the canonical form reads as what it says.
-        -- What the times mean over time is lifecycle's (ticket 23).
+        -- The times are informational: read parses them only to decide
+        -- that the marker is usable, and no decision is made from their
+        -- values (lifecycle Restart Informational, ticket 23).
     @invariant Adoption
         -- standing is a function of the newest API-returned view of the
         -- pod, the last LIST or knarr's own last accepted patch response,
@@ -144,7 +152,8 @@ contract Ownership {
         -- Deployment has not enabled (the safe-to-evict opt-in key is
         -- config's SafeToEvict, ticket 19; the gate is ticket 25's) only
         -- while the marker holds a record for it, so a value
-        -- left by an opt-out falls to cleanup (ticket 23). With no record
+        -- left by an opt-out falls to cleanup (lifecycle Cleanup Scope,
+        -- ticket 23). With no record
         -- for owned: unowned when the annotation is absent and foreign when
         -- it is present. With an applied record: owned when the annotation
         -- equals the recorded value, or is absent and the record is null;
@@ -173,7 +182,8 @@ contract Ownership {
         -- feeds neither. The first patch on an unowned annotation writes
         -- the value and the marker together, so an idle pod knarr never had
         -- to write carries no marker, and the removal that spells 0 keeps
-        -- the marker with a null applied record.
+        -- the marker with a null applied record; only a cleanup drops a
+        -- record (Released).
     @invariant WriteMode
         -- patch is defined for writes whose standing may_write allows; a
         -- write it does not allow is dropped, as is a write of null for an
@@ -245,6 +255,31 @@ contract Ownership {
         -- writes every pod, Karpenter with PodDeletionCostManagement,
         -- lablabs or zepellin, therefore disables knarr for every pod it
         -- reaches, once each.
+    @invariant Released
+        -- cleanup builds the patch lifecycle's Cleanup sends for the owned
+        -- annotations it releases, those a pod or an annotation leaving
+        -- knarr's management leaves standing owned (lifecycle Cleanup
+        -- Scope, ticket 23). It is defined for owned annotations whose
+        -- standing is owned; one that is not, and one with no record, is
+        -- dropped, and a call left with none returns no operations. Unlike
+        -- patch, a null applied record whose annotation is absent is not
+        -- dropped: there is nothing to remove from the pod, but the record
+        -- is released, so the patch rewrites the marker alone. The
+        -- operations are in this order: the deletionTimestamp test and the
+        -- marker test WriteMode names; per released annotation, a test that
+        -- it equals the applied record's value, or is null when the record
+        -- is null; then per released annotation whose record is not null a
+        -- remove; then the marker, rendered with every other entry kept
+        -- and the released entries dropped and its at set to at, as an add,
+        -- or, when no entry remains, a remove of the marker annotation
+        -- instead, so the pod carries nothing of knarr's and each owned
+        -- annotation stands unowned. A marker that holds entries sits in an
+        -- annotations map, so annotations is a list here; the null branch
+        -- WriteMode describes does not arise. The preconditions, the 422
+        -- and the next LIST are Precondition's and Rejected's; the patch
+        -- has purpose cleanup (observability Purpose), and a rejection of
+        -- it raises CleanupRejected rather than PatchRejected. Which
+        -- annotations are released, when and how often is lifecycle's.
     @invariant Event
         -- At most one Event per yield: one create attempt, never more.
         -- event is built from the marker and the annotations the yield
@@ -270,6 +305,7 @@ contract Ownership {
         -- Every signature is a function of its arguments alone: at is
         -- passed in, nothing here reads a clock, the pod, config or state,
         -- and nothing sends. Sending the patch and creating the Event are
-        -- k8s_client's; whether a due write may go now is budget's;
-        -- startup order and what the times mean are lifecycle's.
+        -- k8s_client's; whether a due write may go now is budget's; which
+        -- annotations a cleanup releases, and that the times decide
+        -- nothing, are lifecycle's.
 }

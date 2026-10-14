@@ -18,9 +18,12 @@
 -- and yield signals and their Events; the poll schedule and patcher (ticket
 -- 46) the budget signals, every patch and LIST result and the poll duration,
 -- where the patches, LISTs and polls are sent; the client (ticket 41) the
--- Event create. Tickets 19,
--- 23 and 25 add their own rows under the conventions here when they settle
--- (LaterRows); 21 added knarr_pods_unknown on 2026-10-13 (Standing).
+-- Event create. Tickets 19 and
+-- 25 add their own rows under the conventions here when they settle
+-- (LaterRows); 21 added knarr_pods_unknown on 2026-10-13 (Standing), and 23
+-- added no row on 2026-10-13 (LaterRows), naming the source of the
+-- deployment label on a cleanup (Labels) and when a Deployment's cleanup is
+-- done (SeriesLife).
 
 ------------------------------------------------------------
 -- Value Types
@@ -62,7 +65,11 @@ value AbsentEvent {
 -- rejection), the full keys of the owned annotations it concerned in the
 -- order the patch names them, and, for a cleanup, the owned annotations that
 -- stay on the pod with the values found in the view the patch was built
--- from (empty for any other purpose).
+-- from, or, for a cleanup that released records alone and would have
+-- removed only the marker (lifecycle Cleanup Scope, ownership Released),
+-- the marker annotation with its raw string; empty for one that released
+-- records alone and would have rewritten the marker, keeping other
+-- records, and for any other purpose.
 value RejectedEvent {
     pod_name: String
     pod_uid: String
@@ -106,8 +113,8 @@ enum ReadingKind { valid | not_found | invalid | refused | timed_out | unreachab
 -- What a patch was for: a write cost_mapping or safe_to_evict maps, the
 -- removal that spells 0 and reconcile's neutral removal included (reconcile
 -- Neutral); ownership's yield; or a removal made because the pod or the
--- annotation leaves knarr's management, which is lifecycle's to decide
--- (ticket 23).
+-- annotation leaves knarr's management, which is lifecycle's Cleanup Scope
+-- (ticket 23) and ownership's cleanup builds (ownership Released).
 enum Purpose { apply | yield | cleanup }
 
 -- Log levels, least to most severe.
@@ -140,7 +147,12 @@ contract Catalogue {
         -- threshold list, whose length config's Keys does not cap (ticket
         -- 19), so its value count, like deployment's, is a sizing
         -- assumption and not a limit knarr enforces; every other label set
-        -- is fixed here. No metric carries a pod label or a
+        -- is fixed here. For a patch, a rejection or a pending entry
+        -- concerning a pod that is not a target, which only a cleanup is,
+        -- deployment is the name the pod's ReplicaSet's controller owner
+        -- reference carries (k8s_client Owner.name), and is empty when the
+        -- chain names no Deployment (lifecycle Cleanup Label, ticket 23).
+        -- No metric carries a pod label or a
         -- namespace label: an install is one namespace (§9.18), and per-pod
         -- detail lives in Events and log lines. A label name that also names
         -- a log field means the same thing in both (Logs Format).
@@ -201,11 +213,17 @@ contract Catalogue {
         -- the owned annotations on the Deployment's pods by ownership's
         -- standing, annotation being Owned.name and standing owned,
         -- conflict, yielded or foreign; unowned is not counted. An
-        -- annotation counts on a pod exactly when reconcile asks its standing
-        -- under ownership's Adoption: when the Deployment enables it, and
-        -- otherwise only while the marker holds a record for it, so a value
-        -- an opt-out leaves counts until cleanup, or reconcile's Neutral,
-        -- removes it, and a
+        -- annotation counts on a pod exactly when reconcile, or the View
+        -- builder for a pod that is not a target (lifecycle View), asks its
+        -- standing under ownership's Adoption: when the Deployment enables
+        -- it, and otherwise only while the marker holds a record for it.
+        -- On a pod that is not a target only an annotation standing owned
+        -- counts, so a yielded or conflict record an opt-out leaves, which
+        -- no cleanup removes, counts nowhere and does not keep the
+        -- Deployment's series alive (SeriesLife). A value
+        -- an opt-out leaves counts until cleanup drops its record, whether
+        -- cleanup or reconcile's Neutral removed the value first (lifecycle
+        -- Cleanup Scope and Marker), and a
         -- safe-to-evict on a pod whose Deployment never enabled it counts
         -- nowhere. Its foreign series are the gauge ownership's Adoption
         -- requires.
@@ -236,8 +254,13 @@ contract Catalogue {
         -- from config.
     @invariant SeriesLife
         -- A Deployment's series live while knarr acts on its pods. Once the
-        -- Deployment has left the target set and nothing for its pods is
-        -- pending, in flight or awaiting cleanup (ticket 23), every series
+        -- Deployment is not in the target set, whether it left it in this
+        -- process or was never in it, as after a restart or for the empty
+        -- name lifecycle's Label counts under, nothing for its pods is
+        -- pending with purpose apply or in flight with purpose apply or
+        -- yield, and its cleanup
+        -- is done, which is lifecycle's Cleanup done being true for its name
+        -- (ticket 23), every series
         -- labelled with it is removed, counters included, so a late
         -- response or an opt-out cleanup is counted before the series go:
         -- retire returns the series it is given less every one whose
@@ -251,9 +274,14 @@ contract Catalogue {
         -- them.
     @invariant LaterRows
         -- These invariants are the conventions every later metric follows.
-        -- A ticket that settles a signal of its own (19, 23 or 25, as 21 did)
+        -- A ticket that settles a signal of its own (19 or 25, as 21 did)
         -- adds its row here with tend under Naming, Labels and SeriesLife,
-        -- without reopening ticket 30.
+        -- without reopening ticket 30. Ticket 23 added none on 2026-10-13:
+        -- cleanup is visible on knarr_patches_total and
+        -- knarr_patch_rejections_total with purpose cleanup, on
+        -- knarr_annotations and through CleanupRejected, and each cleanup
+        -- patch logs at debug as every patch does (lifecycle Cleanup
+        -- Label).
     @invariant Pure
         -- tier, patch_result, list_result and retire are functions of their
         -- arguments alone. Keeping the counts and serving the exposition are
@@ -308,7 +336,14 @@ contract Events {
         -- the pod until removed, for example kubectl annotate pod <pod>
         -- <removals>", with <keys> as Rejected says, <pairs> each annotation
         -- left as <key>=<value> joined by ", " ("stay" for more than one),
-        -- and <removals> each left key followed by "-", joined by " ".
+        -- and <removals> each left key followed by "-", joined by " ". When
+        -- left is empty, as for a cleanup that would have rewritten the
+        -- marker keeping other records, it renders instead "<keys>: the
+        -- apiserver rejected knarr's cleanup with <status>; the record
+        -- stays and knarr tries again no sooner than the patch interval",
+        -- naming no command: removing the marker by hand would leave every
+        -- value it still records foreign for the pod's life (ownership
+        -- Adoption).
     @invariant AlsoLogged
         -- Every Event's cause logs one warning line with the reason as the
         -- reason field and the fields of the Event's content, whether or not
@@ -334,7 +369,12 @@ contract Cadence {
         -- Absent); rejected is held from a rejection with purpose apply or
         -- yield, and cleanup_rejected from one with purpose cleanup, to the
         -- pod's next accepted patch (Events Rejected). A terminating pod or
-        -- one the LIST no longer shows leaves every state. The gauges carry
+        -- one the LIST no longer shows leaves every state, where for
+        -- rejected and cleanup_rejected the LIST is the unselected pod
+        -- LIST, so a pod of an opted-out Deployment whose cleanup is
+        -- rejected stays in cleanup_rejected across cycles and raises one
+        -- Event per run (lifecycle Cleanup Retry), and for every other
+        -- state it is the target set. The gauges carry
         -- "still in it".
     @invariant Restart
         -- seen is in memory only and empty after a restart, so every state
