@@ -16,6 +16,10 @@ import knarr/config.{
 import knarr/k8s_client.{Deployment, Owner, Pod, ReplicaSet}
 import knarr/observability
 
+/// The values the application reads with nothing set, each at its default.
+@external(erlang, "application_ffi", "values")
+fn application_values() -> List(#(String, Dynamic))
+
 const defaults =
   Defaults(
     status_port: 8080,
@@ -148,6 +152,11 @@ fn installed_defaults() -> List(#(String, Dynamic)) {
     #("patch_interval", dynamic.int(60)),
     #("list_interval", dynamic.int(60)),
     #("poll_concurrency", dynamic.int(64)),
+    #("poll_jitter_percent", dynamic.int(10)),
+    #("patch_rate_per_second", dynamic.int(5)),
+    #("patch_burst", dynamic.int(10)),
+    #("backoff_initial", dynamic.int(1)),
+    #("backoff_cap", dynamic.int(60)),
     #("log_level", dynamic.string("info")),
   ]
 }
@@ -1365,6 +1374,11 @@ const installed_at_defaults =
     absent_after: 300,
     list_interval: 60,
     poll_concurrency: 64,
+    poll_jitter_percent: 10,
+    patch_rate_per_second: 5,
+    patch_burst: 10,
+    backoff_initial: 1,
+    backoff_cap: 60,
     log_level: observability.Info,
   )
 
@@ -1372,6 +1386,12 @@ const installed_at_defaults =
 // record.
 pub fn installed_accepts_every_default_test() -> Nil {
   assert config.installed(installed_defaults()) == Ok(installed_at_defaults)
+}
+
+// Configuration.Installed: the values the application reads with nothing set
+// are the defaults and are accepted.
+pub fn application_defaults_are_accepted_test() -> Nil {
+  assert config.installed(application_values()) == Ok(installed_at_defaults)
 }
 
 // Configuration.Installed: each log level is read.
@@ -1413,8 +1433,75 @@ pub fn installed_refuses_a_value_outside_its_range_test() -> Nil {
       key: "poll_concurrency",
       reason: "outside 1 to 1024",
     ))
+  assert config.installed(with("poll_jitter_percent", dynamic.int(101)))
+    == Error(InstalledError(
+      key: "poll_jitter_percent",
+      reason: "outside 0 to 100",
+    ))
+  assert config.installed(with("patch_rate_per_second", dynamic.int(0)))
+    == Error(InstalledError(
+      key: "patch_rate_per_second",
+      reason: "outside 1 to 100",
+    ))
+  assert config.installed(with("patch_burst", dynamic.int(201)))
+    == Error(InstalledError(key: "patch_burst", reason: "outside 1 to 200"))
+  assert config.installed(with("backoff_cap", dynamic.int(601)))
+    == Error(InstalledError(key: "backoff_cap", reason: "outside 1 to 600"))
+  assert config.installed(with("backoff_initial", dynamic.int(0)))
+    == Error(InstalledError(key: "backoff_initial", reason: "outside 1 to 60"))
   assert config.installed(with("status_path", dynamic.string("status")))
     == Error(InstalledError(key: "status_path", reason: "not absolute"))
+}
+
+// Configuration.Installed: each of budget's five remaining values is read at
+// both ends of its range.
+pub fn installed_reads_each_budget_value_at_its_bounds_test() -> Nil {
+  assert config.installed(with("poll_jitter_percent", dynamic.int(0)))
+    == Ok(Installed(..installed_at_defaults, poll_jitter_percent: 0))
+  assert config.installed(with("poll_jitter_percent", dynamic.int(100)))
+    == Ok(Installed(..installed_at_defaults, poll_jitter_percent: 100))
+  assert config.installed(with("patch_rate_per_second", dynamic.int(1)))
+    == Ok(Installed(..installed_at_defaults, patch_rate_per_second: 1))
+  assert config.installed(with("patch_rate_per_second", dynamic.int(100)))
+    == Ok(Installed(..installed_at_defaults, patch_rate_per_second: 100))
+  assert config.installed(with("patch_burst", dynamic.int(1)))
+    == Ok(Installed(..installed_at_defaults, patch_burst: 1))
+  assert config.installed(with("patch_burst", dynamic.int(200)))
+    == Ok(Installed(..installed_at_defaults, patch_burst: 200))
+  assert config.installed(with("backoff_cap", dynamic.int(1)))
+    == Ok(Installed(..installed_at_defaults, backoff_cap: 1))
+  assert config.installed(with("backoff_cap", dynamic.int(600)))
+    == Ok(Installed(..installed_at_defaults, backoff_cap: 600))
+  assert config.installed(with("backoff_initial", dynamic.int(1)))
+    == Ok(Installed(..installed_at_defaults, backoff_initial: 1))
+  assert config.installed(with("backoff_initial", dynamic.int(60)))
+    == Ok(Installed(..installed_at_defaults, backoff_initial: 60))
+}
+
+// Configuration.Installed: backoff_initial is 1 to backoff_cap, so the cap is
+// read first and an initial above it is refused naming backoff_initial.
+pub fn installed_refuses_a_backoff_initial_above_the_cap_test() -> Nil {
+  let with_backoff = fn(initial, cap) {
+    installed_defaults()
+    |> list.map(fn(pair) {
+      case pair.0 {
+        "backoff_initial" -> #("backoff_initial", dynamic.int(initial))
+        "backoff_cap" -> #("backoff_cap", dynamic.int(cap))
+        _ -> pair
+      }
+    })
+  }
+
+  assert config.installed(with("backoff_initial", dynamic.int(61)))
+    == Error(InstalledError(key: "backoff_initial", reason: "outside 1 to 60"))
+  assert config.installed(with_backoff(600, 600))
+    == Ok(
+      Installed(..installed_at_defaults, backoff_initial: 600, backoff_cap: 600),
+    )
+  assert config.installed(with_backoff(2, 1))
+    == Error(InstalledError(key: "backoff_initial", reason: "outside 1 to 1"))
+  assert config.installed(with_backoff(0, 0))
+    == Error(InstalledError(key: "backoff_cap", reason: "outside 1 to 600"))
 }
 
 // Configuration.Installed: poll_timeout is 1 to poll_interval less one, so a
@@ -1450,6 +1537,8 @@ pub fn installed_refuses_a_value_of_the_wrong_type_test() -> Nil {
     == Error(InstalledError(key: "status_port", reason: "not an integer"))
   assert config.installed(with("thresholds", dynamic.int(300)))
     == Error(InstalledError(key: "thresholds", reason: "not a list of integers"))
+  assert config.installed(with("patch_burst", dynamic.string("10")))
+    == Error(InstalledError(key: "patch_burst", reason: "not an integer"))
   assert config.installed(with("log_level", dynamic.int(1)))
     == Error(InstalledError(key: "log_level", reason: "not a string"))
 }
@@ -1458,6 +1547,8 @@ pub fn installed_refuses_a_value_of_the_wrong_type_test() -> Nil {
 pub fn installed_refuses_a_missing_key_test() -> Nil {
   assert config.installed(without("absent_after"))
     == Error(InstalledError(key: "absent_after", reason: "missing"))
+  assert config.installed(without("backoff_cap"))
+    == Error(InstalledError(key: "backoff_cap", reason: "missing"))
   assert config.installed([])
     == Error(InstalledError(key: "status_port", reason: "missing"))
 }
@@ -1519,6 +1610,27 @@ pub fn installed_names_the_first_refused_key_in_order_test() -> Nil {
     == Error(InstalledError(
       key: "poll_concurrency",
       reason: "outside 1 to 1024",
+    ))
+
+  let budget =
+    installed_defaults()
+    |> list.map(fn(pair) {
+      case pair.0 {
+        "backoff_cap" -> #("backoff_cap", dynamic.int(0))
+        "poll_jitter_percent" -> #("poll_jitter_percent", dynamic.int(101))
+        _ -> pair
+      }
+    })
+
+  assert config.installed(budget)
+    == Error(InstalledError(
+      key: "poll_jitter_percent",
+      reason: "outside 0 to 100",
+    ))
+  assert config.installed(list.reverse(budget))
+    == Error(InstalledError(
+      key: "poll_jitter_percent",
+      reason: "outside 0 to 100",
     ))
 }
 

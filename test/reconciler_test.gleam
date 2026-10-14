@@ -89,6 +89,11 @@ const installed =
     absent_after: 300,
     list_interval: 60,
     poll_concurrency: 2,
+    poll_jitter_percent: 10,
+    patch_rate_per_second: 5,
+    patch_burst: 10,
+    backoff_initial: 1,
+    backoff_cap: 60,
     log_level: observability.Info,
   )
 

@@ -320,11 +320,13 @@ contract Configuration {
         -- the key (knarr Readiness): no default is substituted for a bad
         -- install-wide value and nothing runs on it, unlike a Deployment's
         -- override, whose fallback InvalidValue states. A key that is not
-        -- set takes its default. Ticket 31 reads worker_contract's three,
+        -- set takes its default. Ticket 31 read worker_contract's three,
         -- cost_mapping's two, reconcile's two, observability's one and
         -- budget's poll_interval, poll_timeout, patch_interval,
-        -- list_interval and poll_concurrency, and leaves budget's other five
-        -- to ticket 46 under this same rule.
+        -- list_interval and poll_concurrency; ticket 46 reads budget's other
+        -- five, poll_jitter_percent, patch_rate_per_second, patch_burst,
+        -- backoff_initial and backoff_cap, under this same rule,
+        -- backoff_initial checked against the backoff_cap read with it.
     @invariant Pure
         -- Every signature is a function of its arguments alone: the
         -- install-wide values arrive in defaults and the LIST results in
