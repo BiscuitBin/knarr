@@ -9,6 +9,7 @@
 
 import gleam/erlang/process.{type Pid, type Subject}
 import gleam/int
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/static_supervisor as supervisor
 import gleam/otp/supervision
@@ -197,6 +198,12 @@ fn await_absent(text: String) -> Bool {
   await(fn() { !string.contains(metrics.collect(), text) }, 50)
 }
 
+/// `await_metric` with a budget of `attempts` tens of milliseconds, for a
+/// change the patcher's own timer makes with the real clock.
+fn await_metric_for(line: String, attempts: Int) -> Bool {
+  await(fn() { string.contains(metrics.collect(), line) }, attempts)
+}
+
 fn await(condition: fn() -> Bool, attempts: Int) -> Bool {
   case condition() {
     True -> True
@@ -249,7 +256,9 @@ pub fn a_due_change_gets_a_turn_at_once_after_a_start_test() -> Nil {
 }
 
 // Pending, order: one turn is out at a time, and once it is answered the
-// oldest-due entry goes next, across pods and purposes alike.
+// oldest-due entry goes next, across pods and purposes alike: the older
+// entry here is an apply and alphabetically the last, so neither a cleanup
+// priority nor name order could pick it.
 pub fn one_turn_is_out_at_a_time_and_the_oldest_due_goes_first_test() -> Nil {
   let harness = harness()
   due(
@@ -262,31 +271,24 @@ pub fn one_turn_is_out_at_a_time_and_the_oldest_due_goes_first_test() -> Nil {
   assert next_turn(harness).pod_name == "a"
   due(
     harness:,
-    pod: "c",
-    purpose: budget.Apply,
+    pod: "b",
+    purpose: budget.Cleanup,
     deployment: "order",
     at: start_ms,
   )
   due(
     harness:,
-    pod: "b",
-    purpose: budget.Cleanup,
+    pod: "c",
+    purpose: budget.Apply,
     deployment: "order",
     at: start_ms - 1000,
   )
   quiet(harness)
   done(harness:, pod: "a", at: start_ms)
-  assert next_turn(harness) == Turn(pod_name: "b", purpose: budget.Cleanup)
-  quiet(harness)
-  attempted(
-    harness:,
-    pod: "b",
-    purpose: budget.Cleanup,
-    outcome: Accepted,
-    still_due: False,
-    at: start_ms,
-  )
   assert next_turn(harness) == Turn(pod_name: "c", purpose: budget.Apply)
+  quiet(harness)
+  done(harness:, pod: "c", at: start_ms)
+  assert next_turn(harness) == Turn(pod_name: "b", purpose: budget.Cleanup)
   stop_root(harness.root)
 }
 
@@ -432,9 +434,10 @@ pub fn the_bucket_bounds_a_burst_and_refills_whole_seconds_test() -> Nil {
   stop_root(harness.root)
 }
 
-// Bucket: a turn that finds nothing due refunds its token, and the pod it
-// was for is not held by an interval it never spent.
-pub fn nothing_due_refunds_the_token_test() -> Nil {
+// Bucket: a turn that finds nothing due spends no token and leaves the
+// bucket as it was, since no attempt was made; only an attempt spends one,
+// and the pod is not held by an interval it never started.
+pub fn nothing_due_leaves_the_bucket_as_it_was_test() -> Nil {
   let table = table_new()
   put(table, "now_ms", int.to_string(start_ms))
   let harness =
@@ -448,14 +451,14 @@ pub fn nothing_due_refunds_the_token_test() -> Nil {
     harness:,
     pod: "a",
     purpose: budget.Apply,
-    deployment: "refund",
+    deployment: "nothing",
     at: start_ms,
   )
   due(
     harness:,
     pod: "b",
     purpose: budget.Apply,
-    deployment: "refund",
+    deployment: "nothing",
     at: start_ms,
   )
   assert next_turn(harness).pod_name == "a"
@@ -465,15 +468,136 @@ pub fn nothing_due_refunds_the_token_test() -> Nil {
   )
   assert next_turn(harness).pod_name == "b"
   done(harness:, pod: "b", at: start_ms)
-  quiet(harness)
-  wake(harness:, at: start_ms + 1000)
   due(
     harness:,
     pod: "a",
     purpose: budget.Apply,
-    deployment: "refund",
-    at: start_ms + 1000,
+    deployment: "nothing",
+    at: start_ms,
   )
+  quiet(harness)
+  wake(harness:, at: start_ms + 1000)
+  assert next_turn(harness).pod_name == "a"
+  stop_root(harness.root)
+}
+
+// Threshold: the token is spent when the attempt is reported, so a turn
+// answered late is counted against the bucket of that moment and at most
+// burst + rate per whole second attempts fall in any window, 15 in one
+// second at the defaults, however the refill and the answer interleave.
+pub fn the_threshold_holds_when_a_turn_is_answered_late_test() -> Nil {
+  let harness = harness()
+  due_with_interval(
+    harness:,
+    pod: "a",
+    deployment: "threshold",
+    interval_s: 0,
+    at: start_ms,
+  )
+  assert next_turn(harness).pod_name == "a"
+  put(harness.table, "now_ms", int.to_string(start_ms + 1500))
+  attempted(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    outcome: Accepted,
+    still_due: True,
+    at: start_ms + 1500,
+  )
+  let attempts =
+    answer_every_turn(
+      harness:,
+      at: start_ms + 1500,
+      until: start_ms + 3500,
+      attempts: [
+        start_ms + 1500,
+      ],
+    )
+  assert attempts_in(attempts:, from: start_ms + 1500, window_s: 1) <= 15
+  list.each([1, 2, 3], fn(window_s) {
+    list.each(attempts, fn(from) {
+      assert attempts_in(attempts:, from:, window_s:) <= 5 * window_s + 10
+    })
+  })
+  assert list.length(attempts) == 20
+  stop_root(harness.root)
+}
+
+/// Answers every turn at once with an attempt at the clock's reading `at`,
+/// and once no turn is out moves the clock half a second and wakes the
+/// patcher, until `until`. The attempts' times, newest first.
+fn answer_every_turn(
+  harness harness: Harness,
+  at at: Int,
+  until until: Int,
+  attempts attempts: List(Int),
+) -> List(Int) {
+  put(harness.table, "now_ms", int.to_string(at))
+  case process.receive(harness.sink, 200) {
+    Ok(turn) -> {
+      attempted(
+        harness:,
+        pod: turn.pod_name,
+        purpose: turn.purpose,
+        outcome: Accepted,
+        still_due: True,
+        at:,
+      )
+      answer_every_turn(harness:, at:, until:, attempts: [at, ..attempts])
+    }
+    Error(Nil) if at >= until -> attempts
+    Error(Nil) -> {
+      wake(harness:, at: at + 500)
+      answer_every_turn(harness:, at: at + 500, until:, attempts:)
+    }
+  }
+}
+
+fn attempts_in(
+  attempts attempts: List(Int),
+  from from: Int,
+  window_s window_s: Int,
+) -> Int {
+  list.count(attempts, fn(at) { at >= from && at < from + window_s * 1000 })
+}
+
+// PerPod, Pending: a Due for a change already pending keeps its due_since
+// and refreshes its interval and Deployment, so a changed override reaches
+// the held pod.
+pub fn a_due_for_a_pending_entry_refreshes_its_interval_and_keeps_its_due_since_test() -> Nil {
+  let harness = harness()
+  due_with_interval(
+    harness:,
+    pod: "a",
+    deployment: "stale",
+    interval_s: 60,
+    at: start_ms,
+  )
+  assert next_turn(harness).pod_name == "a"
+  attempted(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    outcome: Rejected,
+    still_due: True,
+    at: start_ms,
+  )
+  put(harness.table, "now_ms", int.to_string(start_ms + 30_000))
+  due_with_interval(
+    harness:,
+    pod: "a",
+    deployment: "stale-moved",
+    interval_s: 3600,
+    at: start_ms + 30_000,
+  )
+  assert await_metric(pending_line("stale-moved", 1))
+  assert await_metric(pending_line("stale", 0))
+  wake(harness:, at: start_ms + 60_000)
+  quiet(harness)
+  assert await_metric(oldest_line(60))
+  wake(harness:, at: start_ms + 3_599_999)
+  quiet(harness)
+  wake(harness:, at: start_ms + 3_600_000)
   assert next_turn(harness).pod_name == "a"
   stop_root(harness.root)
 }
@@ -549,6 +673,8 @@ pub fn a_429_pauses_every_pod_and_the_wake_at_until_grants_test() -> Nil {
     at: start_ms + 7000,
   )
   assert next_turn(harness).pod_name == "b"
+  assert await_metric(paused_line(0))
+  assert await_metric(pause_seconds_line(0))
   attempted(
     harness:,
     pod: "b",
@@ -615,13 +741,14 @@ pub fn the_wake_timer_lifts_the_pause_on_its_own_test() -> Nil {
     at: now,
   )
   assert next_turn(harness).pod_name == "a"
+  let at = unix_milliseconds()
   attempted(
     harness:,
     pod: "a",
     purpose: budget.Apply,
     outcome: throttled(None),
     still_due: False,
-    at: unix_milliseconds(),
+    at:,
   )
   due_with_interval(
     harness:,
@@ -630,9 +757,42 @@ pub fn the_wake_timer_lifts_the_pause_on_its_own_test() -> Nil {
     interval_s: 0,
     at: now,
   )
-  assert process.receive(harness.sink, 500) == Error(Nil)
-  let turn = process.receive(harness.sink, 1500) |> should.be_ok
+  let turn = process.receive(harness.sink, 3000) |> should.be_ok
+  assert unix_milliseconds() >= at + 1000
   assert turn.pod_name == "b"
+  stop_root(harness.root)
+}
+
+// PauseScope, with the real clock: a pause with nothing left pending still
+// ends on the patcher's own timer, so the patch-scope gauges clear.
+pub fn a_pause_ends_on_the_timer_with_nothing_pending_test() -> Nil {
+  let table = table_new()
+  let harness =
+    start(rate_per_second: 5, burst: 10, now: unix_milliseconds, table:)
+  due_with_interval(
+    harness:,
+    pod: "a",
+    deployment: "empty-pause",
+    interval_s: 0,
+    at: unix_milliseconds(),
+  )
+  assert next_turn(harness).pod_name == "a"
+  attempted(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    outcome: throttled(None),
+    still_due: True,
+    at: unix_milliseconds(),
+  )
+  assert await_metric(paused_line(1))
+  process.send(
+    harness.patcher,
+    Listed(targets: [], terminating: [], deployments: []),
+  )
+  assert await_metric(pending_line("empty-pause", 0))
+  assert await_metric_for(paused_line(0), 300)
+  assert await_metric(pause_seconds_line(0))
   stop_root(harness.root)
 }
 
@@ -671,9 +831,15 @@ pub fn a_list_discards_the_apply_of_a_gone_or_terminating_pod_and_keeps_its_clea
     at: start_ms,
   )
   assert await_metric(pending_line("list", 4))
-  process.send(harness.patcher, Listed(targets: ["a", "b"], terminating: ["b"]))
+  process.send(
+    harness.patcher,
+    Listed(targets: ["a", "b"], terminating: ["b"], deployments: ["list"]),
+  )
   assert await_metric(pending_line("list", 2))
-  process.send(harness.patcher, Listed(targets: ["b"], terminating: []))
+  process.send(
+    harness.patcher,
+    Listed(targets: ["b"], terminating: [], deployments: ["list"]),
+  )
   assert await_metric(pending_line("list", 1))
   quiet(harness)
   attempted(
@@ -728,13 +894,45 @@ pub fn a_departed_deployment_is_quiet_once_nothing_of_its_pods_is_pending_or_in_
   assert await_metric(pending_line("gone", 2))
   process.send(harness.patcher, Departed("gone"))
   no_quiet(harness)
-  process.send(harness.patcher, Listed(targets: ["x"], terminating: []))
+  process.send(
+    harness.patcher,
+    Listed(targets: ["x"], terminating: [], deployments: ["stays"]),
+  )
   no_quiet(harness)
   done(harness:, pod: "a", at: start_ms)
   assert next_turn(harness).pod_name == "x"
   assert next_quiet(harness) == "gone"
   assert await_absent("knarr_patches_pending{deployment=\"gone\"}")
   assert await_metric(pending_line("stays", 1))
+  stop_root(harness.root)
+}
+
+// observability SeriesLife: a Deployment that departs and rejoins before it
+// is quiet is never quiet; its pending series stays, and a later departure
+// starts afresh.
+pub fn a_deployment_that_rejoins_before_quiet_keeps_its_pending_series_test() -> Nil {
+  let harness = harness()
+  due(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    deployment: "rejoin",
+    at: start_ms,
+  )
+  assert next_turn(harness).pod_name == "a"
+  assert await_metric(pending_line("rejoin", 1))
+  process.send(harness.patcher, Departed("rejoin"))
+  no_quiet(harness)
+  process.send(
+    harness.patcher,
+    Listed(targets: ["a"], terminating: [], deployments: ["rejoin"]),
+  )
+  done(harness:, pod: "a", at: start_ms)
+  no_quiet(harness)
+  assert await_metric(pending_line("rejoin", 0))
+  process.send(harness.patcher, Departed("rejoin"))
+  assert next_quiet(harness) == "rejoin"
+  assert await_absent("knarr_patches_pending{deployment=\"rejoin\"}")
   stop_root(harness.root)
 }
 
