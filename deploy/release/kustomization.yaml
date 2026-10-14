@@ -4,10 +4,12 @@
 # install per namespace (OVERVIEW §9.18), and the Role's verbs and the
 # RoleBinding belong in the base. `just deployment-check` renders both and
 # fails on any other difference.
-# The digest is 0.1.0's, the first release (ticket 37). A release's digest
-# exists only once its run has pushed, so `just release-pin sha256:<64 hex>`
-# pins it on main after the tag: at a release's own tag this file still holds
-# the previous digest, and an install there takes the digest from the run.
+# The digest is the latest pinned release's; ticket 37 pinned the first,
+# 0.1.0's. A release's digest exists only once its run has pushed, so
+# `just release-pin sha256:<64 hex>` pins it on main after the tag: at a
+# release's own tag this file still holds the previous digest. An install
+# checks out the tag, runs `just release-pin sha256:<64 hex>` there with the
+# run's digest, and applies this overlay.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

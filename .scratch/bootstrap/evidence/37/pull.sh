@@ -39,7 +39,10 @@ until inner docker info > /dev/null 2>&1; do
 done
 v=$(inner docker version --format '{{.Server.Version}} {{.Server.Os}}/{{.Server.Arch}}') || fail 'the inner daemon did not answer'
 printf 'inner daemon: %s, up after %s s\n' "$v" "$i"
-v=$(inner docker images -q | wc -l | tr -d ' ') || fail 'listing inner images failed'
+# Each list is read first and counted after, so a failed command fails here
+# instead of counting as an empty list.
+out=$(inner docker images -q) || fail 'listing inner images failed'
+v=$(printf '%s' "$out" | grep -c . || true)
 expect 'inner images before the pull' "$v" 0
 # shellcheck disable=SC2016  # expanded by the inner shell, not this one
 v=$(inner sh -c 'ls -A "${DOCKER_CONFIG:-$HOME/.docker}" 2> /dev/null | wc -l | tr -d " "') || fail 'reading the inner docker config failed'
@@ -68,6 +71,7 @@ inner docker images --digests
 
 echo; echo "== docker rm -fv"
 docker rm -fv "$name" > /dev/null || fail 'removing the container failed'
-v=$(docker ps -aq --filter "name=^$name\$" | wc -l | tr -d ' ') || fail 'listing containers failed'
+out=$(docker ps -aq --filter "name=^$name\$") || fail 'listing containers failed'
+v=$(printf '%s' "$out" | grep -c . || true)
 expect 'containers left' "$v" 0
 echo; echo 'pulled by digest on a daemon that never built it; labels match 0.1.0 and the tagged commit'

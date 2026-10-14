@@ -1,4 +1,4 @@
-date: 2026-10-14T04:47:33Z
+date: 2026-10-14T06:31:44Z
 image: ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
 commit: 283a7d489d07d81bd3a9c393ce10be11ad71303f
 host daemon: 29.4.0 linux/arm64
@@ -13,22 +13,22 @@ ok   inner docker config files (no credentials): 0
 ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7: Pulling from steven-cutting/knarr
 d6b2f7582cf5: Pulling fs layer
 a60ef8ec184e: Pulling fs layer
-42ed850e36eb: Pulling fs layer
 86b9f61ea396: Pulling fs layer
 7ce5a6ef78c3: Pulling fs layer
+42ed850e36eb: Pulling fs layer
 61f70ba02274: Pulling fs layer
 61f70ba02274: Download complete
-86b9f61ea396: Download complete
 d6b2f7582cf5: Download complete
+86b9f61ea396: Download complete
 42ed850e36eb: Download complete
 a60ef8ec184e: Download complete
 86b9f61ea396: Pull complete
 a60ef8ec184e: Pull complete
 7ce5a6ef78c3: Download complete
-42ed850e36eb: Pull complete
 7ce5a6ef78c3: Pull complete
 61f70ba02274: Pull complete
 d6b2f7582cf5: Pull complete
+42ed850e36eb: Pull complete
 Digest: sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
 Status: Downloaded newer image for ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
 ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
@@ -41,8 +41,8 @@ ok   org.opencontainers.image.source: https://github.com/steven-cutting/knarr
 info org.opencontainers.image.created: 2026-10-14T04:17:00Z
 ok   platform: linux/amd64
 ok   repo digests: ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
-REPOSITORY                     TAG       DIGEST                                                                    IMAGE ID       CREATED          SIZE
-ghcr.io/steven-cutting/knarr   <none>    sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7   97262e02b632   30 minutes ago   381MB
+REPOSITORY                     TAG       DIGEST                                                                    IMAGE ID       CREATED       SIZE
+ghcr.io/steven-cutting/knarr   <none>    sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7   97262e02b632   2 hours ago   381MB
 
 == docker rm -fv
 ok   containers left: 0

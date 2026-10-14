@@ -1,4 +1,4 @@
-date: 2026-10-14T04:33Z
+date: 2026-10-14T06:31Z
 gh version 2.100.0 (2026-09-03)
 repository: steven-cutting/knarr
 
@@ -11,9 +11,9 @@ ok   ref: v0.1.0
 ok   head sha: 283a7d489d07d81bd3a9c393ce10be11ad71303f
 ok   status, conclusion: completed success
 -- jobs
-Verify the tag: success, 2026-10-14T03:33:13Z to 2026-10-14T03:33:17Z
-Publish to ghcr.io: success, 2026-10-14T04:16:55Z to 2026-10-14T04:17:36Z
-ok   job conclusions: Publish to ghcr.io=success, Verify the tag=success
+Verify the tag (job 115666176163): success, 2026-10-14T03:33:13Z to 2026-10-14T03:33:17Z
+Publish to ghcr.io (job 115666207132): success, 2026-10-14T04:16:55Z to 2026-10-14T04:17:36Z
+ok   job conclusions: Publish to ghcr.io=success,Verify the tag=success
 
 == the release environment's approval: gh api repos/steven-cutting/knarr/actions/runs/38506839202/approvals
 approved by steven-cutting (user 8365892) for release (23921538204), comment: "test"
@@ -21,6 +21,8 @@ ok   approvals (state:user:environment): approved:8365892:23921538204
 
 == Verify the tag (job 115666176163): the guards' line
 tag v0.1.0 at 283a7d489d07d81bd3a9c393ce10be11ad71303f: version 0.1.0, an ancestor of origin/main, in the changelog
+ok   verify's line: tag v0.1.0 at 283a7d489d07d81bd3a9c393ce10be11ad71303f: version 0.1.0, an ancestor of origin/main, in the changelog
+ok   error lines (::error:: or ##[error]): 0
 
 == Publish to ghcr.io (job 115666207132): login, the moved-tag refusal, the existence guard, the push, the digest
 Login Succeeded
@@ -32,6 +34,14 @@ ghcr.io/steven-cutting/knarr:0.1.0 is absent (http 404): pushing
 #30 pushing ghcr.io/steven-cutting/knarr:0.1 with docker
 #31 pushing ghcr.io/steven-cutting/knarr:sha-283a7d4 with docker
 digest=sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+-- checks
+ok   Login Succeeded lines: 1
+ok   the existence guard's line: ghcr.io/steven-cutting/knarr:0.1.0 is absent (http 404): pushing
+ok   tags buildx named: 0.1,0.1.0,sha-283a7d4
+ok   tags buildx pushed: 0.1,0.1.0,sha-283a7d4
+ok   error lines (::error:: or ##[error]): 0
+ok   digest= lines: 1
+ok   the digest is sha256: and 64 hex digits: 1
 
 == the git tag
 ok   git cat-file -t v0.1.0: tag

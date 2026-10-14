@@ -1,10 +1,12 @@
 #!/bin/sh
 # Ticket 37 evidence: ghcr.io/steven-cutting/knarr as anyone sees it, with no
-# credentials. Run twice: `private` before the maintainer changes the
-# package's visibility, `public` after.
-#   private: the anonymous pull token is refused (403), and lib.sh's probe_tag
-#            reads `unknown` (401), as 28's ghcr-probe.txt saw for a package
-#            it could not see.
+# credentials. Two modes. `private` was written for the package before a
+# visibility change, expecting Decision 0012's account. Nobody changed the
+# visibility, and `private` failed its first expectation because the package
+# was already public (public-private.txt). `public` reads the package as it is.
+#   private: expects the anonymous pull token refused (403), and lib.sh's
+#            probe_tag reading `unknown` (401), as 28's ghcr-probe.txt saw for
+#            a package it could not see.
 #   public:  an anonymous pull token is granted; with it, every tag release.yml
 #            pushed, and the digest itself, answer 200 with the run's digest;
 #            `latest` answers 404; tags/list holds exactly the three tags; and
