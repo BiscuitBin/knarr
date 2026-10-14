@@ -9,6 +9,7 @@ import gleam/dict.{type Dict}
 import gleam/dynamic.{type Dynamic}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import knarr/budget
 import knarr/config.{
   type Invalid, type Settings, Defaults, Installed, InstalledError, Invalid,
@@ -1467,6 +1468,20 @@ pub fn installed_refuses_a_value_outside_its_range_test() -> Nil {
     == Error(InstalledError(key: "backoff_cap", reason: "outside 1 to 600"))
   assert config.installed(with("backoff_initial", dynamic.int(0)))
     == Error(InstalledError(key: "backoff_initial", reason: "outside 1 to 60"))
+  assert config.installed(with("poll_jitter_percent", dynamic.int(-1)))
+    == Error(InstalledError(
+      key: "poll_jitter_percent",
+      reason: "outside 0 to 100",
+    ))
+  assert config.installed(with("patch_rate_per_second", dynamic.int(101)))
+    == Error(InstalledError(
+      key: "patch_rate_per_second",
+      reason: "outside 1 to 100",
+    ))
+  assert config.installed(with("patch_burst", dynamic.int(0)))
+    == Error(InstalledError(key: "patch_burst", reason: "outside 1 to 200"))
+  assert config.installed(with("backoff_cap", dynamic.int(0)))
+    == Error(InstalledError(key: "backoff_cap", reason: "outside 1 to 600"))
   assert config.installed(with("status_path", dynamic.string("status")))
     == Error(InstalledError(key: "status_path", reason: "not absolute"))
 }
@@ -1520,6 +1535,8 @@ pub fn installed_refuses_a_backoff_initial_above_the_cap_test() -> Nil {
     == Error(InstalledError(key: "backoff_initial", reason: "outside 1 to 1"))
   assert config.installed(with_backoff(0, 0))
     == Error(InstalledError(key: "backoff_cap", reason: "outside 1 to 600"))
+  assert config.installed(with_backoff(601, 600))
+    == Error(InstalledError(key: "backoff_initial", reason: "outside 1 to 600"))
 }
 
 // Configuration.Installed: poll_timeout is 1 to poll_interval less one, so a
@@ -1650,6 +1667,29 @@ pub fn installed_names_the_first_refused_key_in_order_test() -> Nil {
       key: "poll_jitter_percent",
       reason: "outside 0 to 100",
     ))
+
+  // Each adjacent pair of budget's five, both orders of the input list.
+  let adjacent = fn(first, second) {
+    let values =
+      installed_defaults()
+      |> list.map(fn(pair) {
+        case pair.0 == first || pair.0 == second {
+          True -> #(pair.0, dynamic.int(-1))
+          False -> pair
+        }
+      })
+    assert result.map_error(config.installed(values), fn(error) { error.key })
+      == Error(first)
+    assert result.map_error(config.installed(list.reverse(values)), fn(error) {
+        error.key
+      })
+      == Error(first)
+  }
+  adjacent("poll_concurrency", "poll_jitter_percent")
+  adjacent("poll_jitter_percent", "patch_rate_per_second")
+  adjacent("patch_rate_per_second", "patch_burst")
+  adjacent("patch_burst", "backoff_cap")
+  adjacent("backoff_cap", "backoff_initial")
 }
 
 // ------------------------------------------------------------------ Pure ---
