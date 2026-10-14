@@ -11,7 +11,9 @@
 -- §5 stale state, §8, §9.12). Cleanup acts only on annotations standing
 -- owned under ownership's Adoption; a yielded, conflict or foreign value
 -- stays. There is no expiry by age: the reading window reconcile keeps in
--- memory is the only expiry, within a run and across a restart alike. The
+-- memory is the only expiry, within a run and across a restart alike, and
+-- a safe-to-evict hold cap, if ticket 25 sets one, is not an expiry
+-- (Restart NoExpiry). The
 -- single replica with no leader election and the gap during a Recreate
 -- upgrade (§8, §9.19) are decided in the overview and stated here by
 -- ticket 32 with tend.
@@ -64,10 +66,14 @@ value View {
 }
 
 -- One removal a cleanup makes: the owned annotation, by short name, to
--- remove from the pod together with its record.
+-- remove from the pod together with its record, and the deployment of the
+-- View that made it, which the Removal keeps while it is pending or in
+-- flight, so Done and Label still find its Deployment once the pod has
+-- left the pod LIST.
 value Removal {
     pod_name: String
     name: String
+    deployment: String
 }
 
 ------------------------------------------------------------
@@ -128,8 +134,11 @@ contract Cleanup {
         -- or above the first threshold (cost_mapping Crossing).
     @invariant Retry
         -- A cleanup that is not accepted, a 422, a rejection, a 429 or a
-        -- transport failure alike, leaves nothing behind but the pod's
-        -- last attempt time: knarr remembers no failure. The Removal stays
+        -- transport failure alike, leaves nothing behind for scheduling but
+        -- the pod's last attempt time: knarr remembers no failure to decide
+        -- when or whether to retry. The rejection run (observability
+        -- Cadence) and the failed operations until the next LIST (ownership
+        -- Rejected) are kept as those clauses say. The Removal stays
         -- due while the view that made it stands and is due again from
         -- every later view that names it (budget Pending keeps the entry
         -- while due names the pod), so it is retried while the pod lives,
@@ -150,8 +159,11 @@ contract Cleanup {
         -- permanent rejection, by an admission webhook, keeps the
         -- Deployment's series alive at one attempt per pod per interval
         -- until the operator removes by hand what the Event's message
-        -- names, the annotation left or, for a marker-only cleanup, the
-        -- marker, or the pod goes.
+        -- names, the annotation left or, for a marker-only cleanup that
+        -- would have removed the marker, the marker, or the pod goes; a
+        -- marker-only cleanup that would have rewritten the marker names
+        -- nothing to remove (observability CleanupRejected) and is retried
+        -- while the pod lives.
     @invariant Order
         -- A due cleanup is a pending change under budget's Pending, with
         -- purpose cleanup, served oldest-due first among every pending
@@ -169,14 +181,20 @@ contract Cleanup {
         -- done is true for a Deployment when no live, non-terminating view
         -- whose deployment is that name has a non-empty due, and
         -- outstanding, the cleanups pending or in flight, holds no Removal
-        -- for any pod of such a view. It is what observability's SeriesLife
-        -- waits for before retiring the Deployment's series once it has
-        -- left the target set, so an opt-out's cleanups are counted before
-        -- the series go; a terminating pod holds nothing up.
+        -- whose deployment is that name, so a cleanup in flight for a pod
+        -- that has since left the pod LIST holds the Deployment until it is
+        -- answered. done reads only each Removal's deployment: the caller
+        -- builds outstanding from budget's Pending, which stores no
+        -- annotation name, and from the patches in flight, each with the
+        -- deployment of the View that made it. It is what observability's
+        -- SeriesLife waits for before retiring the Deployment's series once
+        -- it is not in the target set, so an opt-out's cleanups are counted
+        -- before the series go; a terminating pod holds nothing up.
     @invariant Label
         -- A cleanup patch counts on knarr_patches_total and
         -- knarr_patch_rejections_total with purpose cleanup and the
-        -- deployment label the View carries: the Deployment's name for a
+        -- deployment label its Removal carries, copied from the View that
+        -- made it: the Deployment's name for a
         -- target, and for a pod that is not one the name its ReplicaSet's
         -- controller owner reference carries (k8s_client Owner.name), since
         -- the opted-out Deployment is not in the selected LIST and config's
@@ -201,7 +219,9 @@ contract Cleanup {
 
 contract Restart {
     @invariant NoExpiry
-        -- No owned annotation expires by age, pod-deletion-cost and
+        -- Expiry is removing a value because it is stale: for lack of a
+        -- valid reading, or by the age of its write. No owned annotation
+        -- expires by age, pod-deletion-cost and
         -- safe-to-evict alike, within a run or across a downtime. The
         -- reading window is the expiry: a value a restarted knarr finds on
         -- a marked pod stands, as it did before the restart, until the
@@ -213,8 +233,12 @@ contract Restart {
         -- window after the first readings of the new process. A dead knarr
         -- cannot act on anything, so an expiry judged at startup from the
         -- marker's times would be a guaranteed flap after every long
-        -- downtime and is rejected. The pinning cap safe_to_evict may set
-        -- (ticket 25) is a cap on how long a mark is held, not an expiry.
+        -- downtime and is rejected. A safe-to-evict hold cap, if ticket 25
+        -- sets one, is not an expiry: it is safe_to_evict's policy, decided
+        -- from valid readings and from time counted in memory from when the
+        -- mark began, reset by a restart like the reading window, and never
+        -- read from the marker's at (Informational); ticket 25 states it and
+        -- what a restart does to it.
     @invariant Informational
         -- The marker's at and each record's at are the time of the write
         -- that made them (ownership Recorded), and no decision in knarr is
@@ -256,41 +280,60 @@ contract Restart {
         -- The restart threshold §9.16 sets for the §3 criterion, measured
         -- by the harness ticket 33 builds against the fake worker's
         -- control endpoint, has three parts, after knarr is stopped and a
-        -- new process answers /readyz 200. (a) With every fake worker
-        -- holding a cost that crosses no threshold during the run and no
-        -- Deployment opting out or changing its opt-ins, the new process's
-        -- knarr_patches_total stays 0 for 300 seconds after readiness. (b)
-        -- A Deployment opted out during the downtime has every owned
-        -- annotation standing owned removed from its live pods, with the
-        -- marker, within two list intervals of readiness, 120 seconds at
-        -- the defaults. (c) A worker whose cost changed tier during the
-        -- downtime is rewritten within one poll interval plus its jitter
-        -- plus one patch interval of readiness, about 100 seconds at the
-        -- defaults. The windows of (b) and (c) are bounds with slack: after
-        -- a restart every pod is patchable at once (budget Restart) and the
-        -- first poll is due within one interval (budget Phase), so the
-        -- derivable times are shorter, and the slack absorbs the bucket
-        -- and a pause.
+        -- new process answers /readyz 200. (a) For a Deployment whose
+        -- opt-ins did not change and every worker of which holds a cost
+        -- whose mapped value (cost_mapping map) equals its applied value
+        -- through the downtime and the run, the new process's
+        -- knarr_patches_total with that deployment label stays 0 for 300
+        -- seconds after readiness. (b) A Deployment opted out during the
+        -- downtime has every owned annotation standing owned removed from
+        -- its live pods, and the marker of each pod where no record
+        -- remains, within two list intervals of readiness, 120 seconds at
+        -- the defaults. (c) A worker whose cost changed during the downtime
+        -- so that its mapped value differs from its applied value
+        -- (cost_mapping Crossing) is rewritten within one poll interval
+        -- plus its jitter plus one patch interval of readiness, about 100
+        -- seconds at the defaults. One restart run asserts all three, (a)
+        -- on the Deployments the run leaves untouched and (b) and (c) on
+        -- others. The windows of (b) and (c) are bounds with slack for a
+        -- harness run in which no patch is answered 429, so budget's
+        -- BackOff never pauses, and the patches due after readiness fit
+        -- the bucket within the window: after a restart every pod is
+        -- patchable at once (budget Restart) and the first poll is due
+        -- within one interval (budget Phase), so the derivable times are
+        -- shorter, and the slack absorbs the bucket. A pause, or more
+        -- patches due than the bucket serves in the window (Cleanup
+        -- Order), lengthens them, and the threshold does not cover it.
 }
 
 contract Uninstall {
     @invariant Procedure
         -- Uninstall is: opt every Deployment out, wait for cleanup, delete
         -- knarr. The operator removes knarr.io/enabled from every opted-in
-        -- Deployment (config OptIn); waits until knarr_annotations with
-        -- standing owned is 0 for the install; then removes any marker
-        -- left, which a yield or a conflict leaves, since neither is ever
-        -- cleaned up (Cleanup Scope) and a conflict on a pod no longer
-        -- polled is never yielded, and which a kubectl get pods -o
-        -- jsonpath over knarr.io/applied lists, with the full release
+        -- Deployment (config OptIn); waits until no knarr_annotations
+        -- series with standing owned is above 0 for the install, since a
+        -- Deployment's series are removed once its cleanup is done
+        -- (observability SeriesLife), so the count reads 0 or is absent;
+        -- then removes any marker left, whatever left it: a yield or a
+        -- conflict leaves one, since neither is ever cleaned up (Cleanup
+        -- Scope) and a conflict on a pod no longer polled is never
+        -- yielded, and a marker-only cleanup may still be pending. A
+        -- kubectl get pods -o jsonpath over knarr.io/applied lists every
+        -- marker, an unusable or edited one included, and each is released
+        -- with the full release
         -- command ownership's Adoption names, kubectl annotate pod <p>
         -- knarr.io/applied-
         -- controller.kubernetes.io/pod-deletion-cost-
         -- cluster-autoscaler.kubernetes.io/safe-to-evict-; then deletes
         -- the install with kubectl delete -k. Deleting knarr before the
         -- wait leaves every owned annotation standing as a leftover under
-        -- Restart Leftovers, which Recovery clears by hand. The page is
-        -- ticket 34's.
+        -- Restart Leftovers, which Recovery clears by hand. A value of an
+        -- owned key on a pod with no marker is foreign (ownership
+        -- Adoption) and the procedure leaves it, since it may be another
+        -- writer's. An operator who removed a marker by hand without its
+        -- annotations finds such values with a kubectl get pods -o jsonpath
+        -- over the two owned keys and removes them one key at a time as
+        -- Recovery says. The page is ticket 34's.
     @invariant Recovery
         -- Manual recovery after a dead install, or for a pod a permanent
         -- rejection leaves annotated, is the same per-pod command:

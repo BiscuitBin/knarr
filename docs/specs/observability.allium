@@ -66,9 +66,10 @@ value AbsentEvent {
 -- order the patch names them, and, for a cleanup, the owned annotations that
 -- stay on the pod with the values found in the view the patch was built
 -- from, or, for a cleanup that released records alone and would have
--- removed or rewritten only the marker (lifecycle Cleanup Scope, ownership
--- Released), the marker annotation with its raw string (empty for any other
--- purpose).
+-- removed only the marker (lifecycle Cleanup Scope, ownership Released),
+-- the marker annotation with its raw string; empty for one that released
+-- records alone and would have rewritten the marker, keeping other
+-- records, and for any other purpose.
 value RejectedEvent {
     pod_name: String
     pod_uid: String
@@ -215,8 +216,11 @@ contract Catalogue {
         -- annotation counts on a pod exactly when reconcile, or the View
         -- builder for a pod that is not a target (lifecycle View), asks its
         -- standing under ownership's Adoption: when the Deployment enables
-        -- it, and otherwise only while the marker holds a record for it, so
-        -- a value
+        -- it, and otherwise only while the marker holds a record for it.
+        -- On a pod that is not a target only an annotation standing owned
+        -- counts, so a yielded or conflict record an opt-out leaves, which
+        -- no cleanup removes, counts nowhere and does not keep the
+        -- Deployment's series alive (SeriesLife). A value
         -- an opt-out leaves counts until cleanup drops its record, whether
         -- cleanup or reconcile's Neutral removed the value first (lifecycle
         -- Cleanup Scope and Marker), and a
@@ -250,7 +254,9 @@ contract Catalogue {
         -- from config.
     @invariant SeriesLife
         -- A Deployment's series live while knarr acts on its pods. Once the
-        -- Deployment has left the target set, nothing for its pods is
+        -- Deployment is not in the target set, whether it left it in this
+        -- process or was never in it, as after a restart or for the empty
+        -- name lifecycle's Label counts under, nothing for its pods is
         -- pending with purpose apply or in flight with purpose apply or
         -- yield, and its cleanup
         -- is done, which is lifecycle's Cleanup done being true for its name
@@ -330,7 +336,14 @@ contract Events {
         -- the pod until removed, for example kubectl annotate pod <pod>
         -- <removals>", with <keys> as Rejected says, <pairs> each annotation
         -- left as <key>=<value> joined by ", " ("stay" for more than one),
-        -- and <removals> each left key followed by "-", joined by " ".
+        -- and <removals> each left key followed by "-", joined by " ". When
+        -- left is empty, as for a cleanup that would have rewritten the
+        -- marker keeping other records, it renders instead "<keys>: the
+        -- apiserver rejected knarr's cleanup with <status>; the record
+        -- stays and knarr tries again no sooner than the patch interval",
+        -- naming no command: removing the marker by hand would leave every
+        -- value it still records foreign for the pod's life (ownership
+        -- Adoption).
     @invariant AlsoLogged
         -- Every Event's cause logs one warning line with the reason as the
         -- reason field and the fields of the Event's content, whether or not
