@@ -2,10 +2,11 @@
 -export([startup/0, collect/0, inc/2, set/3, observe/2, remove/2, reset_deployment_series/0,
   label_names/1, version/0]).
 
-%% Every series knarr exports, as observability's Catalogue names them
-%% (docs/specs/observability.allium). Declared once per VM; prometheus.erl's
-%% declare is a no-op for a metric already registered, so a restart of the
-%% application in one VM, as the tests make, declares nothing twice.
+%% Every series knarr exports, as observability's Catalogue names them for
+%% tickets 31, 32 and 46 (docs/specs/observability.allium). Declared once per
+%% VM; prometheus.erl's declare is a no-op for a metric already registered, so
+%% a restart of the application in one VM, as the tests make, declares nothing
+%% twice.
 %% knarr_build_info carries the version the .app holds.
 startup() ->
   lists:foreach(fun declare/1, metrics()),
@@ -28,7 +29,16 @@ metrics() ->
     {gauge, knarr_last_discovery_timestamp_seconds, [], "End of the last discovery cycle in which every LIST succeeded."},
     {gauge, knarr_targets, [kind], "Opted-in Deployments and their pods the last LIST shows."},
     {gauge, knarr_build_info, [version], "1, with knarr's release version."},
-    {histogram, knarr_discovery_duration_seconds, Buckets, "Length of every discovery cycle sent."}
+    {histogram, knarr_discovery_duration_seconds, Buckets, "Length of every discovery cycle sent."},
+    {counter, knarr_patches_total, [deployment, purpose, result], "Patches sent, by purpose and the response's result."},
+    {counter, knarr_lists_total, [resource, result], "Discovery LISTs sent, by resource and result."},
+    {counter, knarr_polls_skipped_total, [deployment], "Polls skipped because a pod's last poll was still outstanding."},
+    {gauge, knarr_patches_pending, [deployment], "Pending changes for the Deployment's pods."},
+    {gauge, knarr_patch_pending_oldest_seconds, [], "Age of the oldest pending change; 0 when nothing is pending."},
+    {gauge, knarr_paused, [scope], "1 while the pause of that scope, patch or list, lasts."},
+    {gauge, knarr_pause_seconds, [scope], "Length of the current pause as last set; 0 when not paused."},
+    {gauge, knarr_poll_queue_depth, [], "Due polls waiting in the concurrency queue."},
+    {histogram, knarr_poll_duration_seconds, Buckets, "Time from sending a poll to its outcome; a timeout at the limit."}
   ].
 
 %% prometheus.erl reads a name ending in _seconds as a duration in the VM's
@@ -56,12 +66,14 @@ observe(Name, Value) ->
   nil.
 
 %% The metric's kind decides which table holds the series. A name no
-%% declaration carries is a programming error and crashes the caller.
+%% declaration carries is a programming error and crashes the caller. The
+%% histograms carry no labels, so their one series goes with Labels = [].
 remove(Name, Labels) ->
   Atom = name(Name),
   case lists:keyfind(Atom, 2, metrics()) of
     {counter, _, _, _} -> prometheus_counter:remove(Atom, Labels);
-    {gauge, _, _, _} -> prometheus_gauge:remove(Atom, Labels)
+    {gauge, _, _, _} -> prometheus_gauge:remove(Atom, Labels);
+    {histogram, _, _, _} -> prometheus_histogram:remove(Atom, Labels)
   end,
   nil.
 
@@ -69,8 +81,11 @@ remove(Name, Labels) ->
 %% series, and declared again with the same labels, help and duration_unit:
 %% the reconcile process calls this when it starts, so a restart starts the
 %% counters at 0 and leaves no gauge series until its first full cycle
-%% (observability SeriesLife). knarr_events_total has no deployment label
-%% and keeps counting across restarts.
+%% (observability SeriesLife). The three budget series with a deployment
+%% label, knarr_patches_total, knarr_patches_pending and
+%% knarr_polls_skipped_total, are reset with the rest; the six install-wide
+%% ones and knarr_events_total have no deployment label and keep counting
+%% across restarts.
 reset_deployment_series() ->
   lists:foreach(
     fun(Metric) ->
