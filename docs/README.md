@@ -30,7 +30,7 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 - [Repository README](../README.md): current pre-MVP status and local setup.
 - [Contributing](../CONTRIBUTING.md): the ticket frontier, worktrees, authorization, verification and merging.
 - [Security policy](../SECURITY.md): supported versions and private vulnerability reporting.
-- [Changelog](../CHANGELOG.md): notable unreleased changes.
+- [Changelog](../CHANGELOG.md): notable changes, by release.
 
 ## Project context
 
