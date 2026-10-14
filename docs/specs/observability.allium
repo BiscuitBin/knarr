@@ -23,8 +23,9 @@
 -- (LaterRows); 21 added knarr_pods_unknown on 2026-10-13 (Standing); 23
 -- added no row on 2026-10-13 (LaterRows), naming the source of the
 -- deployment label on a cleanup (Labels) and when a Deployment's cleanup is
--- done (SeriesLife); and 31 added the InvalidOverride Event and the lines
--- it emits the same day (Events InvalidOverride, Logs Lines).
+-- done (SeriesLife); 31 added the InvalidOverride Event and the lines it
+-- emits the same day (Events InvalidOverride, Logs Lines); and 32 added
+-- the rejection and foreign lines on 2026-10-14 (Logs Lines).
 
 ------------------------------------------------------------
 -- Value Types
@@ -450,6 +451,18 @@ contract Logs {
         -- pods, the counts knarr_targets carries. debug: "poll", with deployment, pod, port,
         -- path, reading and, for a valid reading, cost and accepting;
         -- "patch", with deployment, pod, purpose, keys and status or error.
+        -- Ticket 32 added on 2026-10-14, each at warning: "patch
+        -- rejected", with reason, deployment, pod, purpose, status and
+        -- keys, once per rejection run as the PatchRejected Event's cause
+        -- (AlsoLogged, Events Rejected); "cleanup rejected", with the same
+        -- fields and left, the annotations the Event's left names as an
+        -- array of "key=value" strings, empty when it names none, which
+        -- is an array of strings as Format allows, once per run as the
+        -- CleanupRejected Event's cause (AlsoLogged, Events
+        -- CleanupRejected); and "foreign annotation", with deployment,
+        -- pod, annotation, the Owned.name, key, the full annotation key,
+        -- and value, the value found, on entry (StateLines, Cadence
+        -- OnEntry).
     @invariant NeverLogged
         -- No line carries the service-account token or the Authorization
         -- header; k8s_client's TokenReload logs a token change only as the

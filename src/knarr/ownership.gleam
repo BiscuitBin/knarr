@@ -1,7 +1,8 @@
 //// The Ownership contract (docs/specs/ownership.allium): the marker that
 //// records what knarr applied, where each owned annotation stands, the JSON
 //// Patch write mode with its preconditions, the yield by which another
-//// writer wins, and the Event it raises. Every function is pure: `at` is
+//// writer wins, the Event it raises, and the cleanup patch that releases
+//// what knarr owns. Every function is pure: `at` is
 //// passed in, nothing reads a clock, the pod or state, and nothing sends.
 //// The pod's annotations arrive as k8s_client reads them: `None` for a pod
 //// whose response carries no annotations map.
@@ -301,10 +302,13 @@ pub fn may_write(standing: Standing) -> Bool {
   }
 }
 
-/// The operations of one write patch (WriteMode): a write of `None` for an
-/// annotation whose record is `None` or missing is dropped, and no writes
-/// left gives no operations. The caller passes only writes `may_write`
-/// allows.
+/// The operations of one write patch (WriteMode): a write whose standing
+/// `may_write` does not allow is dropped, as is a write of `None` for an
+/// annotation whose record is `None` or missing, and no writes left gives
+/// no operations. The standing here is `standing`'s text comparison alone;
+/// the reconciler's view also forces `Conflict` for an applied record that
+/// does not parse as its annotation's value (Applied), which is reconcile's
+/// gate before a write reaches here.
 pub fn patch(
   marker marker: Marker,
   annotations annotations: Option(Dict(String, String)),
@@ -313,9 +317,12 @@ pub fn patch(
 ) -> List(Operation) {
   let writes =
     list.filter(writes, fn(write) {
-      case write.value, applied_value(marker:, owned: write.owned) {
-        None, None -> False
-        _, _ -> True
+      let allowed =
+        may_write(standing(marker:, annotations:, owned: write.owned))
+      case allowed, write.value, applied_value(marker:, owned: write.owned) {
+        False, _, _ -> False
+        True, None, None -> False
+        True, _, _ -> True
       }
     })
   case writes {
@@ -353,10 +360,16 @@ fn write_members(writes: List(Write)) -> List(#(String, String)) {
 /// The test that the owned annotation equals the applied record's value, or
 /// is null when the record is null or missing.
 fn write_test(marker: Marker, write: Write) -> Operation {
+  applied_test(marker:, owned: write.owned)
+}
+
+/// The test that `owned` equals the applied record's value, or is null when
+/// the record is null or missing.
+fn applied_test(marker marker: Marker, owned owned: Owned) -> Operation {
   Operation(
     Test,
-    pointer(write.owned.key),
-    Some(nullable(applied_value(marker:, owned: write.owned))),
+    pointer(owned.key),
+    Some(nullable(applied_value(marker:, owned:))),
   )
 }
 
@@ -365,6 +378,95 @@ fn write_change(write: Write) -> Operation {
   case write.value {
     Some(value) -> Operation(Add, pointer(write.owned.key), Some(quote(value)))
     None -> Operation(Remove, pointer(write.owned.key), None)
+  }
+}
+
+/// The operations of the patch lifecycle's Cleanup sends (Released): each
+/// annotation in `owned` standing `OwnedByKnarr` is released, any other, and
+/// one with no record, is dropped, and none left gives no operations. Unlike
+/// `patch`, a null applied record whose annotation is absent is released:
+/// nothing is removed from the pod, but its record is dropped. The order is
+/// the deletionTimestamp test, the marker test, per released annotation a
+/// test of its applied value, per released annotation with a value a remove,
+/// then the marker rendered without the released entries and with `at` set,
+/// or a remove of the marker when no entry remains. Nothing stands owned
+/// without a map holding the marker, so `annotations: None` releases
+/// nothing.
+pub fn cleanup(
+  marker marker: Marker,
+  annotations annotations: Option(Dict(String, String)),
+  owned owned: List(Owned),
+  at at: String,
+) -> List(Operation) {
+  let released =
+    list.filter(owned, fn(owned) {
+      standing(marker:, annotations:, owned:) == OwnedByKnarr
+    })
+  case released {
+    [] -> []
+    _ -> {
+      let removes =
+        list.filter_map(released, fn(owned) {
+          case applied_value(marker:, owned:) {
+            Some(_) -> Ok(Operation(Remove, pointer(owned.key), None))
+            None -> Error(Nil)
+          }
+        })
+      let kept =
+        list.filter(marker.entries, fn(entry) {
+          !list.contains(released, entry.owned)
+        })
+      let marker_change = case kept {
+        [] -> Operation(Remove, pointer(marker_key), None)
+        _ -> {
+          let rendered = render(Marker(..marker, at: Some(at), entries: kept))
+          Operation(Add, pointer(marker_key), Some(quote(rendered)))
+        }
+      }
+      list.flatten([
+        [deletion_timestamp_test(), marker_test(marker)],
+        list.map(released, applied_test(marker, _)),
+        removes,
+        [marker_change],
+      ])
+    }
+  }
+}
+
+/// What a rejected cleanup leaves on the pod, for the `left` of its
+/// RejectedEvent (observability Events CleanupRejected): each owned
+/// annotation the operations remove, with the value found in the view the
+/// patch was built from, in operation order; or, when they remove no
+/// annotation but the marker, the marker key with its raw string; or
+/// nothing, for a cleanup that rewrote the marker keeping other records.
+/// Defined for a cleanup's operations: a write patch removes nothing but a
+/// removal's key, and reconcile calls this for cleanup outcomes alone.
+pub fn left(
+  operations operations: List(Operation),
+  annotations annotations: Option(Dict(String, String)),
+) -> List(#(String, String)) {
+  let removed =
+    list.filter_map(operations, fn(operation) {
+      case operation.op {
+        Remove -> pointed_key(operation.path)
+        Test | Add -> Error(Nil)
+      }
+    })
+  let found = fn(key) {
+    lookup(annotations, key)
+    |> option.map(fn(value) { #(key, value) })
+    |> option.to_result(Nil)
+  }
+  let stays =
+    list.filter_map(removed, fn(key) {
+      case key == marker_key {
+        True -> Error(Nil)
+        False -> found(key)
+      }
+    })
+  case stays, list.contains(removed, marker_key) {
+    [], True -> found(marker_key) |> result.map(list.wrap) |> result.unwrap([])
+    _, _ -> stays
   }
 }
 

@@ -131,6 +131,11 @@ pub const pods_contract_absent = "knarr_pods_contract_absent"
 
 pub const yields_total = "knarr_yields_total"
 
+/// Counts every rejection when it is known, by deployment and purpose
+/// (Catalogue Patches). `knarr_patches_total` is declared by the patcher of
+/// ticket 46, not here.
+pub const patch_rejections_total = "knarr_patch_rejections_total"
+
 pub const last_discovery_timestamp_seconds =
   "knarr_last_discovery_timestamp_seconds"
 
@@ -194,17 +199,23 @@ pub fn reason(event: RejectedEvent) -> String {
 }
 
 /// The message of a PatchRejected or CleanupRejected Event (Events Rejected
-/// and CleanupRejected).
+/// and CleanupRejected). A cleanup that leaves nothing, one that would have
+/// rewritten the marker keeping other records, names no command.
 pub fn rejected_message(event: RejectedEvent) -> String {
   let keys = string.join(event.keys, ", ")
   let status = int.to_string(event.status)
-  case event.purpose {
-    Apply | Yield ->
+  case event.purpose, event.left {
+    Apply, _ | Yield, _ ->
       keys
       <> ": the apiserver rejected knarr's patch with "
       <> status
       <> "; the previous annotations stay and knarr tries again no sooner than the patch interval"
-    Cleanup -> {
+    Cleanup, [] ->
+      keys
+      <> ": the apiserver rejected knarr's cleanup with "
+      <> status
+      <> "; the record stays and knarr tries again no sooner than the patch interval"
+    Cleanup, _ -> {
       let pairs =
         event.left
         |> list.map(fn(pair) { pair.0 <> "=" <> pair.1 })

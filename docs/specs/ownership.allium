@@ -23,6 +23,8 @@
 -- patch lifecycle's Cleanup sends, which drops a record from the marker and
 -- removes the marker when none remains; the write times are informational
 -- (lifecycle Restart Informational).
+-- Amended by ticket 32 on 2026-10-14: Objects, and Precondition's
+-- pod-identity decision (ticket 48 detects the case).
 
 ------------------------------------------------------------
 -- Value Types
@@ -171,6 +173,21 @@ contract Ownership {
         -- removing the marker together with every owned annotation on the
         -- pod, after which each stands unowned; removing the marker alone
         -- leaves every present value foreign.
+    @invariant Objects
+        -- knarr's only write to Kubernetes is a patch on a live Pod object
+        -- (§4). It never patches a Deployment or a ReplicaSet, never a pod
+        -- template, and never spec.replicas: HPA or KEDA owns scaling (§7,
+        -- §9.3). The Role grants no verb that could do any of these: list
+        -- and patch on pods, create on events and list on deployments and
+        -- replicasets, as k8s_client Client Verbs states, and nothing
+        -- else. Which paths a patch may name inside the pod is WriteMode's
+        -- (metadata.annotations only, §6). Ticket 32 added this clause
+        -- with tend on 2026-10-14 from the overview's decided rows
+        -- (Decision 0009). The manifest check proves the Role, a pytest in
+        -- scripts/checks/tests/test_deployment.py reading it, and the
+        -- operations tests prove the paths,
+        -- patch_names_no_path_outside_the_annotations_test and a property
+        -- over patch, yield and cleanup in test/ownership_test.gleam.
     @invariant Applied
         -- The last-applied value cost_mapping's map and safe_to_evict take
         -- is the applied record's value: absent for a null record and
@@ -227,7 +244,26 @@ contract Ownership {
         -- is why WriteMode tests /metadata/annotations itself when the map
         -- is absent. Ticket 41's kind check proves the library's behaviour
         -- on a real apiserver before anything is built on it. The Role
-        -- needs no verb beyond list and patch on pods for this.
+        -- needs no verb beyond list and patch on pods for this. The tests
+        -- name the pod's state and never its uid, so a first write, which
+        -- tests a null marker or a null map, can be accepted by a pod
+        -- deleted and recreated under the same name inside one cycle
+        -- whenever the replacement passes the same tests; a yield, a
+        -- removal and every later write carry the marker test, which such
+        -- a replacement fails. The loop heals a first write that lands on
+        -- a replacement: a replacement that is a target is reconciled
+        -- from its own reading at the next cycle, and one that is not a
+        -- target carries an owned record and falls to lifecycle's Cleanup
+        -- Scope at the next cycle. No uid test is added: it would widen
+        -- WriteMode's one exception, pass the uid to patch, yield, cleanup
+        -- and rejected, and need ticket 41's kind check to prove a test on
+        -- /metadata/uid. The patch response carries the patched pod's uid
+        -- (k8s_client Client Verbs), so comparing it with the uid of the
+        -- view the patch was built from detects a write that landed on a
+        -- replacement at no precondition cost; that detection, one
+        -- warning line and a counter, is ticket 48's, after the patcher
+        -- (ticket 46) owns the response. Settled by the maintainer with
+        -- ticket 32 on 2026-10-14.
     @invariant Rejected
         -- A 422 is first a precondition failure. rejected is true when
         -- every test operation of the failed patch passes against the view
@@ -309,9 +345,3 @@ contract Ownership {
         -- annotations a cleanup releases, and that the times decide
         -- nothing, are lifecycle's.
 }
-
-------------------------------------------------------------
--- Open Questions
-------------------------------------------------------------
-
-open question "Pod identity in the patch preconditions (ticket 31's review, for ticket 32): WriteMode's tests name the pod's state and never its uid, so a patch built from one pod's view is accepted by a pod deleted and recreated under the same name before it lands whenever the replacement passes the same tests. Once knarr has written a pod, the marker test of its raw string fails on such a replacement, and a yield or a removal always carries one; only a first write, testing a null marker or a null map, stays open, and a target pod's name is its ReplicaSet's with a random five-character suffix, so the window needs a name collision or a pod created by hand under that name inside one cycle. Whether every patch also tests that /metadata/uid equals the uid of the pod it was built from, which WriteMode's one exception for the deletionTimestamp test would then extend to, with the uid passed to patch, yield, cleanup and rejected."

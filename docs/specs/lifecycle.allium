@@ -16,7 +16,7 @@
 -- (Restart NoExpiry). The
 -- single replica with no leader election and the gap during a Recreate
 -- upgrade (§8, §9.19) are decided in the overview and stated here by
--- ticket 32 with tend.
+-- ticket 32 with tend on 2026-10-14.
 -- Owner: ticket 23 settled every §9.12 question here with the maintainer on
 -- 2026-10-13. Ticket 32 builds it. The patch a cleanup sends is ownership's
 -- cleanup (ticket 22, amended by 23); whether it may go now is budget's
@@ -218,6 +218,22 @@ contract Cleanup {
 }
 
 contract Restart {
+    @invariant Replica
+        -- knarr runs as a single replica with no leader election, deployed
+        -- with strategy Recreate (§8, §9.19). A Recreate upgrade leaves a
+        -- short gap in which no update is made and nothing else happens:
+        -- no removal, since knarr's own shutdown removes nothing (Cleanup
+        -- Scope), and nothing moves (Leftovers). The gap raises no Event
+        -- and no metric of its own; the new pod answers /readyz 503 until
+        -- its first discovery cycle in which every LIST of it succeeds
+        -- (observability Probes Readiness) and starts its counters at 0
+        -- (observability Catalogue SeriesLife). Ticket 32 stated this
+        -- clause with tend on 2026-10-14 from the overview's decided rows.
+        -- The manifest test in scripts/checks/tests/test_deployment.py
+        -- proves one replica, strategy Recreate and no leader-election
+        -- resource, and the readiness latch and supervisor restart tests
+        -- in test/reconciler_test.gleam prove what the new process
+        -- answers.
     @invariant NoExpiry
         -- Expiry is removing a value because it is stale: for lack of a
         -- valid reading, or by the age of its write. No owned annotation
@@ -275,7 +291,16 @@ contract Restart {
         -- until knarr returns or an operator removes it with the per-pod
         -- command Uninstall's Recovery gives (§8 table). The pods of a
         -- Deployment that opted out during the downtime are found out of
-        -- scope by the first cycle and cleaned up like any other.
+        -- scope by the first cycle and cleaned up like any other. Neither
+        -- a down knarr nor a crashlooping one raises an Event: a down
+        -- knarr exports nothing; a crashlooping one answers /readyz 503
+        -- until its first discovery cycle in which every LIST of it
+        -- succeeds and starts its counters at 0 on each start
+        -- (observability Catalogue SeriesLife); and a running knarr whose
+        -- loop stalls shows as a stale
+        -- knarr_last_discovery_timestamp_seconds, which is the alert, and
+        -- liveness never restarts on it (observability Probes Liveness).
+        -- Ticket 32 added the signals with tend on 2026-10-14.
     @invariant Threshold
         -- The restart threshold §9.16 sets for the §3 criterion, measured
         -- by the harness ticket 33 builds against the fake worker's
