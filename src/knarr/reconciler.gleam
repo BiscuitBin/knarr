@@ -354,7 +354,6 @@ fn discovered(
     ),
     observability.int_field(name: "pods", value: list.length(targets)),
   ])
-  leaving(previous: state.targets, current: targets, pods:)
   let #(invalid, cycle) =
     overrides(previous: state.invalid, deployments:, cycle:)
   // Poll every target with a pod IP, at most poll_concurrency at a time
@@ -452,28 +451,6 @@ fn discovered(
       #(retire(acc.0, deployment), retire(acc.1, deployment))
     })
   State(..state, targets:, pods: memories, seen:, invalid:, gauges:, counters:)
-}
-
-/// Logs the pods config's leaving names, per Deployment (config Effective).
-fn leaving(
-  previous previous: List(Target),
-  current current: List(Target),
-  pods pods: List(Pod),
-) -> Nil {
-  let names = config.leaving(previous:, current:, pods:)
-  previous
-  |> list.filter(fn(target) { list.contains(names, target.pod_name) })
-  |> list.group(fn(target) { target.deployment_name })
-  |> dict.to_list
-  |> list.each(fn(group) {
-    log(observability.Info, "pods leaving", [
-      observability.string_field(name: "deployment", value: group.0),
-      observability.strings_field(
-        name: "pods",
-        values: list.map(group.1, fn(t) { t.pod_name }) |> list.reverse,
-      ),
-    ])
-  })
 }
 
 /// The invalid-override Events on entry and the unknown-key lines once per

@@ -223,23 +223,6 @@ fn controlled_by(
   }
 }
 
-/// The pod names in `previous` and not in `current` that `pods` still shows,
-/// in the order of `previous` (Effective).
-pub fn leaving(
-  previous previous: List(Target),
-  current current: List(Target),
-  pods pods: List(Pod),
-) -> List(String) {
-  let current = list.map(current, fn(target) { target.pod_name })
-  let listed = list.map(pods, fn(pod) { pod.name })
-
-  previous
-  |> list.map(fn(target) { target.pod_name })
-  |> list.filter(fn(name) {
-    !list.contains(current, name) && list.contains(listed, name)
-  })
-}
-
 /// Checks every install-wide value the application read, given as the key
 /// and the term OTP application configuration holds for it, each already
 /// present (the callback fills in the default for an unset key): an integer

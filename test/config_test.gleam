@@ -1354,47 +1354,6 @@ pub fn targets_of_empty_lists_is_empty_test() -> Nil {
     == []
 }
 
-// ----------------------------------------------------- Effective: leaving ---
-
-// Configuration.Effective: across an opt-out, leaving names the pods in
-// previous and not in current that the pod LIST still shows, in previous's
-// order; a pod that is simply gone is not named.
-pub fn leaving_names_the_pods_still_listed_test() -> Nil {
-  let previous = [
-    target("a", #("worker", "d1")),
-    target("b", #("worker", "d1")),
-  ]
-  let pods = [pod("a", Some(#("worker-abc", "r1")))]
-
-  assert config.leaving(previous:, current: [], pods:) == ["a"]
-}
-
-// Configuration.Effective: a pod still in current is not leaving.
-pub fn leaving_excludes_the_pods_still_targeted_test() -> Nil {
-  let previous = [
-    target("c", #("worker", "d1")),
-    target("a", #("worker", "d1")),
-    target("b", #("worker", "d1")),
-  ]
-  let current = [target("a", #("worker", "d1"))]
-  let pods = [
-    pod("a", Some(#("worker-abc", "r1"))),
-    pod("b", Some(#("worker-abc", "r1"))),
-    pod("c", Some(#("worker-abc", "r1"))),
-  ]
-
-  assert config.leaving(previous:, current:, pods:) == ["c", "b"]
-}
-
-// Configuration.Effective: on the first cycle previous is empty and leaving
-// returns nothing.
-pub fn leaving_on_the_first_cycle_is_empty_test() -> Nil {
-  let current = [target("a", #("worker", "d1"))]
-  let pods = [pod("a", Some(#("worker-abc", "r1")))]
-
-  assert config.leaving(previous: [], current:, pods:) == []
-}
-
 // ------------------------------------------------------------- Installed ---
 
 /// The record the defaults give.
@@ -1768,6 +1727,3 @@ pub fn target_is_a_pod_a_deployment_and_its_settings_test() -> Nil {
 
 // contract-signature.Configuration.targets: (deployments, replicasets,
 // pods, defaults) -> List<Target>. The Discovery tests above discharge it.
-
-// contract-signature.Configuration.leaving: (previous, current, pods) ->
-// List<String>. The leaving tests above discharge it.

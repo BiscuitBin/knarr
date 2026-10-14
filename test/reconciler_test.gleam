@@ -666,9 +666,10 @@ pub fn invalid_and_unknown_keys_are_reported_at_their_cadence_test() -> Nil {
   stop_actor(pid(actor))
 }
 
-// config Effective: the pods of a Deployment that opted out are logged as
-// leaving; observability SeriesLife: its series are retired.
-pub fn an_opt_out_logs_the_leaving_pods_and_retires_the_series_test() -> Nil {
+// config Effective: the pods of a Deployment that opted out leave the target
+// set and nothing here names them, leaving being retired (ticket 23);
+// observability SeriesLife: its series are retired.
+pub fn an_opt_out_names_no_pods_and_retires_the_series_test() -> Nil {
   let harness = harness("leaving", [pod("1")])
   capture_logs(harness.table)
   let actor = start(harness)
@@ -685,11 +686,8 @@ pub fn an_opt_out_logs_the_leaving_pods_and_retires_the_series_test() -> Nil {
   lists(harness)
   quiet(harness)
   release_logs()
-  assert list.any(list_of(harness.table, "logs"), fn(line) {
-    string.contains(
-      line,
-      "\"msg\":\"pods leaving\",\"deployment\":\"leaving\",\"pods\":[\"1\"]",
-    )
+  assert !list.any(list_of(harness.table, "logs"), fn(line) {
+    string.contains(line, "\"msg\":\"pods leaving\"")
   })
   assert !string.contains(metrics.collect(), "deployment=\"leaving\"")
   stop_actor(pid(actor))

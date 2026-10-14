@@ -445,11 +445,9 @@ contract Logs {
         -- Event's fields (AlsoLogged); "event create failed", with reason
         -- and status or error; "not ready with cost", with deployment, pod
         -- and applied (StateLines). info: "started", once, with version;
-        -- "token changed", with sha256 and expires_at; "pods leaving", with
-        -- deployment and pods, the names config's leaving returns, once
-        -- per cycle that has any; "discovery", once per cycle in which
-        -- every LIST succeeded, with deployments and pods, the counts
-        -- knarr_targets carries. debug: "poll", with deployment, pod, port,
+        -- "token changed", with sha256 and expires_at; "discovery", once
+        -- per cycle in which every LIST succeeded, with deployments and
+        -- pods, the counts knarr_targets carries. debug: "poll", with deployment, pod, port,
         -- path, reading and, for a valid reading, cost and accepting;
         -- "patch", with deployment, pod, purpose, keys and status or error.
     @invariant NeverLogged
