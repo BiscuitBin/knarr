@@ -12,6 +12,9 @@
 -- are config (§9.1); the metric and Event names are observability (§9.14).
 -- Owner: ticket 24 settled every question here with the maintainer on
 -- 2026-10-12. Ticket 46 builds it.
+-- Amended by ticket 23 on 2026-10-13: Pending carries a purpose, apply or
+-- cleanup, and keeps a cleanup entry while lifecycle's Cleanup names the
+-- pod; PerPod and Restart name the cleanup.
 --
 -- Scale target and expected write rate. The defaults are sized for 500
 -- polled pods across up to 50 opted-in Deployments in one namespace, one
@@ -50,11 +53,16 @@ value Schedule {
     outstanding: Boolean
 }
 
--- A change that is due but may not go yet: which pod, and when it first
--- became due. The change itself is not stored; it is re-derived from the
--- pod's latest reading when the pod's turn comes.
+-- A change that is due but may not go yet: which pod, what for, and when
+-- it first became due. purpose is apply for a change reconcile derives from
+-- the pod's latest reading, the yield a conflict turns it into included,
+-- and cleanup for a removal lifecycle's Cleanup due names (ticket 23). The
+-- change itself is not stored; it is re-derived when the pod's turn comes,
+-- an apply from the pod's latest reading and a cleanup from the newest
+-- view of the pod.
 value Pending {
     pod_name: String
+    purpose: apply | cleanup
     due_since: Timestamp
 }
 
@@ -193,8 +201,13 @@ contract WriteBudget {
         -- 3600 seconds, install-wide and for an override alike. A value of
         -- 0 is valid and leaves the bucket as the only bound on the pods it
         -- covers, after a rejection too; no floor is applied. The interval is
-        -- counted from the pod's last patch attempt whatever its outcome,
-        -- so a rejected patch, 429 or not, is not retried before it ends.
+        -- counted from the pod's last patch attempt whatever its outcome
+        -- or purpose, so a rejected patch, 429 or not, is not retried
+        -- before it ends, and an apply and a cleanup to one pod are two
+        -- attempts an interval apart. A cleanup of a pod that is not a
+        -- target takes config.patch_interval, since its Deployment is not
+        -- in the selected LIST and its override cannot be read (lifecycle
+        -- Cleanup Retry).
         -- The interval is budget's only per-pod hold: a longer hold after a
         -- conflict with another writer is ownership's (§9.10, ticket 22)
         -- and sits on top of it, and the Event and metric a rejection
@@ -216,14 +229,22 @@ contract WriteBudget {
     @invariant Pending
         -- A change that is due but not allowed, by PerPod, Bucket or
         -- BackOff, stays pending and is not dropped. There is at most one
-        -- pending entry per pod, kept from when the change first became due;
-        -- when the pod's turn comes the change is re-derived from its latest
-        -- reading against the applied value, as reconcile's rule says, so a
-        -- change no longer due has nothing pending. order serves pods
-        -- oldest-due first, with no priority for a drained or terminating
-        -- change and no rotation by Deployment. A pod's pending entry is
-        -- discarded when a LIST first shows its deletionTimestamp set or no
-        -- longer shows the pod.
+        -- pending entry per pod and purpose, kept from when the change
+        -- first became due, so a pod due both an apply and a cleanup has
+        -- two; when the pod's turn comes an apply is re-derived from its
+        -- latest reading against the applied value, as reconcile's rule
+        -- says, and a cleanup from the newest view, as lifecycle's Cleanup
+        -- Scope and due say, so a change no longer due has nothing pending.
+        -- order serves entries oldest-due first, with no priority for a
+        -- drained, terminating or cleanup change and no rotation by
+        -- Deployment. A
+        -- pod's apply entry is discarded when a LIST first shows its
+        -- deletionTimestamp set or no longer shows the pod, where the pods
+        -- the LIST shows are the target set (Leaving); its cleanup entry is
+        -- kept while lifecycle's due names the pod, which it does only for
+        -- a live pod the pod LIST returns that is not terminating, so an
+        -- opt-out keeps the cleanup and drops the apply (lifecycle Cleanup
+        -- Scope and Retry).
     @invariant BackOff
         -- A 429 from a patch pauses patching: the first in a run for
         -- config.backoff_initial, 1 second by default and valid from 1
@@ -257,8 +278,11 @@ contract WriteBudget {
         -- The per-pod interval, the bucket and the pause are in memory only
         -- and start fresh: every pod is patchable at once after a restart,
         -- the bucket holds config.patch_burst tokens, and the global bucket
-        -- alone bounds the startup repair lifecycle describes (ticket 23).
-        -- The marker timestamp is not read for budgeting.
+        -- alone bounds the startup repair lifecycle describes: the cleanups
+        -- the first discovery cycle derives and the rewrites the first
+        -- valid readings make (lifecycle Cleanup Order and Restart
+        -- NoStartupStep, ticket 23). The marker timestamp is not read for
+        -- budgeting (lifecycle Restart Informational).
     @invariant Threshold
         -- From Bucket it follows that, within one run of the knarr
         -- process, an install makes at most 5·W + 10 patches in any window
