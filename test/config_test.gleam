@@ -9,6 +9,7 @@ import gleam/dict.{type Dict}
 import gleam/dynamic.{type Dynamic}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import knarr/budget
 import knarr/config.{
   type Invalid, type Settings, Defaults, Installed, InstalledError, Invalid,
   Settings, Target,
@@ -1392,6 +1393,23 @@ pub fn installed_accepts_every_default_test() -> Nil {
 // are the defaults and are accepted.
 pub fn application_defaults_are_accepted_test() -> Nil {
   assert config.installed(application_values()) == Ok(installed_at_defaults)
+}
+
+// Configuration.Installed and budget config: the defaults the test feeds are
+// budget's declared defaults.
+pub fn installed_defaults_agree_with_budget_test() -> Nil {
+  assert config.installed(installed_defaults()) == Ok(installed_at_defaults)
+  assert installed_at_defaults.defaults.poll_interval == budget.poll_interval
+  assert installed_at_defaults.defaults.poll_timeout == budget.poll_timeout
+  assert installed_at_defaults.defaults.patch_interval == budget.patch_interval
+  assert installed_at_defaults.list_interval == budget.list_interval
+  assert installed_at_defaults.poll_concurrency == budget.poll_concurrency
+  assert installed_at_defaults.poll_jitter_percent == budget.poll_jitter_percent
+  assert installed_at_defaults.patch_rate_per_second
+    == budget.patch_rate_per_second
+  assert installed_at_defaults.patch_burst == budget.patch_burst
+  assert installed_at_defaults.backoff_initial == budget.backoff_initial
+  assert installed_at_defaults.backoff_cap == budget.backoff_cap
 }
 
 // Configuration.Installed: each log level is read.
