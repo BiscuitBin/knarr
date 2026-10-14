@@ -16,9 +16,9 @@
 ------------------------------------------------------------
 
 open question "§9.12 Cleanup scope: never, when a pod or workload leaves scope (the pods a Deployment's opt-out or deletion drops from the target set, which config's leaving names, ticket 19), or also on graceful shutdown."
-open question "§9.12 Expiry: the separate expiry for pod-deletion-cost and for safe-to-evict, and what knarr writes when one expires (§5 stale state)."
-open question "§9.12 Marker freshness: what the write times ownership's Recorded marker holds mean when writes are sparse, so a steady cost is told apart from hours of failed polls (§8)."
-open question "§9.12 Restart: the conservative behaviour on restart when freshness is unknown, and the restart success threshold handed to §9.16."
+open question "§9.12 Expiry: the separate expiry for pod-deletion-cost and for safe-to-evict, and what knarr writes when one expires (§5 stale state). The window after readings stop being valid is settled in memory by reconcile's Window and Neutral (ticket 21), so this expiry is of a value a restarted knarr finds on a marked pod, judged from the marker's at across a downtime."
+open question "§9.12 Marker freshness: what the write times ownership's Recorded marker holds mean when writes are sparse, so a steady cost is told apart from hours of failed polls (§8). reconcile's windows are in memory and read no at (reconcile Restart); what at means across a downtime is this question's alone."
+open question "§9.12 Restart: the conservative behaviour on restart when freshness is unknown, and the restart success threshold handed to §9.16. reconcile's Restart keeps every value a pod holds until its window elapses again in the new process, so nothing flaps for lack of a reading; what startup does with the marker is this question's."
 open question "§9.12 Startup reconciliation: which pods are reconciled on startup and in what order, so annotations do not flap (§3)."
 open question "§9.12 Crash leftovers: what happens to annotations left on pods after a crash or while knarr is down (§8 failure modes)."
 open question "§9.12 Uninstall: the uninstall procedure and the manual recovery steps it documents (§8)."

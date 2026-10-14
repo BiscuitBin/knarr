@@ -1,22 +1,218 @@
 -- allium: 3
 
 -- Module: reconcile.
--- Scope: the per-pod loop. A poll outcome becomes a pod state (the §5 state
--- diagram), the desired annotation state is compared with the last applied
--- state, which ownership's marker records (ownership Applied), a patch
--- happens only on meaningful change and only where ownership's may_write
--- allows it, a throttled change stays pending, no patch is made once
--- deletionTimestamp is set (§4), and a Deployment rollout gets no special
--- handling (§8 failure modes, §9.13).
--- Owner: ticket 21 for the unknown and unreachable policy (§9.6). The decided
--- loop safeguards, including the rollout rule, are built by the round-2
--- spec-then-build ticket 31; the rollout guidance page is ticket 34.
+-- Scope: the per-pod loop. A poll's reading becomes a pod state (the §5 state
+-- diagram): the window during which an applied value stands after readings
+-- stop being valid, the neutral write that ends it, the contract-absent state
+-- with its Event and gauge, the unknown gauge, and a pod without a pod IP
+-- (§5, §8 failure modes, §9.6). The decided loop, desired state against last
+-- applied (ownership Applied), a patch only on meaningful change and only
+-- where may_write allows, a throttled change pending, no patch once
+-- deletionTimestamp is set (§4) and no special handling of a rollout (§9.13),
+-- is ticket 31's to state here with tend. What a reading is is
+-- worker_contract's (§9.4a); the mapped value is cost_mapping's (§9.5); the
+-- patch is ownership's (§9.10); whether a due write may go now is budget's
+-- (§9.8); the Event, gauge and line names are observability's (§9.14); what
+-- the marker's write times mean across a downtime, and cleanup, are
+-- lifecycle's (§9.12, ticket 23).
+-- Owner: ticket 21 settled every §9.6 question here with the maintainer on
+-- 2026-10-13. Ticket 31 builds it with the decided loop.
 
 ------------------------------------------------------------
--- Open Questions
+-- Value Types
 ------------------------------------------------------------
 
-open question "§9.6 Transient failure: how many polls and how much time the last-known value is kept after a timeout, 5xx or unparsable payload before knarr removes the annotation, the neutral value cost_mapping's Absent fixes (§5)."
-open question "§9.6 Absent contract: how many consecutive 404 or refused polls since the pod started mark the contract absent, and whether a NetworkPolicy block is distinguishable from it (§8 failure modes)."
-open question "§9.6 Unmanaged: what knarr does on an absent contract: remove the annotations it owns, emit a per-Deployment Event and metric, and whether it keeps polling."
-open question "§9.6 Just started: how long a pod stays unannotated before its first valid poll, and whether pods without a pod IP are tracked at all (§5; every pod with a pod IP is polled whatever its phase or readiness, see worker_contract Discovery)."
+-- One pod's place in the reading state machine, kept in memory by the
+-- reconcile process for this run. kind is fresh before any reading in this
+-- process and after a valid one; stale while readings are not valid and the
+-- window has not elapsed; unknown once it has; absent once a run of not_found
+-- or refused readings has lasted absent_after. "Known" in prose means fresh
+-- or stale, the initial state included: the pod's applied value is treated
+-- as current. failed is the
+-- number of consecutive readings since the last valid one that were not
+-- valid. run_since is the time of the first reading of the current unbroken
+-- run of not_found or refused readings, null when there is no run.
+value PodState {
+    kind: fresh | stale | unknown | absent
+    failed: Integer
+    run_since: Timestamp?
+}
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+-- worker_contract's Reading kinds, verbatim.
+enum ReadingKind { valid | not_found | invalid | refused | timed_out | unreachable }
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract Fallback {
+    initial: () -> PodState
+    observe: (state: PodState, reading: ReadingKind, at: Timestamp, unknown_polls: Integer, absent_after: Duration) -> PodState
+    neutral: (state: PodState) -> Boolean
+
+    @invariant Readings
+        -- initial is fresh with failed 0 and no run, and only a reading
+        -- moves the state: observe is called once per reading a poll
+        -- produces, with at the time it was produced, and nothing else
+        -- calls it. A poll budget's NoOverlap skips and a response budget's
+        -- Leaving discards produce no reading and leave the state as it
+        -- is, so under load the windows
+        -- counted in readings stretch with the effective interval (budget
+        -- Concurrency). When the clauses below would disagree about kind, a
+        -- valid reading wins and makes the pod fresh; otherwise a pod whose
+        -- run has lasted absent_after is absent (Absent); otherwise failed
+        -- decides between stale and unknown (Window).
+    @invariant Window
+        -- A valid reading makes the pod fresh, with failed 0 and run_since
+        -- null, whatever its state. Any other reading, timed_out,
+        -- unreachable, invalid, not_found and refused alike, adds one to
+        -- failed; the pod is stale while failed is below unknown_polls and
+        -- unknown once it reaches it, unless Absent says absent, in which
+        -- case failed keeps counting and decides nothing. unknown_polls is
+        -- config.unknown_polls, 3 by default, valid from 1 to 100,
+        -- install-wide with no per-Deployment override (config Keys and
+        -- Installed); at 1 the first reading that is not valid makes the pod
+        -- unknown. At the defaults the window is about 90 to 100 seconds
+        -- after the last valid reading, three readings at a 30-second
+        -- interval with jitter; at a 10-second override about 30 seconds and
+        -- at a 300-second override 15 to 17 minutes, since the window is
+        -- counted in readings and not in time (ticket 24). A stale pod keeps
+        -- its applied value and is not rewritten: missing data is never busy
+        -- and never drained (§5).
+    @invariant Neutral
+        -- neutral is true for exactly the kinds unknown and absent. While a
+        -- pod is neutral its desired state for every owned annotation is
+        -- the removal: every owned annotation standing owned under
+        -- ownership's Adoption, pod-deletion-cost (a drained -1 included)
+        -- and safe-to-evict alike, is removed in one patch with purpose
+        -- apply (observability Purpose); a safe-to-evict record the
+        -- Deployment no longer enables is among them, so a value an opt-out
+        -- left is removed here when the pod goes neutral before lifecycle's
+        -- cleanup reaches it. The patch is due at once on entry and sent as
+        -- budget's PerPod, Bucket and Pending allow. The marker stays, with a
+        -- null applied record for each removed annotation (ownership
+        -- Applied), and the pod stays managed: a rejected neutral write is
+        -- a rejection with purpose apply (ownership Rejected, observability
+        -- Events Rejected), and purpose cleanup is lifecycle's alone, for a
+        -- pod or an annotation that leaves knarr's management (ticket 23).
+        -- The removal is dropped for every owned annotation whose record
+        -- is null or missing (ownership WriteMode), and no patch is sent to
+        -- a terminating pod (k8s_client NoPatchWhileTerminating), so a pod
+        -- that never had a valid reading has nothing to remove and stays
+        -- unannotated until its first valid one (§5). The next valid
+        -- reading maps against the absent applied value (cost_mapping Absent
+        -- and Crossing), so a busy pod is rewritten at once, as budget
+        -- allows. For safe-to-evict this removal is the one rule here;
+        -- safe_to_evict (ticket 25) may
+        -- replace that one sentence if it settles another value for a
+        -- protection that ends for lack of data.
+    @invariant Absent
+        -- A not_found or refused reading starts a run, setting run_since to
+        -- at when it is null, or continues one; before entry any other
+        -- kind, valid, invalid, timed_out or unreachable, ends the run and
+        -- sets run_since to null, so invalid never counts toward a run and
+        -- a 5xx storm is transient under Window. The pod enters absent at a
+        -- not_found or refused reading whose at is at least absent_after
+        -- after run_since, so a run needs two readings at least;
+        -- absent_after is config.absent_after, 300 seconds by default, valid
+        -- from 30 to 3600 seconds, install-wide with no per-Deployment
+        -- override (config Keys and Installed). At the defaults that is
+        -- about eleven readings at a 30-second interval, two at a 300-second
+        -- override and thirty-one at a 10-second one: a slow starter has five
+        -- minutes to bind its endpoint, and a Deployment whose pods never
+        -- serve the contract is reported within about five minutes plus one
+        -- interval whatever its interval. Once absent the pod leaves on a
+        -- valid reading only, which makes it fresh under Window; a
+        -- not_found, refused, timed_out, unreachable or invalid reading
+        -- after entry leaves kind absent and run_since as it is and raises
+        -- nothing. After leaving, the next not_found or refused reading
+        -- starts a new run, and entry at the end of it is a re-entry
+        -- (observability Cadence OnEntry). A NetworkPolicy block reads as
+        -- timed_out (worker_contract NetworkPolicy), so it never makes a
+        -- contract absent: the pod goes neutral under Window and shows on
+        -- knarr_polls_total with reading timed_out. On entry any owned
+        -- annotation still standing is removed under Neutral, knarr makes
+        -- the one create attempt of the ContractAbsent Event observability's
+        -- Events ContractAbsent names, on the pod's Deployment by name and
+        -- uid, with the Deployment's effective status port and path (config
+        -- Effective) and the reading that entered it, and logs the warning
+        -- line (observability Logs StateLines); the pod counts on
+        -- knarr_pods_contract_absent while it stays (Gauges); and polling
+        -- continues on its normal schedule (budget Jitter), so a pod that
+        -- binds late is managed from its first valid reading. The state
+        -- machine runs for every pod that is polled, a terminating one
+        -- included; the caller leaves a terminating pod, and one the LIST no
+        -- longer shows, out of the current entries it hands observability's
+        -- entered, so it leaves every announced state and the Event, the
+        -- line and the gauges exclude it (observability Cadence OnEntry,
+        -- Catalogue SeriesLife).
+    @invariant Gauges
+        -- knarr_pods_unknown{deployment} is the number of the Deployment's
+        -- pods whose kind is unknown and knarr_pods_contract_absent
+        -- {deployment} the number whose kind is absent, as observability's
+        -- Standing names them: the two are disjoint, a stale pod counts on
+        -- neither, a terminating pod counts on neither (observability
+        -- SeriesLife), and both are rebuilt from this process's states after
+        -- a restart. Entering unknown raises no Event and logs no state
+        -- line; only absent is announced on entry.
+    @invariant NoPodIp
+        -- A pod without a pod IP (k8s_client Pod.pod_ip null) is a target:
+        -- it is in config's target set, counts in knarr_targets and is among
+        -- the listed pods budget's on_list receives. The caller builds no
+        -- joining entry for it (budget Leaving), so it is not scheduled, not
+        -- polled and has no state until a discovery cycle shows an IP, when
+        -- the caller builds its joining entry and it joins with a fresh
+        -- phase (budget Phase) and the initial state. A just-started pod has
+        -- no window of its own: nothing was ever written on it, so it stays
+        -- unannotated until its first valid reading (§5; the loop's row in
+        -- ticket 31).
+    @invariant Restart
+        -- The state is in memory only. After a restart every pod is initial,
+        -- so a pod holding a value keeps it until the window elapses again
+        -- in the new process: nothing is removed at startup for lack of a
+        -- reading and nothing flaps (§3). An absent pod leaves
+        -- knarr_pods_contract_absent and is polled afresh; it re-enters, and
+        -- raises ContractAbsent once more, once a new run has lasted
+        -- absent_after, and knarr_pods_unknown and knarr_pods_contract_absent
+        -- are 0 for every Deployment until a window elapses, from the first
+        -- discovery cycle at which observability's SeriesLife rebuilds the
+        -- pod-state gauges. This follows budget's Restart,
+        -- config's InvalidValue memory and observability's Cadence Restart.
+        -- The marker's at and each record's at are not read here; what they
+        -- mean across a downtime, and whether a value a restarted knarr
+        -- finds on a marked pod has expired, are lifecycle's (ticket 23).
+    @invariant NotReadyWithCost
+        -- worker_contract's ReadinessWarning counts a pod only while its
+        -- reading is known: a pod is in observability's not_ready_with_cost
+        -- state while its Ready condition is false, its kind is fresh or
+        -- stale, and the pod-deletion-cost value its marker records as
+        -- applied (ownership Applied), which is what its last valid reading
+        -- mapped to under cost_mapping, is above 0; so after a restart a
+        -- NotReady pod carrying such a value is in the state from the first
+        -- discovery cycle, in the initial state, while its reading stays
+        -- known (Restart). A pod whose kind is unknown or absent has no current
+        -- valid reading and leaves the state; it re-enters, with its line,
+        -- when a valid reading maps above 0 again while it is NotReady
+        -- (observability Cadence OnEntry). The gauge is
+        -- knarr_pods_not_ready_with_cost (observability Standing).
+    @invariant Pure
+        -- initial, observe and neutral are functions of their arguments
+        -- alone: the clock and both windows are passed in, and none reads
+        -- state, time, config or the pod, or sends. Keeping each pod's state,
+        -- sending the neutral write, creating the Event, logging the line
+        -- and serving the gauges are the reconcile process's (ticket 31),
+        -- under supervision.
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    unknown_polls: Integer = 3
+    absent_after: Duration = 300.seconds
+}
