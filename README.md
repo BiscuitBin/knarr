@@ -10,7 +10,7 @@ AI agents start at [AGENTS.md](AGENTS.md), the one contract for working here; `C
 
 - [Contributing](CONTRIBUTING.md): pick up a ticket, work locally and prepare a change for merging.
 - [Security policy](SECURITY.md): supported versions and private vulnerability reporting.
-- [Changelog](CHANGELOG.md): unreleased changes.
+- [Changelog](CHANGELOG.md): notable changes, by release.
 
 ## Getting started
 
