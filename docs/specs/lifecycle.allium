@@ -220,7 +220,13 @@ contract Cleanup {
         -- standing for held, keeping the pending set
         -- and sending the patch are the discovery and patcher processes'
         -- (tickets 31 and 46), under supervision; the cleanup's operations
-        -- are ownership's cleanup.
+        -- are ownership's cleanup. Ticket 47 built the cleanup on those
+        -- processes on 2026-10-15: each complete discovery cycle builds a
+        -- View for every pod the unselected pod LIST shows and hands every
+        -- non-empty due to the patcher with the listed pods, a cleanup turn
+        -- re-derives due from the newest view and sends one patch, and
+        -- done decides when a name out of the target set retires its
+        -- series (reconcile Cycle).
 }
 
 contract Restart {
