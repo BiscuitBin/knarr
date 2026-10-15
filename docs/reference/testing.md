@@ -24,10 +24,45 @@ crashes a supervised listener to prove recovery without resetting metrics,
 once on an OS-assigned port and once on a fixed port that it must rebind.
 These tests need no cluster or external network. Test and
 lint recipes select a loopback address and ephemeral application port so concurrent worktrees do
-not contend for port 8080 or expose metrics on the LAN. The checker suite also
-starts isolated Erlang subprocesses to verify startup failure, exhausted
-supervision and normal shutdown exit codes; its recipe builds first. Image and cluster checks are separate recipes in
+not contend for port 8080 or expose metrics on the LAN. The checker process
+groups start isolated Erlang subprocesses to verify startup failure, exhausted
+supervision and normal shutdown exit codes; selecting these groups builds their
+applications first. Image and cluster checks are separate recipes in
 the [local cluster guide](../how-to/local-cluster.md).
+
+## Checker tests
+
+`just test-checkers` runs the small policy suite in `just check`: dependency
+pins, hook configuration, workflow permissions, shared manifest versions, and
+test selection. It requires no Gleam build and has a five-second runtime budget.
+The actual documentation, agent, specification, build, and lint checks still
+run on every gate invocation.
+
+`just test-checkers-all` runs every script regression and process integration
+test. Use `just test-checkers-selected coverage docs` to run particular groups;
+the explicit ownership and input map is in
+[`checker_suite.py`](../../scripts/checks/checker_suite.py). Every test module
+must have exactly one owner. New modules without ownership fail the gate.
+
+CI compares the PR base and head (or the push before and after commits), including
+both sides of renames and deleted files. It runs affected process tests in the
+gate job and affected tooling regressions in a separate required job. Shared
+build/toolchain inputs select all groups. Missing history or unclassified
+executable/configuration inputs also select all groups. Documentation-only edits
+skip regression jobs. Each non-required cluster job runs only for its relevant
+inputs. The required `check` status accepts a skipped regression job only when
+the selector explicitly excluded it.
+
+Most checker tests call entrypoints in process; CLI smoke tests preserve the
+executable boundary. Coverage tests use isolated copies of a small compiled
+probe, with separate cold-build and real-controller startup cases. They run
+when coverage/build tooling or its application-entrypoint dependencies change.
+
+Use `PYTEST_ADDOPTS="--durations=25" just test-checkers-all` to identify slow
+regressions. Measure `just check` separately with warm and fresh build artifacts.
+The CI target is roughly 40–45 seconds including setup on a fresh runner with
+normal dependency-cache hits. Cache misses and selected extended regressions
+are reported separately; local timing alone does not establish the CI target.
 
 ## The toolkit
 

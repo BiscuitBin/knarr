@@ -18,14 +18,34 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    outputs:
+      regressions: ${{ steps.select.outputs.regressions }}
+      kind: ${{ steps.select.outputs.kind }}
+      worker: ${{ steps.select.outputs.worker }}
+      kwok: ${{ steps.select.outputs.kwok }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Select affected suites
+        id: select
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 scripts/checks/checker_suite.py ci
       - uses: ./.github/actions/setup
       - run: just check
+      - name: Selected process tests
+        if: steps.select.outputs.runtime != '[]'
+        env:
+          CHECKER_GROUPS: ${{ steps.select.outputs.runtime }}
+        run: just test-checkers-selected
 
   cluster-smoke:
+    needs: gate
+    if: needs.gate.outputs.kind == 'true'
     name: Kind smoke (non-required)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -56,6 +76,8 @@ jobs:
   # status, and two of them deleted so their kill records reach the collector.
   # Non-required, like the smoke job, and never in needs below.
   fake-worker-smoke:
+    needs: gate
+    if: needs.gate.outputs.worker == 'true'
     name: Kind fake worker smoke (non-required)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -81,6 +103,8 @@ jobs:
         run: just cluster-down
 
   cluster-kwok:
+    needs: gate
+    if: needs.gate.outputs.kwok == 'true'
     name: Kwok readiness (non-required)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -103,18 +127,35 @@ jobs:
       - if: always()
         run: just cluster-down
 
+  checker-regressions:
+    name: Selected checker regressions
+    needs: gate
+    if: needs.gate.outputs.regressions != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: just test-checkers-selected
+        env:
+          CHECKER_GROUPS: ${{ needs.gate.outputs.regressions }}
+
   # This is the sole status check intended for branch protection. Only required
   # gate jobs belong in needs. Keep the initial kind and kwok jobs out (tickets
   # 10 and 13); kind needs a stated period of stability before becoming required.
   # Never include the separate audit here.
   check:
     name: check
-    needs: [gate]
+    needs: [gate, checker-regressions]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 1
     steps:
       - name: Require every gate job to succeed
         env:
-          PASSED: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') }}
+          PASSED: ${{ needs.gate.result == 'success' && (needs.checker-regressions.result == 'success' || (needs.gate.outputs.regressions == '[]' && needs.checker-regressions.result == 'skipped')) }}
         run: test "$PASSED" = true

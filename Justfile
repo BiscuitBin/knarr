@@ -130,13 +130,22 @@ fake-worker-test: fake-worker-manifest-check
 fake-worker-lint: fake-worker-build
     cd fixtures/fake_worker && before=$(cksum < manifest.toml); sh ../../scripts/checks/run_glinter.sh; [ "$(cksum < manifest.toml)" = "$before" ] || { echo 'gleam rewrote fixtures/fake_worker/manifest.toml; run just fake-worker-manifest-check' >&2; exit 1; }
 
-# The gate checkers' own tests (scripts/checks/tests/). The fake worker's
-# process tests there run its build.
+# Policy checks are cheap; expensive regressions have explicit commands.
 [group('develop')]
 [group('check')]
 [doc("Run the gate checkers' own tests")]
-test-checkers: build fake-worker-build
-    python3 -m pytest
+test-checkers:
+    python3 scripts/checks/checker_suite.py fast
+
+[group('develop')]
+[doc('Run every checker regression and process integration test')]
+test-checkers-all:
+    python3 scripts/checks/checker_suite.py all
+
+[group('develop')]
+[doc('Run named checker groups (or CHECKER_GROUPS JSON from CI)')]
+test-checkers-selected *groups:
+    python3 scripts/checks/checker_suite.py selected "$@"
 
 # ----------------------------------------------------------------- format ---
 
@@ -293,7 +302,7 @@ check-clean baseline="":
 [doc('The complete read-only gate')]
 check:
     test -x .pixi/envs/default/bin/python3 || { printf '%s\n' 'the pixi environment is missing; run just initialize' >&2; exit 2; }
-    python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam build test snapshots-check fake-worker-manifest-check fake-worker-build fake-worker-test fake-worker-lint test-checkers packaging-check toml-check lint
+    python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam test snapshots-check fake-worker-lint fake-worker-test test-checkers packaging-check toml-check lint
 
 # --------------------------------------------------------------- cluster ---
 # Cluster effects are deliberately outside the offline repository gate.

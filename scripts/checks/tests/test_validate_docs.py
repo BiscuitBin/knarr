@@ -1,16 +1,14 @@
-"""Documentation contract through the CLI, using real temporary Git trees."""
+"""Documentation contract through the entrypoint, using real temporary Git trees."""
 
 from __future__ import annotations
 
 import json
-import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-from conftest import CHECKS
+from conftest import run_checker
 
 PROSE = (
     "This page explains the documentation contract for contributors maintaining the project. "
@@ -53,18 +51,11 @@ def handbook(repository: Path) -> Path:
     return repository
 
 
-def check(repository: Path) -> subprocess.CompletedProcess[str]:
+def check(repository: Path, *, cli: bool = False) -> subprocess.CompletedProcess[str]:
     before = {
         p.relative_to(repository): p.read_bytes() for p in repository.rglob("*") if p.is_file()
     }
-    result = subprocess.run(
-        [sys.executable, str(CHECKS / "validate_docs.py")],
-        cwd=repository,
-        check=False,
-        capture_output=True,
-        text=True,
-        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-    )
+    result = run_checker("validate_docs", repository, cli=cli)
     after = {
         p.relative_to(repository): p.read_bytes() for p in repository.rglob("*") if p.is_file()
     }
@@ -387,3 +378,16 @@ def test_an_empty_handbook_cannot_pass_without_the_navigation_root(handbook: Pat
     result = check(handbook)
     assert result.returncode == 1
     assert "docs/README.md: required navigation root is missing" in result.stderr
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_cli_contract(handbook: Path, broken: bool) -> None:
+    if broken:
+        (handbook / "docs/extra.md").write_text("Unregistered page")
+    result = check(handbook, cli=True)
+    assert result.returncode == int(broken), result.stderr
+    assert (
+        "missing from manifest" in result.stderr
+        if broken
+        else "Validated 1 pages" in result.stdout
+    )

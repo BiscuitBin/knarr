@@ -6,10 +6,13 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
-from conftest import CHECKS
+import run_allium
+from conftest import run_checker
 
 
 def install_fake(repository: Path, output: str, status: int = 0, version: str = "3.6.1") -> None:
@@ -23,6 +26,7 @@ def install_fake(repository: Path, output: str, status: int = 0, version: str = 
         f"else:\n    print({output!r})\n    sys.exit({status})\n"
     )
     binary.chmod(0o755)
+    (repository / "allium-response.json").write_text(json.dumps([output, status, version]))
     (repository / "tools.txt").write_text(
         "".join(
             f"allium 3.6.1 {platform} https://example.invalid/allium {'a' * 64} allium\n"
@@ -36,15 +40,28 @@ def install_fake(repository: Path, output: str, status: int = 0, version: str = 
 
 
 def run(
-    repository: Path, command: str = "check", *arguments: str
+    repository: Path, command: str = "check", *arguments: str, cli: bool = False
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(CHECKS / "run_allium.py"), command, *arguments],
-        cwd=repository,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    if cli:
+        return run_checker("run_allium", repository, command, *arguments, cli=True)
+    output, status, version = json.loads((repository / "allium-response.json").read_text())
+
+    def execute(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        binary = repository / ".tools/bin/allium"
+        assert argv[0] == str(binary)
+        if not binary.exists():
+            raise FileNotFoundError(binary)
+        if argv[1:] == ["--version"]:
+            return subprocess.CompletedProcess(argv, 0, f"allium {version}\n", "")
+        assert argv[1:] == [command, arguments[0] if arguments else "specifications"]
+        stdout, stderr = output + "\n", ""
+        if not kwargs.get("text"):
+            stdout, stderr = stdout.encode(), stderr.encode()
+        return subprocess.CompletedProcess(argv, status, stdout, stderr)
+
+    # Patch this adapter's boundary only; Git root discovery stays real.
+    with patch.object(run_allium, "subprocess", SimpleNamespace(run=execute)):
+        return run_checker("run_allium", repository, command, *arguments)
 
 
 def test_info_diagnostic_fails_even_when_allium_exits_zero(repository: Path) -> None:
@@ -154,7 +171,7 @@ def test_missing_or_wrong_binary_requires_initialize(repository: Path, version: 
     install_fake(repository, "", version=version)
     if version == "missing":
         (repository / ".tools/bin/allium").unlink()
-    result = run(repository)
+    result = run(repository, cli=True)
     assert result.returncode == 1
     assert "run just initialize" in result.stderr
 
@@ -172,3 +189,31 @@ def test_plan_refuses_invalid_reports(repository: Path, report: dict) -> None:
     result = run(repository, "plan", "specifications/root.allium")
     assert result.returncode == 1
     assert "0 obligations" not in result.stdout
+
+
+@pytest.mark.parametrize("command", ["check", "analyse", "plan"])
+@pytest.mark.parametrize("broken", [False, True])
+def test_cli_reports(repository: Path, command: str, broken: bool) -> None:
+    report = {
+        "spec_file": "specifications/root.allium",
+        "diagnostics": [],
+        "findings": [],
+        "obligations": [{}],
+    }
+    if broken:
+        report["diagnostics"] = [{"message": "broken"}]
+    install_fake(repository, json.dumps(report))
+    arguments = ("specifications/root.allium",) if command == "plan" else ()
+    result = run(repository, command, *arguments, cli=True)
+    assert result.returncode == int(broken), result.stdout + result.stderr
+    if broken:
+        assert ("plan failed" if command == "plan" else "broken") in result.stderr
+    else:
+        assert "allium" in result.stdout
+
+
+@pytest.mark.parametrize("arguments", [("plan",), ("check", "extra.allium"), ("unknown",)])
+def test_cli_rejects_invalid_arguments(repository: Path, arguments: tuple[str, ...]) -> None:
+    result = run_checker("run_allium", repository, *arguments, cli=True)
+    assert result.returncode == 2
+    assert "usage:" in result.stderr

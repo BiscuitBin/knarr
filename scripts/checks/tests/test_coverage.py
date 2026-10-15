@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,52 +16,153 @@ from conftest import git
 ROOT = Path(__file__).resolve().parents[3]
 
 
-@pytest.fixture
-def coverage_project() -> Iterator[Path]:
-    # AGENTS.md requires temporary agent work under the ignored ai_tmp directory.
+def prepare(project: Path) -> None:
+    """Copy command wiring and pins, without copying the controller or its tests."""
+    (project / "scripts/checks").mkdir(parents=True)
+    for name in ("coverage.py", "coverage_ffi.erl", "manifest_check.py"):
+        shutil.copyfile(ROOT / "scripts/checks" / name, project / "scripts/checks" / name)
+    for name in ("gleam.toml", "manifest.toml", "Justfile", ".gitignore"):
+        shutil.copyfile(ROOT / name, project / name)
+    shutil.copyfile(ROOT / "scripts/cluster-name.sh", project / "scripts/cluster-name.sh")
+    for name in (".pixi", ".tools"):
+        (project / name).symlink_to(ROOT / name, target_is_directory=True)
+
+
+def track(project: Path) -> None:
+    git(project, "init", "-q")
+    (project / ".git/info/exclude").write_text(".pixi\n.tools\n")
+    git(project, "add", ".")
+
+
+@pytest.fixture(scope="session")
+def coverage_template() -> Iterator[Path]:
     scratch = ROOT / "ai_tmp"
     scratch.mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="coverage-test-", dir=scratch) as directory:
+    with tempfile.TemporaryDirectory(prefix="coverage-template-", dir=scratch) as directory:
         project = Path(directory)
-        for name in ("src", "test", "scripts/checks"):
-            shutil.copytree(ROOT / name, project / name)
-        for name in ("gleam.toml", "manifest.toml", "Justfile", ".gitignore"):
-            shutil.copyfile(ROOT / name, project / name)
-        shutil.copyfile(ROOT / "scripts/cluster-name.sh", project / "scripts/cluster-name.sh")
-        for name in (".pixi", ".tools"):
-            (project / name).symlink_to(ROOT / name, target_is_directory=True)
+        prepare(project)
+        make_probe(project)
         shutil.copytree(ROOT / "build/packages", project / "build/packages")
-        # Copy the warm build, but never share writable compiler artefacts.
         shutil.copytree(ROOT / "build/dev", project / "build/dev")
-        (project / "src/coverage_probe.gleam").write_text(
-            "pub fn choose(value: Bool) -> Int {\n"
-            "  case value {\n"
-            "    True -> 11\n"
-            "    False -> 22\n"
-            "  }\n"
-            "}\n"
-            "\n"
-            '@external(erlang, "probe_ffi", "value")\n'
-            "pub fn ffi_value() -> Int\n",
+        # Reuse compiled dependencies, but compile only the tiny probe application.
+        shutil.rmtree(project / "build/dev/erlang/knarr")
+        result = subprocess.run(
+            [str(ROOT / ".pixi/envs/default/bin/just"), "build"],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
         )
-        (project / "src/probe_ffi.erl").write_text(
-            "-module(probe_ffi).\n"
-            "-export([value/0, unused/0]).\n"
-            "value() ->\n"
-            "    33.\n"
-            "unused() ->\n"
-            "    44.\n",
-        )
-        (project / "test/coverage_probe_test.gleam").write_text(
-            "import coverage_probe\n"
-            "pub fn exercised_test() {\n"
-            "  assert coverage_probe.choose(True) == 11\n"
-            "  assert coverage_probe.ffi_value() == 33\n"
-            "}\n",
-        )
-        git(project, "init", "-q")
-        (project / ".git/info/exclude").write_text(".pixi\n.tools\n")
-        git(project, "add", ".")
+        assert result.returncode == 0, result.stdout + result.stderr
+        yield project
+
+
+def make_probe(project: Path) -> None:
+    (project / "src").mkdir()
+    (project / "test/birdie_snapshots").mkdir(parents=True)
+    config = project / "gleam.toml"
+    config.write_text(
+        config.read_text().replace('application_start_module = "application_ffi"\n', "")
+    )
+    (project / "src/knarr.gleam").write_text("pub fn main() -> Nil { Nil }\n")
+    (project / "test/knarr_test.gleam").write_text(
+        "import gleeunit\npub fn main() -> Nil { gleeunit.main() }\n"
+    )
+    (project / "src/coverage_probe.gleam").write_text(
+        "pub fn choose(value: Bool) -> Int {\n"
+        "  case value {\n"
+        "    True -> 11\n"
+        "    False -> 22\n"
+        "  }\n"
+        "}\n"
+        "\n"
+        '@external(erlang, "probe_ffi", "value")\n'
+        "pub fn ffi_value() -> Int\n",
+    )
+    (project / "src/probe_ffi.erl").write_text(
+        "-module(probe_ffi).\n"
+        "-export([value/0, unused/0]).\n"
+        "value() ->\n"
+        "    33.\n"
+        "unused() ->\n"
+        "    44.\n",
+    )
+    (project / "test/coverage_probe_test.gleam").write_text(
+        "import coverage_probe\n"
+        "pub fn exercised_test() {\n"
+        "  assert coverage_probe.choose(True) == 11\n"
+        "  assert coverage_probe.ffi_value() == 33\n"
+        "}\n",
+    )
+
+    (project / "test/snapshot_test.gleam").write_text(
+        "import birdie\npub fn snapshot_test() {\n"
+        '  "application/json" |> birdie.snap(title: "coverage probe")\n}\n'
+    )
+    manifest = tomllib.loads((project / "manifest.toml").read_text())
+    birdie = next(
+        package["version"] for package in manifest["packages"] if package["name"] == "birdie"
+    )
+    (project / "test/birdie_snapshots/coverage_probe.accepted").write_text(
+        f"---\nversion: {birdie}\ntitle: coverage probe\n"
+        "file: ./test/snapshot_test.gleam\ntest_name: snapshot_test\n---\napplication/json\n"
+    )
+
+
+@pytest.fixture
+def coverage_project(coverage_template: Path) -> Iterator[Path]:
+    with tempfile.TemporaryDirectory(prefix="coverage-test-", dir=ROOT / "ai_tmp") as directory:
+        project = Path(directory)
+        shutil.copytree(coverage_template, project, dirs_exist_ok=True, symlinks=True)
+        track(project)
+        yield project
+
+
+def forbid_compiler(project: Path) -> None:
+    # An executable boundary fake makes any attempted compiler invocation an
+    # observable failure, without ever permitting a dependency download.
+    tools = project / "fake-bin"
+    tools.mkdir()
+    gleam = tools / "gleam"
+    gleam.write_text("#!/bin/sh\necho UNEXPECTED_COMPILER >&2\nexit 91\n")
+    gleam.chmod(0o755)
+    text = (project / "Justfile").read_text()
+    (project / "Justfile").write_text(
+        text.replace(
+            "export PATH := ", 'export PATH := justfile_directory() / "fake-bin" + ":" + '
+        ),
+    )
+
+
+@pytest.fixture
+def preflight_project() -> Iterator[Path]:
+    scratch = ROOT / "ai_tmp"
+    scratch.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="coverage-preflight-", dir=scratch) as directory:
+        project = Path(directory)
+        prepare(project)
+        packages = project / "build/packages"
+        packages.mkdir(parents=True)
+        shutil.copyfile(ROOT / "build/packages/packages.toml", packages / "packages.toml")
+        manifest = tomllib.loads((project / "manifest.toml").read_text())
+        for package in manifest["packages"]:
+            (packages / package["name"]).mkdir()
+        forbid_compiler(project)
+        track(project)
+        yield project
+
+
+@pytest.fixture
+def controller_project() -> Iterator[Path]:
+    scratch = ROOT / "ai_tmp"
+    scratch.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="coverage-controller-", dir=scratch) as directory:
+        project = Path(directory)
+        prepare(project)
+        for name in ("src", "test", "build/packages", "build/dev"):
+            shutil.copytree(ROOT / name, project / name)
+        track(project)
         yield project
 
 
@@ -107,36 +209,23 @@ def test_reports_source_lines_and_ffi(coverage_project: Path) -> None:
 
 @pytest.mark.parametrize("cache_state", ["missing-directory", "missing-index", "wrong-version"])
 def test_missing_cache_fails_before_gleam_can_fetch(
-    coverage_project: Path,
+    preflight_project: Path,
     cache_state: str,
 ) -> None:
-    index = coverage_project / "build/packages/packages.toml"
+    index = preflight_project / "build/packages/packages.toml"
     if cache_state == "missing-directory":
-        shutil.rmtree(coverage_project / "build/packages/gleeunit")
+        shutil.rmtree(preflight_project / "build/packages/gleeunit")
     elif cache_state == "missing-index":
         index.unlink()
     else:
         index.write_text(index.read_text().replace('gleeunit = "1.11.0"', 'gleeunit = "0.0.0"'))
-    # An executable boundary fake makes any attempted compiler invocation an
-    # observable failure, without ever permitting a dependency download.
-    tools = coverage_project / "fake-bin"
-    tools.mkdir()
-    gleam = tools / "gleam"
-    gleam.write_text("#!/bin/sh\necho UNEXPECTED_COMPILER >&2\nexit 91\n")
-    gleam.chmod(0o755)
-    text = (coverage_project / "Justfile").read_text()
-    (coverage_project / "Justfile").write_text(
-        text.replace(
-            "export PATH := ", 'export PATH := justfile_directory() / "fake-bin" + ":" + '
-        ),
-    )
-    result = run_coverage(coverage_project)
+    result = run_coverage(preflight_project)
     assert result.returncode != 0
     assert "UNEXPECTED_COMPILER" not in result.stdout + result.stderr
     assert "cached package" in result.stderr
 
 
-def test_uncalled_modules_empty_modules_and_startup(coverage_project: Path) -> None:
+def test_cold_uncalled_and_empty_modules(coverage_project: Path) -> None:
     shutil.rmtree(coverage_project / "build/dev")
     (coverage_project / "src/never_called.gleam").write_text(
         "pub fn unused() -> Int {\n  99\n}\n",
@@ -148,8 +237,13 @@ def test_uncalled_modules_empty_modules_and_startup(coverage_project: Path) -> N
     assert files["src/never_called.gleam"]["uncovered_lines"] == [2]
     assert files["src/types_only.gleam"]["executable"] == 0
     assert "0/0 (n/a)" in result.stdout
-    # The real application callback checks the install-wide values once,
-    # before main/tests.
+
+
+def test_real_controller_startup(controller_project: Path) -> None:
+    result = run_coverage(controller_project)
+    assert result.returncode == 0, result.stdout + result.stderr
+    files = {entry["path"]: entry for entry in read_report(controller_project)["files"]}
+    # Instrumentation must begin before the real OTP application callback runs.
     assert 11 in files["src/knarr/application_ffi.erl"]["covered_lines"]
 
 
@@ -221,17 +315,18 @@ def test_missing_debug_information_fails_collection(coverage_project: Path) -> N
     assert not list((coverage_project / "build/coverage").glob("*/coverage.json"))
 
 
-def test_drifted_manifest_is_refused_without_rewriting(coverage_project: Path) -> None:
-    manifest = coverage_project / "manifest.toml"
+def test_drifted_manifest_is_refused_without_rewriting(preflight_project: Path) -> None:
+    manifest = preflight_project / "manifest.toml"
     manifest.write_text(
         manifest.read_text().replace(
             'gleeunit = { version = ">= 1.11.0 and < 2.0.0" }',
             'gleeunit = { version = ">= 1.10.0 and < 2.0.0" }',
         )
     )
-    result = run_coverage(coverage_project)
+    result = run_coverage(preflight_project)
     assert result.returncode != 0
     assert "manifest.toml disagrees with gleam.toml" in result.stdout + result.stderr
+    assert "UNEXPECTED_COMPILER" not in result.stdout + result.stderr
 
 
 def test_existing_eunit_options_and_paths_with_spaces(coverage_project: Path) -> None:

@@ -2,7 +2,7 @@
 # and pin-digest.sh; not run on its own. Moved from ticket 28's evidence, where
 # the dry run exercised them against a throwaway registry and ghcr.io.
 # lib_test.sh beside it tests every helper offline, probe_tag through a stub
-# curl, and runs in `just test-checkers`.
+# curl, and runs in `just test-checkers-selected release`.
 #
 #   version_of_tag <tag>       v0.1.0 -> 0.1.0; the one prerelease form is
 #                              -rc.N (N without a leading zero); anything else

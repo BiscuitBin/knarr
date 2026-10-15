@@ -1,18 +1,16 @@
-"""Agent contract through the CLI, using real temporary Git trees."""
+"""Agent contract through the entrypoint, using real temporary Git trees."""
 
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-from conftest import CHECKS, git
+from conftest import git, run_checker
 
 SENTENCE = (
     "Read the owning specification first, make the smallest coherent change, land its test "
@@ -169,18 +167,13 @@ def surface(repository: Path) -> Path:
     return repository
 
 
-def check(repository: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+def check(
+    repository: Path, *arguments: str, cli: bool = False
+) -> subprocess.CompletedProcess[str]:
     before = {
         p.relative_to(repository): p.read_bytes() for p in repository.rglob("*") if p.is_file()
     }
-    result = subprocess.run(
-        [sys.executable, str(CHECKS / "validate_agents.py"), *arguments],
-        cwd=repository,
-        check=False,
-        capture_output=True,
-        text=True,
-        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-    )
+    result = run_checker("validate_agents", repository, *arguments, cli=cli)
     after = {
         p.relative_to(repository): p.read_bytes() for p in repository.rglob("*") if p.is_file()
     }
@@ -697,3 +690,21 @@ def test_lock_mode_refuses_no_names_or_an_absent_skill(surface: Path) -> None:
     result = check(surface, "lock", "ghost")
     assert result.returncode == 2
     assert "ghost" in result.stderr
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_cli_contract(surface: Path, broken: bool) -> None:
+    if broken:
+        (surface / "CLAUDE.md").write_text("drifted")
+    result = check(surface, cli=True)
+    assert result.returncode == int(broken), result.stderr
+    assert "CLAUDE.md" in result.stderr if broken else "Validated AGENTS.md" in result.stdout
+
+
+def test_cli_lock_output(surface: Path) -> None:
+    vendor(surface, "allium", VENDORED_FILES)
+    result = check(surface, "lock", "allium", cli=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["skills"]["allium"]["files"] == {
+        name: sha256(content.encode()) for name, content in VENDORED_FILES.items()
+    }
