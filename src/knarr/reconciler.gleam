@@ -11,10 +11,12 @@
 //// into the pod's memory and decides whether anything is due
 //// on the pod against its marker; if so it tells the patcher, which grants
 //// one turn at a time as budget's WriteBudget allows. On a turn the change
-//// is re-derived from the newest view and the latest reading (budget
-//// Pending) and one patch is sent through `k8s_client.patch_pod`: a
-//// conflict's yield, else the due writes; the turn is answered with the
-//// attempt's outcome or with nothing due, exactly once. A 429 on a LIST
+//// is re-derived from the newest view (budget Pending) and one patch is
+//// sent through `k8s_client.patch_pod`: for an apply, from the latest
+//// reading too, a conflict's yield, else the due writes; for a cleanup,
+//// every removal the pod's lifecycle View makes due on that view (lifecycle
+//// Cleanup Marker); the turn is answered with the attempt's outcome or with
+//// nothing due, exactly once. A 429 on a LIST
 //// pauses the cycles (budget PauseScope); a Deployment that left the target
 //// set is retired once the patcher says it is quiet (observability
 //// SeriesLife). It raises the Events and lines observability names, the
@@ -196,10 +198,17 @@ type Memory {
   )
 }
 
-/// The operations of a patch a 422 refused and the purpose it was sent
-/// for, so the LIST that classifies them as a rejection reports it.
+/// The operations of a patch a 422 refused, the purpose it was sent for and
+/// the deployment label it was counted under, so the LIST that classifies
+/// them as a rejection reports it under the attempt's purpose and label,
+/// whatever that LIST's View names (lifecycle Cleanup Label; observability
+/// Labels).
 type Kept {
-  Kept(operations: List(Operation), purpose: observability.Purpose)
+  Kept(
+    operations: List(Operation),
+    purpose: observability.Purpose,
+    deployment: String,
+  )
 }
 
 type State {
@@ -704,9 +713,9 @@ fn discovered(
     overrides(previous: state.invalid, deployments:, cycle:)
   // Every listed pod's memory, kept from the last cycle or begun here, with
   // this cycle's lifecycle View, and a 422's operations classified against
-  // the LIST's view under the View's deployment, a pod that left the target
-  // set since included (reconcile Rejected422, Sequence; ownership
-  // Rejected; observability Labels). A memory of a pod the LIST no longer
+  // the LIST's view under the label their attempt was counted under, a pod
+  // that left the target set since included (reconcile Rejected422,
+  // Sequence; ownership Rejected; observability Labels). A memory of a pod the LIST no longer
   // shows is dropped with it.
   let by_name =
     list.fold(targets, dict.new(), fn(acc, target) {
@@ -720,7 +729,6 @@ fn discovered(
       let #(memory, cycle) =
         classify_kept(
           cycle:,
-          deployment: view.deployment,
           pod:,
           memory: listed_memory(previous: state.pods, pod:, target:),
         )
@@ -1174,16 +1182,16 @@ fn held(memory: Memory) -> Bool {
 
 /// A 422's operations are classified against the next LIST's view and then
 /// forgotten (reconcile Rejected422): when every test would have passed,
-/// the 422 was a rejection with status 422 (ownership Rejected).
+/// the 422 was a rejection with status 422 (ownership Rejected), reported
+/// under the purpose and the label its attempt was counted under.
 fn classify_kept(
   cycle cycle: Cycle,
-  deployment deployment: String,
   pod pod: Pod,
   memory memory: Memory,
 ) -> #(Memory, Cycle) {
   case memory.kept {
     None -> #(memory, cycle)
-    Some(Kept(operations:, purpose:)) -> {
+    Some(Kept(operations:, purpose:, deployment:)) -> {
       let memory = Memory(..memory, kept: None)
       case
         ownership.rejected(
@@ -1214,8 +1222,8 @@ fn classify_kept(
 /// CleanupRejected on the Pod with its warning line (Events Rejected,
 /// CleanupRejected, AlsoLogged); a second rejection in the run counts and
 /// raises nothing. The run ends with the pod's next accepted patch, which
-/// `accepted` records. The function is purpose-agnostic: ticket 47 calls
-/// it with `observability.Cleanup`, and `left` is then `ownership.left`
+/// `accepted` records. The function is purpose-agnostic: a cleanup turn
+/// calls it with `observability.Cleanup`, and `left` is then `ownership.left`
 /// over the cleanup's operations against `pod`'s annotations. `deployment`
 /// is the label observability Labels names: the Deployment's name for a
 /// target, `lifecycle.deployment_of` for a pod that is not one.
@@ -1407,18 +1415,20 @@ fn due_operations(
 }
 
 /// A turn the patcher granted: one patch attempt on the pod, re-derived
-/// from its newest view and latest reading (budget Pending), the first
-/// conflict's yield if any, else the due writes (reconcile Sequence), and
-/// one answer, always: `Attempted` with the outcome and whether anything
-/// is still due, or `NothingDue` when the pod is gone, terminating, has no
-/// reading yet (JustStarted), holds a 422 for the next LIST (Rejected422)
-/// or has nothing to write. A cleanup turn, which discovery now enqueues,
-/// is still answered nothing due: re-deriving it from the newest view and
-/// sending it is ticket 47's next step. An accepted response
-/// becomes the pod's view. The request is built at the turn's clock, the
-/// marker's `at` among it, and the answer carries the clock after the
-/// attempt returned, so the pod's interval and a pause run from the
-/// response, not from a request a slow apiserver sat on (budget PerPod,
+/// from its newest view (budget Pending), and one answer, always:
+/// `Attempted` with the outcome and whether anything is still due, or
+/// `NothingDue` when nothing was attempted. An apply turn takes the latest
+/// reading too and sends the first conflict's yield if any, else the due
+/// writes (reconcile Sequence); it attempts nothing when the pod is no
+/// target, has no reading yet (JustStarted) or nothing to write. A cleanup
+/// turn sends the removals the pod's lifecycle View makes due on that view
+/// (lifecycle Cleanup); it attempts nothing when the pod has no View or
+/// nothing to release. Neither attempts anything on a pod gone, terminating,
+/// holding a 422 for the next LIST (Rejected422) or stale. An accepted
+/// response becomes the pod's view. The request is built at the turn's
+/// clock, the marker's `at` among it, and the answer carries the clock
+/// after the attempt returned, so the pod's interval and a pause run from
+/// the response, not from a request a slow apiserver sat on (budget PerPod,
 /// BackOff). The patcher's target set is the last good LIST's: during a
 /// LIST pause a pod deleted meanwhile keeps its entry, and its turns fail
 /// at the apiserver until the next good LIST drops it.
@@ -1426,11 +1436,16 @@ fn turn(state: State, granted: patcher.Turn) -> State {
   let patcher.Turn(pod_name:, purpose:) = granted
   let target =
     list.find(state.targets, fn(target) { target.pod_name == pod_name })
-  case purpose, state.session, dict.get(state.pods, pod_name), target {
-    budget.Apply, Some(#(namespace, token)), Ok(memory), Ok(target) -> {
+  case state.session, dict.get(state.pods, pod_name) {
+    Some(#(namespace, token)), Ok(memory) -> {
       let now = state.config.now()
       let cycle = context(state:, namespace:, token:, now:)
-      case attempt(cycle:, target:, memory:) {
+      let attempted = case purpose, target {
+        budget.Apply, Ok(target) -> attempt(cycle:, target:, memory:)
+        budget.Apply, Error(Nil) -> None
+        budget.Cleanup, _ -> cleanup(cycle:, memory:)
+      }
+      case attempted {
         Some(#(pod, memory, cycle, still_due)) -> {
           answer(
             state:,
@@ -1448,7 +1463,7 @@ fn turn(state: State, granted: patcher.Turn) -> State {
         None -> nothing_due(state, granted)
       }
     }
-    _, _, _, _ -> nothing_due(state, granted)
+    _, _ -> nothing_due(state, granted)
   }
 }
 
@@ -1475,6 +1490,75 @@ fn attempt(
     [], None -> None
     [], Some(#(reading, _)) ->
       Some(write_turn(cycle:, target:, pod:, memory:, reading:))
+  }
+}
+
+/// One cleanup on the pod's turn, or none when nothing is to be released
+/// (lifecycle Cleanup): the pod, the memory and the cycle after it, and
+/// whether it is still due. The View's target, enabled, terminating and
+/// deployment are the last complete cycle's; its held and the marker and
+/// annotations the patch is built from are the pod's newest API-returned
+/// view, the LIST's or knarr's own later accepted response, so an apply
+/// accepted since does not cost the cleanup a 422 (lifecycle Cleanup View,
+/// Scope; ownership Adoption). Every name `due` returns goes to ownership's
+/// cleanup together, one patch for the pod (Marker; ownership Released),
+/// counted under the View's deployment (Label). `held` gates it as it does
+/// an apply: no patch to a pod terminating in the newest view (reconcile
+/// Terminating), none while a 422's operations wait for the next LIST
+/// (Rejected422), and none on a view an accepted patch left stale, which
+/// the next LIST replaces (Sequence). The outcome is settled as an apply's:
+/// still due after a 400, 403, 429 or transport failure, at the interval or
+/// after the pause; not after an accepted patch; and not after a 422, which
+/// the next LIST classifies and makes due again from its view (lifecycle
+/// Cleanup Retry).
+fn cleanup(
+  cycle cycle: Cycle,
+  memory memory: Memory,
+) -> Option(#(Pod, Memory, Cycle, Bool)) {
+  let pod = memory.pod
+  use view <- option.then(memory.cleanup_view)
+  use <- bool.guard(held(memory), None)
+  let marker = ownership.read(pod.annotations)
+  let view =
+    lifecycle.View(
+      ..view,
+      held: lifecycle.held(marker:, annotations: pod.annotations),
+    )
+  let names = list.map(lifecycle.due(view), fn(removal) { removal.name })
+  let owned =
+    list.filter(ownership.owned_annotations, fn(owned) {
+      list.contains(names, owned.name)
+    })
+  case
+    ownership.cleanup(
+      marker:,
+      annotations: pod.annotations,
+      owned:,
+      at: cycle.at,
+    )
+  {
+    [] -> None
+    operations -> {
+      let #(cycle, result) =
+        send_patch(
+          cycle:,
+          deployment: view.deployment,
+          pod:,
+          operations:,
+          purpose: observability.Cleanup,
+        )
+      let #(pod, memory, cycle) =
+        settle(
+          cycle:,
+          deployment: view.deployment,
+          pod:,
+          memory:,
+          operations:,
+          purpose: observability.Cleanup,
+          result:,
+        )
+      Some(#(pod, memory, cycle, stays_due(memory:, cycle:)))
+    }
   }
 }
 
@@ -1546,11 +1630,18 @@ fn write_turn(
   reading reading: Reading,
 ) -> #(Pod, Memory, Cycle, Bool) {
   let #(pod, memory, cycle) = write(cycle:, target:, pod:, memory:, reading:)
-  let still_due = case held(memory), cycle.attempt {
+  #(pod, memory, cycle, stays_due(memory:, cycle:))
+}
+
+/// Whether the change a turn attempted stays due: not when it was accepted,
+/// nor when the attempt left nothing due on the pod until the next LIST
+/// (`held`), a 422's operations kept or an accepted view gone stale; after
+/// any other outcome, yes.
+fn stays_due(memory memory: Memory, cycle cycle: Cycle) -> Bool {
+  case held(memory), cycle.attempt {
     False, Some(attempt) -> outcome(attempt) != patcher.Accepted
     True, _ | False, None -> False
   }
-  #(pod, memory, cycle, still_due)
 }
 
 /// The patcher's reading of an attempt: a 2xx accepted, a 429 throttled
@@ -1621,7 +1712,7 @@ fn yields(
       let #(cycle, result) =
         send_patch(
           cycle:,
-          target:,
+          deployment: target.deployment_name,
           pod:,
           operations:,
           purpose: observability.Yield,
@@ -1645,7 +1736,11 @@ fn yields(
           Error(#(
             Memory(
               ..memory,
-              kept: Some(Kept(operations:, purpose: observability.Yield)),
+              kept: Some(Kept(
+                operations:,
+                purpose: observability.Yield,
+                deployment: target.deployment_name,
+              )),
             ),
             cycle,
           ))
@@ -1723,44 +1818,67 @@ fn write(
       let #(cycle, result) =
         send_patch(
           cycle:,
-          target:,
+          deployment: target.deployment_name,
           pod:,
           operations:,
           purpose: observability.Apply,
         )
-      case result {
-        Ok(pod) -> #(pod, accepted(memory), cycle)
-        Error(PreconditionFailed) -> #(
-          pod,
-          Memory(
-            ..memory,
-            kept: Some(Kept(operations:, purpose: observability.Apply)),
-          ),
-          cycle,
-        )
-        Error(Rejected(status)) -> {
-          let #(memory, cycle) =
-            rejection(
-              cycle:,
-              deployment: target.deployment_name,
-              pod:,
-              memory:,
-              operations:,
-              purpose: observability.Apply,
-              status:,
-            )
-          #(pod, memory, cycle)
-        }
-        // Accepted without a view: the runs end, and nothing more is due on
-        // the pod until the next LIST supplies the pod (reconcile Sequence).
-        Error(AcceptedUnseen) -> #(
-          pod,
-          Memory(..accepted(memory), stale: True),
-          cycle,
-        )
-        Error(OtherFailure) -> #(pod, memory, cycle)
-      }
+      settle(
+        cycle:,
+        deployment: target.deployment_name,
+        pod:,
+        memory:,
+        operations:,
+        purpose: observability.Apply,
+        result:,
+      )
     }
+  }
+}
+
+/// The pod, the memory and the cycle after a write or a cleanup was sent:
+/// an accepted response is the pod's view and ends its runs; a 422 keeps
+/// the operations, with the purpose and `deployment`, for the next LIST to
+/// classify (reconcile Rejected422); a 400 or 403 is a rejection at once
+/// under `deployment` (ownership Rejected); anything else leaves the memory
+/// as it was.
+fn settle(
+  cycle cycle: Cycle,
+  deployment deployment: String,
+  pod pod: Pod,
+  memory memory: Memory,
+  operations operations: List(Operation),
+  purpose purpose: observability.Purpose,
+  result result: Result(Pod, PatchFailure),
+) -> #(Pod, Memory, Cycle) {
+  case result {
+    Ok(pod) -> #(pod, accepted(memory), cycle)
+    Error(PreconditionFailed) -> #(
+      pod,
+      Memory(..memory, kept: Some(Kept(operations:, purpose:, deployment:))),
+      cycle,
+    )
+    Error(Rejected(status)) -> {
+      let #(memory, cycle) =
+        rejection(
+          cycle:,
+          deployment:,
+          pod:,
+          memory:,
+          operations:,
+          purpose:,
+          status:,
+        )
+      #(pod, memory, cycle)
+    }
+    // Accepted without a view: the runs end, and nothing more is due on the
+    // pod until the next LIST supplies the pod (reconcile Sequence).
+    Error(AcceptedUnseen) -> #(
+      pod,
+      Memory(..accepted(memory), stale: True),
+      cycle,
+    )
+    Error(OtherFailure) -> #(pod, memory, cycle)
   }
 }
 
@@ -1777,14 +1895,15 @@ type PatchFailure {
 }
 
 /// Sends one patch, logs it, counts it on knarr_patches_total by its
-/// result (observability Patches) and records the attempt on the cycle, so
+/// result under `deployment`, the label observability Labels names
+/// (observability Patches), and records the attempt on the cycle, so
 /// a turn can answer with its outcome: a 429 is counted once, as throttled,
 /// and is `OtherFailure` to the callers, which read it off the attempt. An
 /// undecodable body answers a 2xx, since the client decodes one only after
 /// its success-status guard, so it is counted and answered as accepted.
 fn send_patch(
   cycle cycle: Cycle,
-  target target: Target,
+  deployment deployment: String,
   pod pod: Pod,
   operations operations: List(Operation),
   purpose purpose: observability.Purpose,
@@ -1793,10 +1912,7 @@ fn send_patch(
   let keys = ownership.keys(operations)
   let label = observability.purpose_label(purpose)
   let fields = [
-    observability.string_field(
-      name: "deployment",
-      value: target.deployment_name,
-    ),
+    observability.string_field(name: "deployment", value: deployment),
     observability.string_field(name: "pod", value: pod.name),
     observability.string_field(name: "purpose", value: label),
     observability.strings_field(name: "keys", values: keys),
@@ -1848,7 +1964,7 @@ fn send_patch(
   }
   let cycle =
     count(cycle:, name: observability.patches_total, labels: [
-      target.deployment_name,
+      deployment,
       label,
       observability.patch_result(status),
     ])

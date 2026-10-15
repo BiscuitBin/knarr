@@ -332,7 +332,8 @@ fn cluster(name: String, pods: List(PodFixture)) -> Table {
 /// request to `requests`. A LIST is refused with 429 while "list_status",
 /// or "list_status:" and its resource, is "429"; a patch answers with
 /// "patch_status", after moving the clock to "patch_advances_now" once when
-/// that is set, as a slow response does; a refusal of either carries
+/// that is set, as a slow response does, or fails in transport while
+/// "patch_status" is "send_failed"; a refusal of either carries
 /// "list_retry_after" or "patch_retry_after" as its Retry-After header when
 /// set.
 fn apiserver(
@@ -361,25 +362,33 @@ fn apiserver(
       }
       http.Patch -> {
         advance_clock(table)
-        let status =
-          get(table, "patch_status")
-          |> result.try(int.parse)
-          |> result.unwrap(200)
-        let body = case get(table, "patched:" <> resource) {
-          Ok(body) -> body
-          Error(Nil) -> pod_json(pod(resource))
+        case get(table, "patch_status") {
+          Ok("send_failed") -> Error(k8s_http.ConnectFailed("econnrefused"))
+          _ -> Ok(patched(table:, resource:))
         }
-        Ok(
-          response.new(status)
-          |> response.set_body(body)
-          |> retry_after(table:, key: "patch_retry_after"),
-        )
       }
       http.Post -> Ok(response.new(201) |> response.set_body("{}"))
       // The reconciler sends no other method.
       _ -> Ok(response.new(405) |> response.set_body(""))
     }
   }
+}
+
+/// The answer to a patch of the pod `resource`: "patch_status", 200 when
+/// unset, with "patched:" and the pod's name as its body, else the pod
+/// with no annotations.
+fn patched(table table: Table, resource resource: String) -> Response(String) {
+  let status =
+    get(table, "patch_status")
+    |> result.try(int.parse)
+    |> result.unwrap(200)
+  let body = case get(table, "patched:" <> resource) {
+    Ok(body) -> body
+    Error(Nil) -> pod_json(pod(resource))
+  }
+  response.new(status)
+  |> response.set_body(body)
+  |> retry_after(table:, key: "patch_retry_after")
 }
 
 /// A slow response: the clock moves to "patch_advances_now", in seconds,
@@ -2345,9 +2354,10 @@ fn a_list_429_on(resource: String) -> Nil {
 
 // budget Pending: every turn is answered once, with the turn's own key. A
 // turn for a pod no LIST shows is answered nothing due, and so is a cleanup
-// turn, whose changes ticket 47 derives, so the patcher's one turn in
-// flight clears and the next due pod gets its turn.
-pub fn a_turn_for_an_unknown_pod_or_a_cleanup_is_answered_nothing_due_test() -> Nil {
+// turn on a pod whose newest view holds nothing to release (lifecycle
+// Cleanup Scope), so the patcher's one turn in flight clears and the next
+// due pod gets its turn.
+pub fn a_turn_for_an_unknown_pod_or_a_cleanup_with_nothing_due_is_answered_nothing_due_test() -> Nil {
   let harness = harness("ghost", [pod("1")])
   let set = start(harness)
 
@@ -2387,7 +2397,7 @@ pub fn a_turn_for_an_unknown_pod_or_a_cleanup_is_answered_nothing_due_test() -> 
 // it, so a late response is counted before its series go. The cleanup the
 // LIST makes due for its pod, whose marker owns the cost the opt-out no
 // longer enables (lifecycle Cleanup Scope), is pending held by the patch
-// interval and keeps it busy; the turn that finds nothing due lets it go
+// interval and keeps it busy; the turn that sends it, accepted, lets it go
 // quiet.
 pub fn a_departed_deployment_is_retired_only_when_the_patcher_is_quiet_test() -> Nil {
   let harness = harness("depart", [pod("1")])
@@ -2417,6 +2427,7 @@ pub fn a_departed_deployment_is_retired_only_when_the_patcher_is_quiet_test() ->
     "knarr_pods{deployment=\"depart\",tier=\"0\"} 1\n",
   )
   patcher_wake(harness:, at: 1060)
+  patch_of(next(harness), "1")
   assert await_retired("depart", 1000)
   quiet(harness)
   stop_root(set)
@@ -2497,8 +2508,10 @@ pub fn a_removed_safe_to_evict_opt_in_makes_a_cleanup_due_under_the_targets_labe
 // and the cost its marker owns is due, pending under the name its
 // ReplicaSet's owner reference carries. It waits config.patch_interval from
 // the pod's last attempt, not the override its Deployment set, which is not
-// read once the Deployment is out of the selected LIST; the turn then finds
-// nothing due and the Deployment goes quiet.
+// read once the Deployment is out of the selected LIST; its turn then sends
+// the patch that removes the cost and, with no record left, the marker
+// (lifecycle Cleanup Marker, ownership Released), and the Deployment goes
+// quiet.
 pub fn an_opted_out_pods_cleanup_waits_the_install_interval_under_its_deployment_test() -> Nil {
   let harness = harness("opted-out", [pod("1")])
   set_deployment(harness.table, "{\"knarr.io/patch-interval\":\"120\"}")
@@ -2519,6 +2532,11 @@ pub fn an_opted_out_pods_cleanup_waits_the_install_interval_under_its_deployment
   quiet(harness)
   assert string.contains(metrics.collect(), pending("opted-out") <> "1\n")
   patcher_wake(harness:, at: 1060)
+  let document = patch_of(next(harness), "1")
+  assert string.contains(document, remove_of(cost_key))
+  assert string.contains(document, remove_of(marker_key))
+  assert !string.contains(document, remove_of(ste_key))
+  assert !string.contains(document, "\"op\":\"add\"")
   assert await_exposition(
     fn(exposition) { !string.contains(exposition, pending("opted-out")) },
     1000,
@@ -2692,10 +2710,11 @@ pub fn the_first_complete_cycle_after_a_start_enqueues_every_due_cleanup_at_once
 // only: the value an opt-out leaves and the null record Neutral leaves
 // count until cleanup drops their records, a yielded or a conflict record
 // counts nowhere, and a terminating pod on no standing gauge (SeriesLife).
-// No other per-Deployment gauge carries the name.
+// No other per-Deployment gauge carries the name. No turn is granted, so
+// the cleanups stay pending and send nothing.
 pub fn a_pod_that_is_not_a_target_counts_its_owned_annotations_alone_test() -> Nil {
   let harness =
-    harness("standing-out", [
+    holding("standing-out", [
       PodFixture(..pod("1"), annotations: marked("500", at(1000))),
       PodFixture(..pod("2"), annotations: null_record()),
       PodFixture(..pod("3"), annotations: yielded()),
@@ -2745,7 +2764,8 @@ pub fn a_pod_that_is_not_a_target_counts_its_owned_annotations_alone_test() -> N
 // cycle. A target with a 10 s override has an apply attempt at 1000; its
 // Deployment then drops the safe-to-evict opt-in, so the owned value's
 // cleanup is pending, held to 1010; at 1010 the Deployment opts out, so the
-// install's 60 s applies, and no cleanup turn is granted before 1060.
+// install's 60 s applies, and no cleanup turn is granted before 1060, when
+// it is sent.
 pub fn a_cleanup_that_leaves_the_target_set_waits_the_install_interval_test() -> Nil {
   let harness =
     harness("short", [
@@ -2775,6 +2795,7 @@ pub fn a_cleanup_that_leaves_the_target_set_waits_the_install_interval_test() ->
   quiet(harness)
   assert string.contains(metrics.collect(), pending("short") <> "1\n")
   patcher_wake(harness:, at: 1060)
+  patch_of(next(harness), "1")
   assert await_exposition(
     fn(exposition) { !string.contains(exposition, pending("short")) },
     1000,
@@ -2813,6 +2834,728 @@ pub fn a_kept_422_on_a_pod_that_opted_out_is_classified_at_the_next_list_test() 
     metrics.collect(),
     "knarr_patch_rejections_total{deployment=\"kept-out\",purpose=\"apply\"} 1\n",
   )
+  stop_root(set)
+}
+
+// ----------------------------------------------------------- Cleanup turn ---
+
+/// A marker owning the cost at 500 while safe-to-evict stands yielded at
+/// "false": one annotation to release and one yield to keep.
+fn owned_and_yielded() -> String {
+  let marker =
+    "{\"at\":\""
+    <> at(1000)
+    <> "\",\"pod-deletion-cost\":{\"applied\":\"500\",\"at\":\""
+    <> at(1000)
+    <> "\"},\"safe-to-evict\":{\"at\":\""
+    <> at(1000)
+    <> "\",\"yielded\":\"false\"}}"
+  json.object([
+    #(cost_key, json.string("500")),
+    #(ste_key, json.string("false")),
+    #(marker_key, json.string(marker)),
+  ])
+  |> json.to_string
+}
+
+/// A marker owning both annotations at 1000, the cost at 500 and
+/// safe-to-evict at "true", while the pod's safe-to-evict reads "false": a
+/// conflict on safe-to-evict, the cost still owned.
+fn safe_moved() -> String {
+  let marker =
+    "{\"at\":\""
+    <> at(1000)
+    <> "\",\"pod-deletion-cost\":{\"applied\":\"500\",\"at\":\""
+    <> at(1000)
+    <> "\"},\"safe-to-evict\":{\"applied\":\"true\",\"at\":\""
+    <> at(1000)
+    <> "\"}}"
+  json.object([
+    #(cost_key, json.string("500")),
+    #(ste_key, json.string("false")),
+    #(marker_key, json.string(marker)),
+  ])
+  |> json.to_string
+}
+
+/// The Deployment's ReplicaSet listed with no owner, as a cascade-orphan
+/// deletion of the Deployment leaves it.
+fn orphan_own_replica_set(table: Table) -> Nil {
+  put(
+    table,
+    "replicasets",
+    items(["{\"metadata\":{\"name\":\"rs\",\"uid\":\"rs-1\"}}"]),
+  )
+}
+
+/// The remove of the annotation `key` as a patch document carries it.
+fn remove_of(key: String) -> String {
+  "{\"op\":\"remove\",\"path\":\"/metadata/annotations/"
+  <> string.replace(key, "/", "~1")
+  <> "\"}"
+}
+
+/// The add that rewrites the marker to the `rendered` marker text, its
+/// quotes escaped as the patch document carries them.
+fn marker_rewrite(rendered: String) -> String {
+  "{\"op\":\"add\",\"path\":\"/metadata/annotations/knarr.io~1applied\",\"value\":\""
+  <> string.replace(rendered, "\"", "\\\"")
+  <> "\"}"
+}
+
+// lifecycle Cleanup Marker and Order, ownership Released, budget Pending: an
+// opt-out of a pod owning both annotations makes one pending cleanup, held
+// by the patch interval from the apply at 1000, and its turn sends one patch
+// that removes both annotations and, with no record left, the marker.
+pub fn an_opt_out_of_a_pod_owning_both_removes_both_and_the_marker_test() -> Nil {
+  let harness =
+    harness("clean-both", [
+      PodFixture(..pod("1"), annotations: owning_both("500", "true")),
+    ])
+  put(harness.table, "reading:10.0.0.1", "2000")
+  let both = PodFixture(..pod("1"), annotations: owning_both("2000", "true"))
+  put(harness.table, "patched:1", pod_json(both))
+  set_deployment(harness.table, safe_to_evict_on)
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  set_pods(harness.table, [both])
+  opt_out(harness.table)
+  tick(harness:, at: 1000)
+  lists(harness)
+  quiet(harness)
+  assert await_metric(pending("clean-both") <> "1\n", 1000)
+  patcher_wake(harness:, at: 1060)
+  let document = patch_of(next(harness), "1")
+  assert string.contains(document, remove_of(cost_key))
+  assert string.contains(document, remove_of(ste_key))
+  assert string.contains(document, remove_of(marker_key))
+  assert !string.contains(document, "\"op\":\"add\"")
+  quiet(harness)
+  stop_root(set)
+}
+
+// lifecycle Cleanup Scope, Marker and Label, ownership Released: a target
+// whose Deployment does not opt in to safe-to-evict while its marker owns
+// one gets a cleanup that removes safe-to-evict alone and rewrites the
+// marker with the cost's record kept, counted on knarr_patches_total with
+// purpose cleanup under the target's Deployment.
+pub fn a_removed_safe_to_evict_opt_in_is_removed_alone_and_the_marker_kept_test() -> Nil {
+  let harness =
+    harness("clean-ste", [
+      PodFixture(..pod("1"), annotations: owning_both("500", "true")),
+    ])
+  put(
+    harness.table,
+    "patched:1",
+    pod_json(PodFixture(..pod("1"), annotations: marked("500", at(1000)))),
+  )
+  let set = start(harness)
+
+  lists(harness)
+  let document = patch_of(next(harness), "1")
+  assert string.contains(document, remove_of(ste_key))
+  assert !string.contains(document, remove_of(cost_key))
+  assert !string.contains(document, remove_of(marker_key))
+  assert string.contains(
+    document,
+    marker_rewrite(
+      "{\"at\":\""
+      <> at(1000)
+      <> "\",\"pod-deletion-cost\":{\"applied\":\"500\",\"at\":\""
+      <> at(1000)
+      <> "\"}}",
+    ),
+  )
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "clean-ste", purpose: "cleanup", result: "accepted")
+      <> "1\n",
+    1000,
+  )
+  stop_root(set)
+}
+
+// lifecycle Cleanup Marker, ownership Released and Yield: a yielded record
+// keeps the marker, so the cleanup of a pod whose Deployment was deleted
+// removes the owned cost and rewrites the marker with the yield alone.
+pub fn a_yielded_record_keeps_the_marker_through_a_cleanup_test() -> Nil {
+  let harness =
+    harness("clean-yield", [
+      PodFixture(..pod("1"), annotations: owned_and_yielded()),
+    ])
+  put(harness.table, "deployments", items([]))
+  let set = start(harness)
+
+  lists(harness)
+  let document = patch_of(next(harness), "1")
+  assert string.contains(document, remove_of(cost_key))
+  assert !string.contains(document, remove_of(ste_key))
+  assert !string.contains(document, remove_of(marker_key))
+  assert string.contains(
+    document,
+    marker_rewrite(
+      "{\"at\":\""
+      <> at(1000)
+      <> "\",\"safe-to-evict\":{\"at\":\""
+      <> at(1000)
+      <> "\",\"yielded\":\"false\"}}",
+    ),
+  )
+  quiet(harness)
+  stop_root(set)
+}
+
+// lifecycle Cleanup Scope and Marker, ownership Released: the null record
+// reconcile's Neutral leaves stands owned, so a pod that is no target with
+// it gets the marker-only cleanup: nothing removed from the pod but the
+// marker, which no record keeps.
+pub fn neutrals_null_record_gets_the_marker_only_cleanup_test() -> Nil {
+  let harness =
+    harness("clean-null", [PodFixture(..pod("1"), annotations: null_record())])
+  put(harness.table, "deployments", items([]))
+  let set = start(harness)
+
+  lists(harness)
+  let document = patch_of(next(harness), "1")
+  assert string.contains(document, remove_of(marker_key))
+  assert !string.contains(document, remove_of(cost_key))
+  assert !string.contains(document, "\"op\":\"add\"")
+  quiet(harness)
+  stop_root(set)
+}
+
+// lifecycle Cleanup Label, observability Catalogue Patches: the cleanup of
+// a pod that is no target counts on knarr_patches_total with purpose
+// cleanup under its View's deployment, the name its ReplicaSet's owner
+// reference carries after the Deployment was deleted.
+pub fn a_cleanup_counts_under_its_views_deployment_test() -> Nil {
+  let harness =
+    harness("clean-label", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "clean-label", purpose: "cleanup", result: "accepted")
+      <> "1\n",
+    1000,
+  )
+  stop_root(set)
+}
+
+// lifecycle Cleanup Order, budget PerPod: a pod due both an apply and a
+// cleanup, its safe-to-evict opt-in gone while its cost crosses a
+// threshold, makes two patches, each with its own purpose, the second a
+// patch interval after the first.
+pub fn a_pod_due_an_apply_and_a_cleanup_makes_two_patches_an_interval_apart_test() -> Nil {
+  let harness =
+    harness("clean-two", [
+      PodFixture(..pod("1"), annotations: owning_both("500", "true")),
+    ])
+  put(harness.table, "reading:10.0.0.1", "2000")
+  put(
+    harness.table,
+    "patched:1",
+    pod_json(PodFixture(..pod("1"), annotations: marked("500", at(1000)))),
+  )
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  patcher_wake(harness:, at: 1059)
+  quiet(harness)
+  patcher_wake(harness:, at: 1060)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "clean-two", purpose: "cleanup", result: "accepted")
+      <> "1\n",
+    1000,
+  )
+  assert await_metric(
+    patches(deployment: "clean-two", purpose: "apply", result: "accepted")
+      <> "1\n",
+    1000,
+  )
+  stop_root(set)
+}
+
+// lifecycle Cleanup View and Scope, ownership Adoption: the cleanup is
+// re-derived at its turn from the pod's newest API-returned view, so an
+// apply accepted between the LIST and the turn does not cost it a 422. The
+// apply pending since the poll at 1030 goes at 1060, before the cleanup the
+// LIST at 1040 made due; the cleanup follows at 1120 with the marker the
+// apply's response holds, cost 4000, not the LIST's 2000.
+pub fn a_cleanup_turn_is_built_from_the_newest_accepted_response_test() -> Nil {
+  let harness =
+    harness("clean-held", [
+      PodFixture(..pod("1"), annotations: owning_both("500", "true")),
+    ])
+  put(harness.table, "reading:10.0.0.1", "2000")
+  let listed = PodFixture(..pod("1"), annotations: owning_both("2000", "true"))
+  put(harness.table, "patched:1", pod_json(listed))
+  set_deployment(harness.table, safe_to_evict_on)
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  put(harness.table, "reading:10.0.0.1", "4000")
+  wake(harness:, at: 1030)
+  assert await_polls(harness:, count: 2, within: 1000)
+  quiet(harness)
+  set_pods(harness.table, [listed])
+  set_deployment(harness.table, "{}")
+  tick(harness:, at: 1040)
+  lists(harness)
+  quiet(harness)
+  put(
+    harness.table,
+    "patched:1",
+    pod_json(PodFixture(..pod("1"), annotations: owning_both("4000", "true"))),
+  )
+  patcher_wake(harness:, at: 1060)
+  let apply = patch_of(next(harness), "1")
+  assert string.contains(apply, "\"4000\"")
+  quiet(harness)
+  patcher_wake(harness:, at: 1119)
+  quiet(harness)
+  patcher_wake(harness:, at: 1120)
+  let cleanup = patch_of(next(harness), "1")
+  assert string.contains(cleanup, remove_of(ste_key))
+  assert string.contains(cleanup, "\\\"applied\\\":\\\"4000\\\"")
+  assert !string.contains(cleanup, "\\\"applied\\\":\\\"2000\\\"")
+  quiet(harness)
+  stop_root(set)
+}
+
+// lifecycle Cleanup Retry, reconcile Rejected422, ownership Rejected: a
+// cleanup refused with 422 is not retried before the next LIST, so nothing
+// stays pending and a wake past the interval sends nothing. That LIST
+// classifies the kept operations, unchanged on its view, as a rejection,
+// raised as CleanupRejected with 422 (observability Events CleanupRejected),
+// and makes the cleanup due again; the rebuilt patch is accepted.
+pub fn a_cleanup_refused_with_422_is_rebuilt_from_the_next_list_test() -> Nil {
+  let harness =
+    harness("clean-422", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patch_status", "422")
+  let set = start(harness)
+
+  lists(harness)
+  let first = patch_of(next(harness), "1")
+  quiet(harness)
+  assert await_metric(
+    patches(
+      deployment: "clean-422",
+      purpose: "cleanup",
+      result: "precondition_failed",
+    )
+      <> "1\n",
+    1000,
+  )
+  patcher_wake(harness:, at: 1060)
+  quiet(harness)
+  put(harness.table, "patch_status", "200")
+  tick(harness:, at: 1300)
+  lists(harness)
+  let #(reason, message, _) = event_of(next(harness))
+  assert reason == "CleanupRejected"
+  assert string.contains(message, "rejected knarr's cleanup with 422;")
+  let second = patch_of(next(harness), "1")
+  assert second == first
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "clean-422", purpose: "cleanup", result: "accepted")
+      <> "1\n",
+    1000,
+  )
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"clean-422\",purpose=\"cleanup\"} 1\n",
+  )
+  stop_root(set)
+}
+
+// lifecycle Cleanup Retry, observability Events CleanupRejected, Cadence
+// and Catalogue Patches: a cleanup rejected with 403 raises CleanupRejected,
+// naming what it left, with its warning line, and stays due; it is tried
+// again no sooner than the patch interval, and the second 403 in the run
+// counts and raises nothing.
+pub fn a_cleanup_rejected_twice_raises_one_cleanup_rejected_event_test() -> Nil {
+  let harness =
+    harness("clean-403", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patch_status", "403")
+  capture_logs(harness.table)
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, message, kind) = event_of(next(harness))
+  assert reason == "CleanupRejected"
+  assert kind == "Pod"
+  assert string.contains(
+    message,
+    "the apiserver rejected knarr's cleanup with 403; controller.kubernetes.io/pod-deletion-cost=500 stays on the pod until removed",
+  )
+  quiet(harness)
+  patcher_wake(harness:, at: 1059)
+  quiet(harness)
+  patcher_wake(harness:, at: 1060)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    "knarr_patch_rejections_total{deployment=\"clean-403\",purpose=\"cleanup\"} 2\n",
+  )
+  assert string.contains(
+    exposition,
+    patches(deployment: "clean-403", purpose: "cleanup", result: "rejected")
+      <> "2\n",
+  )
+  let rejected = lines(harness, "cleanup rejected")
+  assert list.length(rejected) == 1
+  assert list.all(rejected, fn(line) {
+    string.contains(line, "\"deployment\":\"clean-403\"")
+    && string.ends_with(
+      line,
+      "\"left\":[\"controller.kubernetes.io/pod-deletion-cost=500\"]}\n",
+    )
+  })
+  release_logs()
+  stop_root(set)
+}
+
+// lifecycle Cleanup Retry, ownership Rejected: a 400 is a rejection at
+// once, raised as CleanupRejected on the attempt, and the cleanup stays
+// due, sent again a patch interval later.
+pub fn a_cleanup_rejected_with_400_is_a_rejection_at_once_and_stays_due_test() -> Nil {
+  let harness =
+    harness("clean-400", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patch_status", "400")
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, message, _) = event_of(next(harness))
+  assert reason == "CleanupRejected"
+  assert string.contains(message, "rejected knarr's cleanup with 400;")
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"clean-400\",purpose=\"cleanup\"} 1\n",
+  )
+  patcher_wake(harness:, at: 1060)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  stop_root(set)
+}
+
+// lifecycle Cleanup Retry, budget BackOff: a cleanup refused with 429 stays
+// due and is retried only once the pause has ended, never inside it.
+pub fn a_throttled_cleanup_is_retried_only_after_the_pause_test() -> Nil {
+  let harness =
+    harness("clean-429", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patch_status", "429")
+  put(harness.table, "patch_retry_after", "120")
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "clean-429", purpose: "cleanup", result: "throttled")
+      <> "1\n",
+    1000,
+  )
+  put(harness.table, "patch_status", "200")
+  patcher_wake(harness:, at: 1119)
+  quiet(harness)
+  patcher_wake(harness:, at: 1120)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "clean-429", purpose: "cleanup", result: "accepted")
+      <> "1\n",
+    1000,
+  )
+  stop_root(set)
+}
+
+// lifecycle Cleanup Retry, observability Events Rejected: an accepted
+// cleanup ends the pod's rejection run, so a rejection of the cleanup the
+// next LIST makes due again raises CleanupRejected anew.
+pub fn an_accepted_cleanup_ends_the_rejection_run_test() -> Nil {
+  let harness =
+    harness("clean-run", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patch_status", "403")
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "CleanupRejected"
+  quiet(harness)
+  put(harness.table, "patch_status", "200")
+  patcher_wake(harness:, at: 1060)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  put(harness.table, "patch_status", "403")
+  tick(harness:, at: 1300)
+  lists(harness)
+  patch_of(next(harness), "1")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "CleanupRejected"
+  quiet(harness)
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    "knarr_patch_rejections_total{deployment=\"clean-run\",purpose=\"cleanup\"} 2\n",
+  )
+  assert string.contains(
+    exposition,
+    patches(deployment: "clean-run", purpose: "cleanup", result: "accepted")
+      <> "1\n",
+  )
+  stop_root(set)
+}
+
+// lifecycle Cleanup Label, observability Labels, ownership Rejected: a 422
+// is classified at the next LIST under the label its attempt was counted
+// under, though that LIST's View names another deployment: here a
+// cascade-orphan deletion empties the chain between the 422 and the LIST,
+// with every field the patch tested unchanged, so the rejection counts and
+// logs under "clean-422-label", not under the empty name.
+pub fn a_kept_422_is_classified_under_the_label_its_attempt_was_counted_under_test() -> Nil {
+  let harness =
+    harness("clean-422-label", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patch_status", "422")
+  capture_logs(harness.table)
+  let set = start(harness)
+  let empty =
+    "knarr_patch_rejections_total{deployment=\"\",purpose=\"cleanup\"}"
+  let before = counter(empty)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert await_metric(
+    patches(
+      deployment: "clean-422-label",
+      purpose: "cleanup",
+      result: "precondition_failed",
+    )
+      <> "1\n",
+    1000,
+  )
+  orphan_own_replica_set(harness.table)
+  put(harness.table, "patch_status", "200")
+  tick(harness:, at: 1300)
+  lists(harness)
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "CleanupRejected"
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"clean-422-label\",purpose=\"cleanup\"} 1\n",
+  )
+  assert counter(empty) == before
+  let rejected = lines(harness, "cleanup rejected")
+  assert list.length(rejected) == 1
+  assert list.all(rejected, string.contains(
+    _,
+    "\"deployment\":\"clean-422-label\"",
+  ))
+  release_logs()
+  stop_root(set)
+}
+
+// lifecycle Cleanup View and Scope, ownership Precondition and Released: a
+// 422 is not replayed but rebuilt from the next LIST's view. Here that view
+// shows safe-to-evict changed under knarr, a conflict, so the 422 is no
+// rejection, and the rebuilt patch releases the cost alone: no test or
+// remove of safe-to-evict, and the marker rewritten with the conflict's
+// record kept as found.
+pub fn a_cleanup_refused_with_422_is_rebuilt_from_a_changed_view_test() -> Nil {
+  let harness =
+    harness("clean-422-moved", [
+      PodFixture(..pod("1"), annotations: owning_both("500", "true")),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patch_status", "422")
+  let set = start(harness)
+
+  lists(harness)
+  let first = patch_of(next(harness), "1")
+  assert string.contains(first, remove_of(ste_key))
+  quiet(harness)
+  set_pods(harness.table, [PodFixture(..pod("1"), annotations: safe_moved())])
+  put(harness.table, "patch_status", "200")
+  tick(harness:, at: 1300)
+  lists(harness)
+  let second = patch_of(next(harness), "1")
+  assert string.contains(second, remove_of(cost_key))
+  assert !string.contains(
+    second,
+    "\"path\":\"/metadata/annotations/cluster-autoscaler.kubernetes.io~1safe-to-evict\"",
+  )
+  assert !string.contains(second, remove_of(marker_key))
+  assert string.contains(
+    second,
+    marker_rewrite(
+      "{\"at\":\""
+      <> at(1300)
+      <> "\",\"safe-to-evict\":{\"applied\":\"true\",\"at\":\""
+      <> at(1000)
+      <> "\"}}",
+    ),
+  )
+  quiet(harness)
+  assert !string.contains(
+    metrics.collect(),
+    "knarr_patch_rejections_total{deployment=\"clean-422-moved\"",
+  )
+  stop_root(set)
+}
+
+// reconcile Sequence, k8s_client Verbs: an accepted patch whose body gives
+// no view leaves nothing due on the pod until the next LIST, for either
+// purpose. A target is due a cleanup and an apply; the cleanup goes first
+// and is accepted unseen, so the apply's turn after the interval sends
+// nothing; after the next LIST the apply is built from the LIST's view.
+pub fn an_unseen_accepted_patch_holds_the_other_purpose_until_the_next_list_test() -> Nil {
+  let harness =
+    harness("unseen-both", [
+      PodFixture(..pod("1"), annotations: owning_both("500", "true")),
+    ])
+  put(harness.table, "reading:10.0.0.1", "2000")
+  put(harness.table, "patched:1", "not json")
+  let set = start(harness)
+
+  lists(harness)
+  let cleanup = patch_of(next(harness), "1")
+  assert string.contains(cleanup, remove_of(ste_key))
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "unseen-both", purpose: "cleanup", result: "accepted")
+      <> "1\n",
+    1000,
+  )
+  patcher_wake(harness:, at: 1060)
+  quiet(harness)
+  assert !string.contains(
+    metrics.collect(),
+    patches(deployment: "unseen-both", purpose: "apply", result: "accepted"),
+  )
+  set_pods(harness.table, [
+    PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+  ])
+  tick(harness:, at: 1300)
+  lists(harness)
+  wake(harness:, at: 1300)
+  let apply = patch_of(next(harness), "1")
+  assert string.contains(apply, "\"2000\"")
+  assert !string.contains(apply, ste_key)
+  quiet(harness)
+  stop_root(set)
+}
+
+// lifecycle Cleanup Retry, budget PerPod: a cleanup that fails in transport
+// is counted as an error, is no rejection, and stays due: it is sent again
+// no sooner than the patch interval.
+pub fn a_cleanup_that_fails_in_transport_is_retried_after_the_interval_test() -> Nil {
+  let harness =
+    harness("clean-transport", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patch_status", "send_failed")
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "clean-transport", purpose: "cleanup", result: "error")
+      <> "1\n",
+    1000,
+  )
+  put(harness.table, "patch_status", "200")
+  patcher_wake(harness:, at: 1059)
+  quiet(harness)
+  patcher_wake(harness:, at: 1060)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    patches(
+      deployment: "clean-transport",
+      purpose: "cleanup",
+      result: "accepted",
+    )
+      <> "1\n",
+  )
+  assert !string.contains(
+    exposition,
+    "knarr_patch_rejections_total{deployment=\"clean-transport\"",
+  )
+  stop_root(set)
+}
+
+// reconcile Sequence, k8s_client Verbs: a cleanup accepted with a body that
+// gives no view is accepted, and nothing more is due on the pod until the
+// next LIST supplies its view, which makes the cleanup due again.
+pub fn a_cleanup_accepted_without_a_view_waits_for_the_next_list_test() -> Nil {
+  let harness =
+    harness("clean-unseen", [
+      PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    ])
+  put(harness.table, "deployments", items([]))
+  put(harness.table, "patched:1", "not json")
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "clean-unseen", purpose: "cleanup", result: "accepted")
+      <> "1\n",
+    1000,
+  )
+  patcher_wake(harness:, at: 1060)
+  quiet(harness)
+  tick(harness:, at: 1300)
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
   stop_root(set)
 }
 
