@@ -4,15 +4,19 @@
 # running and the fake-worker Deployment opted in. Drives the same worker's
 # cost back above the first threshold and waits for the pod-deletion-cost
 # annotation and knarr's marker, opens a port-forward to knarr's /metrics,
-# removes the Deployment's knarr.io/enabled label, and then scrapes /metrics
-# about once a second while it waits for the annotation and the marker to
-# leave the pod. It requires a scrape that counts the cleanup on
-# knarr_patches_total with purpose cleanup and result accepted, then a later
-# scrape with no series labelled with the Deployment at all. Every scrape is
+# waits out the patch interval from the write, removes the Deployment's
+# knarr.io/enabled label, and then scrapes /metrics about once a second
+# while it waits for the annotation and the marker to leave the pod. It
+# requires a scrape that counts the cleanup on knarr_patches_total with
+# purpose cleanup and result accepted, then a later scrape with no series
+# labelled with the Deployment at all. Every scrape is
 # kept under the work directory, numbered, so the sequence can be read back.
-# The opt-out is seen at the next LIST (up to 60 s), the cleanup waits the
-# patch interval from the write before it (up to 60 s), and the series retire
-# about one LIST after the cleanup is accepted, so the wait is 330 s.
+# The cleanup waits the patch interval (60 s) from the write before it, so
+# the label stays until 65 s after the write was seen: the cleanup is then
+# granted at the first LIST after the opt-out (up to 60 s), and the series
+# retire about one LIST after it is accepted, which keeps the accepted count
+# visible for about one LIST interval. The wait after the opt-out is 330 s,
+# more than twice those two LIST intervals.
 # Usage: sh cleanup-kind.sh <worktree> <empty-work-dir>   (after reconcile-kind.sh)
 set -eu
 worktree=${1:?usage: cleanup-kind.sh <worktree> <work-dir>}
@@ -80,12 +84,14 @@ await_annotation() {
 
 # Scrapes /metrics into the numbered file given, its first line the epoch
 # second of the scrape. A failed scrape leaves the file without knarr_targets
-# and reopens the forward, so it never reads as a retirement.
+# and reopens the forward, whether or not its kubectl is still running, since
+# a forward can stop carrying connections while its process lives on; the
+# file never reads as a retirement.
 scrape() {
   file=$1
   echo "# at $(date +%s)" > "$file"
   if ! curl -sS --max-time 3 "http://127.0.0.1:$metrics_port/metrics" >> "$file" 2>&1; then
-    kill -0 "$mforward" 2>/dev/null || open_metrics_forward
+    open_metrics_forward
   fi
 }
 
@@ -104,6 +110,7 @@ fake_worker_series() { grep -c 'deployment="fake-worker"' "$1" || :; }
 echo '--- cost 1800 (above the first threshold): the write and the marker ---'
 curl -sS -X PUT --data '{"cost":1800,"accepting":true}' "http://127.0.0.1:$port/control" > /dev/null
 await_annotation 'controller\.kubernetes\.io/pod-deletion-cost' 1800 'pod-deletion-cost written'
+written=$(date +%s)
 marker=$(kubectl get pod "$worker" -o jsonpath='{.metadata.annotations.knarr\.io/applied}')
 case $marker in
   *'"pod-deletion-cost":{"applied":"1800"'*) echo "ok   marker records the write: $marker" ;;
@@ -119,6 +126,13 @@ before=$(fake_worker_series "$work/scrapes/0000.txt")
 echo "ok   $before fake-worker series before the opt-out"
 
 echo '--- opt-out: the cleanup, its count and the series retirement ---'
+# The write was made before it was seen, so 65 s from the sighting is past
+# the patch interval from the write: the cleanup is not held by it.
+hold=$(( written + 65 - $(date +%s) ))
+if [ "$hold" -gt 0 ]; then
+  echo "     holding the label ${hold}s, until the patch interval from the write has passed"
+  sleep "$hold"
+fi
 kubectl label deployment fake-worker knarr.io/enabled-
 # One loop scrapes every second and reads the pod every fifth: it ends when
 # both annotations are gone and a scrape with no fake-worker series has

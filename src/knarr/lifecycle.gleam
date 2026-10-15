@@ -160,12 +160,13 @@ fn held_standing(standing: Standing) -> Result(HeldStanding, Nil) {
 /// A View's deployment (Label): the name the pod's ReplicaSet's controller
 /// owner reference carries when the pod's controller owner is a listed
 /// ReplicaSet, matched by uid, whose controller owner is a Deployment; the
-/// empty string when the chain names no Deployment. The owner-chain lookup
-/// mirrors config's targets, which reads the opted-in Deployment list this
-/// pod's Deployment is not in.
+/// empty string when the chain names no Deployment. `replica_sets` is the
+/// listed ReplicaSets keyed by uid, built once per cycle. The owner-chain
+/// lookup mirrors config's targets, which reads the opted-in Deployment list
+/// this pod's Deployment is not in.
 pub fn deployment_of(
   owner owner: Option(Owner),
-  replica_sets replica_sets: List(ReplicaSet),
+  replica_sets replica_sets: Dict(String, ReplicaSet),
 ) -> String {
   let deployment = {
     use owner <- option.then(owner)
@@ -183,9 +184,8 @@ pub fn deployment_of(
 /// any.
 fn controlled_by(
   owner owner: Owner,
-  replica_sets replica_sets: List(ReplicaSet),
+  replica_sets replica_sets: Dict(String, ReplicaSet),
 ) -> Option(ReplicaSet) {
   use <- bool.guard(owner.kind != "ReplicaSet", None)
-  list.find(replica_sets, fn(replica_set) { replica_set.uid == owner.uid })
-  |> option.from_result
+  dict.get(replica_sets, owner.uid) |> option.from_result
 }

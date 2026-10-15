@@ -407,15 +407,16 @@ contract Loop {
         -- the cycle itself. A pod's memory, its state, its latest reading, a
         -- kept 422 and its rejection runs, is kept for every pod the
         -- unselected pod LIST shows: a target keeps all four, and a pod that
-        -- is not a target only its rejection runs and a kept 422, from its
-        -- cleanups. It belongs to its name and uid: a
-        -- LIST that shows the name under another uid begins the memory
-        -- afresh, as a restart forgets a kept 422 (Rejected422, ownership
-        -- Rejected), so nothing is written on the new pod from its
-        -- predecessor's reading and it has no reading until its own first
-        -- poll returns (JustStarted). A reading whose uid is not that of the
-        -- pod's newest view lands nowhere, neither counted nor observed, as
-        -- a reading of a pod the LIST no longer shows does (budget Leaving).
+        -- is not a target only its rejection runs and a kept 422 of any
+        -- purpose, an apply's made while it was a target among them. It
+        -- belongs to its name and uid: a LIST that shows the name under
+        -- another uid begins the memory afresh, as a restart forgets a kept
+        -- 422 (Rejected422, ownership Rejected), so nothing is written on
+        -- the new pod from its predecessor's reading and it has no reading
+        -- until its own first poll returns (JustStarted). A reading whose
+        -- uid is not that of the pod's newest view lands nowhere, neither
+        -- counted nor observed, as a reading of a pod the LIST no longer
+        -- shows does (budget Leaving).
         -- The patch carries no uid test; its preconditions are ownership's
         -- (Precondition). A reading that finds a write or a yield due on
         -- a pod that is not terminating hands the patcher a budget Pending

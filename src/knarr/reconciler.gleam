@@ -44,6 +44,8 @@ import gleam/otp/actor
 import gleam/otp/factory_supervisor
 import gleam/otp/static_supervisor as supervisor
 import gleam/otp/supervision
+import gleam/result
+import gleam/set
 import gleam/string
 import knarr/budget
 import knarr/config.{type Installed, type Target}
@@ -725,6 +727,12 @@ fn discovered(
     list.fold(targets, dict.new(), fn(acc, target) {
       dict.insert(acc, target.pod_name, target)
     })
+  // The listed ReplicaSets by uid, built once for every View's deployment
+  // (lifecycle Cleanup Label).
+  let replica_sets =
+    list.fold(replica_sets, dict.new(), fn(acc, replica_set) {
+      dict.insert(acc, replica_set.uid, replica_set)
+    })
   let #(listed_pods, cycle) =
     list.fold(pods, #([], cycle), fn(acc, pod) {
       let #(listed_pods, cycle) = acc
@@ -800,8 +808,11 @@ fn discovered(
         None -> Error(Nil)
       }
     })
-  let listed = list.map(targets, fn(target) { target.pod_name })
-  notify(config.names.scheduler, scheduler.Listed(listed:, joining:))
+  let target_names = list.map(targets, fn(target) { target.pod_name })
+  notify(
+    config.names.scheduler,
+    scheduler.Listed(listed: target_names, joining:),
+  )
   // The patcher learns the same in one message: the apply of a pod not
   // listed, or listed terminating, is discarded (budget Pending, Leaving),
   // the apply, the cleanup and the last attempt of a pod listed under
@@ -841,8 +852,13 @@ fn discovered(
   // labelled by name, so one recreated under the same name between two
   // LISTs keeps them. This cycle decides the Views' half and names the
   // Deployments departing in its Listed; the patcher, which keeps the
-  // pending set, decides the rest and answers quiet (`quiet`).
-  let views = list.map(listed_pods, fn(item) { item.2 })
+  // pending set, decides the rest and answers quiet (`quiet`). The Views'
+  // half is lifecycle's done with nothing outstanding: no View of the
+  // Deployment has a non-empty due, a terminating View's due being empty,
+  // and `cleaning` holds exactly the Views with a non-empty due under their
+  // deployment, so a candidate is departing when no cleanup names it.
+  let cleaning_deployments =
+    list.map(cleaning, fn(cleanup) { cleanup.deployment }) |> set.from_list
   let candidates =
     retirable(
       series: list.flatten([state.gauges, current, cycle.counters]),
@@ -850,13 +866,13 @@ fn discovered(
     )
   let departing =
     list.filter(candidates, fn(deployment) {
-      lifecycle.done(views:, outstanding: [], deployment:)
+      !set.contains(cleaning_deployments, deployment)
     })
   notify(
     config.names.patcher,
     patcher.Listed(
       listed: list.map(pods, fn(pod) { pod.name }),
-      targets: listed,
+      targets: target_names,
       terminating: list.filter_map(memories, fn(item) {
         case { item.1 }.pod.deletion_timestamp {
           Some(_) -> Ok({ item.0 }.pod_name)
@@ -877,13 +893,13 @@ fn discovered(
   // their last values until it retires, done or not; every other series of
   // the last cycle that this one did not set leaves the exposition, and so
   // does a held name's knarr_annotations, which the Views rebuild each cycle
-  // (observability Standing). A held series this cycle set again is kept
-  // once.
+  // (observability Standing). This cycle sets no held series again: the
+  // only series it sets under a name not in the target set are
+  // knarr_annotations, which are never held.
   let #(held, previous) =
     list.partition(state.gauges, fn(series) {
       series.name != observability.annotations && labelled(series, candidates)
     })
-  let held = list.filter(held, fn(series) { !list.contains(current, series) })
   let gauges = list.append(rebuild(previous, current), held)
   State(
     ..state,
@@ -950,7 +966,7 @@ fn listed_memory(
 fn cleanup_view(
   pod pod: Pod,
   target target: Option(Target),
-  replica_sets replica_sets: List(ReplicaSet),
+  replica_sets replica_sets: Dict(String, ReplicaSet),
 ) -> lifecycle.View {
   let #(deployment, enabled) = case target {
     Some(target) -> #(
@@ -2276,9 +2292,13 @@ fn gauges(
   pods pods: List(#(Target, Memory)),
   others others: List(lifecycle.View),
 ) -> List(Series) {
-  let other_standings = fn(name) {
+  let others_by_deployment =
     others
-    |> list.filter(fn(view) { view.deployment == name && !view.terminating })
+    |> list.filter(fn(view) { !view.terminating })
+    |> list.group(fn(view) { view.deployment })
+  let other_standings = fn(name) {
+    dict.get(others_by_deployment, name)
+    |> result.unwrap([])
     |> list.flat_map(fn(view) {
       list.filter_map(view.held, fn(held) {
         case held.standing {
@@ -2300,9 +2320,8 @@ fn gauges(
   let names =
     list.map(targets, fn(target) { target.deployment_name }) |> list.unique
   let others_only =
-    others
-    |> list.map(fn(view) { view.deployment })
-    |> list.unique
+    others_by_deployment
+    |> dict.keys
     |> list.filter(fn(name) { !list.contains(names, name) })
     |> list.flat_map(fn(name) { annotations(name, other_standings(name)) })
   targets
