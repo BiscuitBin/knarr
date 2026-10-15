@@ -1,25 +1,25 @@
-# Transcript of the cluster-s1 job, run 38784331120 on ubuntu-24.04 (native linux/amd64),
-# https://github.com/steven-cutting/knarr/actions/runs/38784331120/job/116592307555
+# Transcript of the cluster-s1 job, run 38820393121 on ubuntu-24.04 (native linux/amd64),
+# https://github.com/steven-cutting/knarr/actions/runs/38820393121/job/116715288745
 # The cleanup-kind.sh step only, after reconcile-kind.sh on the same cluster; the
 # runner's step preamble and the log timestamps are removed. The commit is the
-# pull request's merge commit of daee441 onto main.
-date: 2026-10-15T18:21Z
+# pull request's merge commit of a457d02 onto main.
+date: 2026-10-15T22:59Z
 host: Linux x86_64
-commit: ac45f2f
-knarr pod knarr-59c967f6fd-2vgln
-worker pod fake-worker-7c6ccb5cf4-46tv9
+commit: 2a02f23
+knarr pod knarr-549cc6f6c8-v6qzv
+worker pod fake-worker-6fc6b8f8cc-5j82x
 --- cost 1800 (above the first threshold): the write and the marker ---
 ok   pod-deletion-cost written: controller\.kubernetes\.io/pod-deletion-cost=1800
-ok   marker records the write: {"at":"2026-10-15T18:22:04Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-15T18:22:04Z"}}
+ok   marker records the write: {"at":"2026-10-15T23:00:39Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-15T23:00:39Z"}}
 --- metrics through a port-forward: the series before the opt-out ---
 ok   8 fake-worker series before the opt-out
 --- opt-out: the cleanup, its count and the series retirement ---
-     holding the label 64s, until the patch interval from the write has passed
+     holding the label 65s, until the patch interval from the write has passed
 deployment.apps/fake-worker unlabeled
-ok   scrape 27 at 1792088616: knarr_patches_total{deployment="fake-worker",purpose="cleanup",result="accepted"} 1
-ok   by scrape 30: controller.kubernetes.io/pod-deletion-cost and knarr.io/applied absent
-ok   scrape 86 at 1792088676: no series labelled deployment="fake-worker"
-ok   86 scrapes kept under /home/runner/work/_temp/cleanup-kind/scrapes
+ok   scrape 46 at 1792105355: knarr_patches_total{deployment="fake-worker",purpose="cleanup",result="accepted"} 1
+ok   by scrape 50: controller.kubernetes.io/pod-deletion-cost and knarr.io/applied absent
+ok   scrape 105 at 1792105416: no series labelled deployment="fake-worker"
+ok   105 scrapes kept under /home/runner/work/_temp/cleanup-kind/scrapes
 --- knarr log and pod ---
 ok   no error line and no bearer token in the log
 ok   knarr Ready with restartCount 0
