@@ -11,7 +11,9 @@
 -- ownership and k8s_client (§9.10); the override keys and an invalid override
 -- are config (§9.1); the metric and Event names are observability (§9.14).
 -- Owner: ticket 24 settled every question here with the maintainer on
--- 2026-10-12. Ticket 46 builds it.
+-- 2026-10-12. Ticket 46 built it on 2026-10-14: the pure functions of both
+-- contracts, the scheduler and the patcher under supervision, and the ten
+-- install-wide values read at start (config Installed).
 -- Amended by ticket 23 on 2026-10-13: Pending carries a purpose, apply or
 -- cleanup, and keeps a cleanup entry while lifecycle's Cleanup names the
 -- pod; PerPod and Restart name the cleanup.
@@ -125,7 +127,10 @@ contract PollSchedule {
         -- rung's draw; the caller calls it once per rung until the due time
         -- is after now. A pod whose poll was delayed by the queue therefore
         -- keeps its ladder and never polls early to catch up, and no poll
-        -- fires merely because the previous returned.
+        -- fires merely because the previous returned. A LIST that changes
+        -- a pod's interval (config Effective) leaves the rung already
+        -- computed where it is; the rungs after it climb by the new
+        -- interval.
     @invariant NoOverlap
         -- At most one poll of a pod is outstanding, whether waiting in the
         -- concurrency queue or sent and not yet returned, until it returns
@@ -164,8 +169,9 @@ contract PollSchedule {
         -- returns; no patch is made once deletionTimestamp is set, which is
         -- reconcile's. on_list drops every schedule whose pod the
         -- latest LIST no longer shows; a poll of that pod waiting in the
-        -- queue leaves the queue at once and is never sent, and the response
-        -- to one already in flight is discarded when it returns. on_list
+        -- queue leaves the queue at once and is never sent, and one already
+        -- in flight is abandoned, its response discarded if it returns and
+        -- no reading of it counted or observed. on_list
         -- also adds, for every listed pod that has none, the schedule
         -- joining holds for it: the caller builds joining with phase, one
         -- entry per listed pod with a pod IP (reconcile NoPodIp), each from
@@ -182,10 +188,13 @@ contract PollSchedule {
         -- alone: phase and next take the clock and the random draw, admit
         -- the clock, and on_list the joining schedules already built with
         -- phase, and none reads state, time or the pod, or makes a request.
-        -- Sending the poll
-        -- and the LIST are the injected effects of worker_contract and
-        -- k8s_client; running the timers is the scheduler that ticket 46
-        -- builds under supervision.
+        -- Sending the poll and the LIST are the injected effects of
+        -- worker_contract and k8s_client. Running the ladder is the
+        -- scheduler ticket 46 built: one supervised process that takes the
+        -- clock and the draw injected, calls phase, next, admit and on_list
+        -- on the listed pods each discovery cycle hands it (reconcile
+        -- Cycle), sends each poll through a worker of its own under a
+        -- supervisor, and hands each reading back as its poll returns.
 }
 
 contract WriteBudget {
@@ -297,8 +306,17 @@ contract WriteBudget {
         -- alone: the clock is passed in, and none reads state, time or the
         -- pod, or makes a request. The status and Retry-After that pause
         -- reads are the values k8s_client returns for a failed patch or
-        -- list; the patcher that keeps the bucket, the pause and the
-        -- pending set is ticket 46's, under supervision.
+        -- list. The patcher that keeps the bucket, the per-pod interval,
+        -- the pause and the pending set is the one ticket 46 built: one
+        -- supervised process that takes the clock injected and grants the
+        -- reconcile process a pod's turn, one turn out at a time. The token
+        -- is spent at the attempt the turn's answer reports, not at the
+        -- grant, and an answer of nothing due spends none, so the patches
+        -- sent are the attempts and the bucket at the moment of each
+        -- attempt bounds them (Threshold). The LIST pause of PauseScope is
+        -- the discovery process's (reconcile Cycle). Which series a
+        -- Deployment that leaves the target set keeps, and until when, is
+        -- observability's SeriesLife.
     @invariant NoGateCheck
         -- knarr performs no check of the PodDeletionCost feature gate,
         -- neither at startup nor periodically: it sends no request whose

@@ -17,8 +17,9 @@
 -- marker's write times are informational, and cleanup is lifecycle's
 -- (§9.12, ticket 23).
 -- Owner: ticket 21 settled every §9.6 question here with the maintainer on
--- 2026-10-13. Ticket 31 built it with the decided loop (Loop), and runs it
--- in a thin driver that 46 replaces with budget's schedule and bucket (Cycle).
+-- 2026-10-13. Ticket 31 built it with the decided loop (Loop) in a thin
+-- driver; ticket 46 replaced the driver's poll fan-out and direct patch with
+-- budget's schedule and bucket on 2026-10-14 (Cycle, Sequence, Pending).
 -- Amended by ticket 23 on 2026-10-13: Neutral and Restart name lifecycle's
 -- answer, no expiry and the record a neutral removal leaves falling to
 -- cleanup.
@@ -177,8 +178,10 @@ contract Fallback {
         -- Events ContractAbsent names, on the pod's Deployment by name and
         -- uid, with the Deployment's effective status port and path (config
         -- Effective) and the reading that entered it, and logs the warning
-        -- line (observability Logs StateLines); the pod counts on
-        -- knarr_pods_contract_absent while it stays (Gauges); and polling
+        -- line (observability Logs StateLines), both as that reading is
+        -- observed and not at the next discovery cycle; the pod counts on
+        -- knarr_pods_contract_absent from the next discovery cycle while
+        -- it stays (Gauges); and polling
         -- continues on its normal schedule (budget Jitter), so a pod that
         -- binds late is managed from its first valid reading. The state
         -- machine runs for every pod that is polled, a terminating one
@@ -193,9 +196,11 @@ contract Fallback {
         -- {deployment} the number whose kind is absent, as observability's
         -- Standing names them: the two are disjoint, a stale pod counts on
         -- neither, a terminating pod counts on neither (observability
-        -- SeriesLife), and both are rebuilt from this process's states after
-        -- a restart. Entering unknown raises no Event and logs no state
-        -- line; only absent is announced on entry.
+        -- SeriesLife), and both are rebuilt from this process's states at
+        -- each discovery cycle, so a state a reading entered counts from
+        -- the cycle after it, and after a restart from the first cycle.
+        -- Entering unknown raises no Event and logs no state line; only
+        -- absent is announced on entry.
     @invariant NoPodIp
         -- A pod without a pod IP (k8s_client Pod.pod_ip null) is a target:
         -- it is in config's target set, counts in knarr_targets and is among
@@ -313,15 +318,23 @@ contract Loop {
         -- pod's turn comes the change is re-derived with desired from the
         -- pod's latest reading against the applied value the newest view
         -- holds, so a change that is no longer due has nothing pending.
-        -- Under Cycle every due write goes at once, so nothing is pending
-        -- between cycles until 46 builds the bucket.
+        -- Under Cycle a due change becomes a budget Pending entry for the
+        -- pod, apply for a write or a yield and cleanup for lifecycle's
+        -- removal, kept until the patcher grants the pod's turn or a LIST
+        -- discards it (budget Pending); a later reading that still finds
+        -- the change due hands the entry over again, so a changed patch
+        -- interval reaches it without resetting when it became due.
     @invariant Sequence
         -- The view a patch is built from is the newest API-returned one:
         -- the cycle's LIST or knarr's own last accepted patch response,
-        -- later by the order received (ownership Adoption). A write and a
-        -- yield on one pod in one cycle go in sequence, the yield first and
-        -- the write built from the yield's response, and an accepted patch
-        -- response replaces the pod's view for the rest of the cycle. The
+        -- later by the order received (ownership Adoption). A yield and a
+        -- write on one pod are two attempts an interval apart (budget
+        -- PerPod): on the pod's turn the yield goes alone, its accepted
+        -- response replaces the pod's view, and the write is built on a
+        -- later turn from that view, re-derived then (Pending); a yield
+        -- that leaves nothing due drops the entry, one refused keeps it. An
+        -- accepted patch response replaces the pod's view until the next
+        -- LIST replaces it in turn. The
         -- marker a yield is reported from, and the Event, are ownership's
         -- Event: the create is attempted only after the yield patch is
         -- accepted.
@@ -356,38 +369,61 @@ contract Loop {
         -- Discovery), each is polled and mapped on its own, and a pod the
         -- rollout terminates is a terminating pod (Terminating).
     @invariant Cycle
-        -- Until the poll schedule and the patcher are built (budget
-        -- PollSchedule and WriteBudget, ticket 46), the reconcile process is
-        -- a thin driver on the LIST timer: on its own start and then every
-        -- config.list_interval it runs one discovery cycle (config
-        -- Discovery), polls every target pod with a pod IP once, at most
-        -- config.poll_concurrency polls at a time, observes each reading,
-        -- and sends each due write and yield at once through k8s_client's
-        -- patch_pod, with no per-pod patch interval, no bucket and no pause;
-        -- a 429 is a failed patch left to the next cycle. The cycle reads
-        -- the token and the namespace first (k8s_client TokenReload); a
-        -- failed read, or a LIST that fails, ends the cycle with an error
-        -- line, the previous target set stands, and the next tick tries
-        -- again. The cycle latches readiness once the first cycle's three
-        -- LISTs have succeeded, before that cycle's polls and writes:
-        -- readiness is the discovery cycle's (observability Probes
-        -- Readiness), not the polls'. It rebuilds the per-Deployment gauges and retires a
-        -- Deployment that left (observability SeriesLife), at once, since
-        -- nothing is pending or in flight between its cycles. Ticket 46
-        -- replaces the poll fan-out and the direct patch with the schedule
-        -- and the bucket, and nothing here depends on their absence. The
-        -- next tick is armed config.list_interval after a cycle ends, so
-        -- cycles never overlap. The cycle reads the clock once, after its
-        -- LISTs, and that reading is the time of every reading and write of
-        -- the cycle, the at ownership's Recorded marker holds among them.
-        -- The polls run in workers linked to the reconcile process and
-        -- bounded by its wait, not under a supervisor of their own: a
-        -- worker that crashes crashes the process, which its supervisor
-        -- restarts, and a worker that has not answered when the wait ends
-        -- gives its pod a timed_out reading (worker_contract Transport) and
-        -- no other pod's. That is the one exception to a supervisor per
-        -- process in knarr, and it ends with the fan-out when 46 builds
-        -- the schedule.
+        -- The reconcile process drives the LIST timer: on its own start and
+        -- then every config.list_interval it runs one discovery cycle
+        -- (config Discovery), and the next tick is armed
+        -- config.list_interval after a cycle ends, so cycles never overlap.
+        -- It is one of a set of four, with the poll workers, the scheduler
+        -- that runs budget's PollSchedule and the patcher that runs
+        -- WriteBudget, each a process under one supervisor and restarted
+        -- together, so a restart draws every phase afresh and refills the
+        -- bucket (budget Restart). The cycle reads the token and the
+        -- namespace first (k8s_client TokenReload); a failed read, or a
+        -- LIST that fails, ends the cycle with an error line, the previous
+        -- target set stands, and the next tick that is sent tries again. A
+        -- failed read also forgets the token until the next good one, so a
+        -- turn that comes meanwhile is answered nothing due and the pod's
+        -- next poll hands the change over again, and a state a reading
+        -- enters meanwhile is announced by the next cycle that reads the
+        -- token (Absent, observability Cadence OnEntry), the reading
+        -- itself still counted and observed. A 429 on any LIST
+        -- lengthens the LIST pause, with its info lines (observability
+        -- Logs Lines), and a tick inside that pause runs no cycle while the
+        -- timer keeps its cadence (budget ListCadence, PauseScope). The
+        -- cycle latches readiness once the first cycle's three LISTs have
+        -- succeeded, before any write: readiness is the discovery cycle's
+        -- (observability Probes Readiness), not the polls'. Polls run on
+        -- budget's PollSchedule under the scheduler: each cycle hands it
+        -- the listed pods and a joining schedule for every target with a
+        -- pod IP (budget Leaving), each reading comes back as its poll
+        -- returns and is observed then, the states it enters announced
+        -- then (Absent, observability Cadence OnEntry), and no poll runs in
+        -- the cycle itself. A reading that finds a write or a yield due on
+        -- a pod that is not terminating hands the patcher a budget Pending
+        -- entry for the pod with purpose apply, and does so again at every
+        -- later reading that finds one; the patcher serves the entries
+        -- oldest-due first under WriteBudget, one turn out at a time. On
+        -- the pod's turn the change is re-derived from the newest view and
+        -- the latest reading (Pending) and one patch attempt is made
+        -- through k8s_client's patch_pod, whatever its outcome (Sequence;
+        -- budget PerPod); the turn is answered exactly once, with the
+        -- attempt's status and Retry-After and whether the pod is still
+        -- due, or with nothing due, which also answers a turn for a
+        -- terminating pod, one without a reading or one the LIST no longer
+        -- shows, and every cleanup turn until lifecycle's Cleanup is built.
+        -- A 422 ends the entry: nothing of the pod is handed over again
+        -- until the next LIST refreshes the view (Rejected422); a 429
+        -- stays due and waits out the pause, and any other refusal stays
+        -- due and is tried again after the pod's interval. The clock is
+        -- read once after the cycle's LISTs for every view the cycle
+        -- holds, once as each reading is delivered, once as a turn builds
+        -- its request, which is the at ownership's Recorded marker holds,
+        -- and once as the attempt returns, which the answer carries. The
+        -- cycle rebuilds the per-Deployment gauges when it completes. A
+        -- Deployment that left the target set keeps every series, gauges
+        -- included, until the patcher reports nothing of its pods pending
+        -- or in turn, and is then retired (observability SeriesLife); one
+        -- that returns first is not.
     @invariant Pure
         -- parse_applied, safe_to_evict_usable, desired and due are
         -- functions of their arguments alone: the state, the reading, the

@@ -25,6 +25,10 @@
 -- deployment label on a cleanup (Labels) and when a Deployment's cleanup is
 -- done (SeriesLife); and 31 added the InvalidOverride Event and the lines
 -- it emits the same day (Events InvalidOverride, Logs Lines).
+-- Ticket 46 built the schedule and the patcher on 2026-10-14, emitting the
+-- Budget and Polls rows and every patch and LIST result (Catalogue), added
+-- their lines (Logs Lines), and announces a state a reading enters at that
+-- reading (Cadence OnEntry).
 
 ------------------------------------------------------------
 -- Value Types
@@ -194,7 +198,9 @@ contract Catalogue {
     @invariant Budget
         -- budget's six signals. The patch rate is knarr_patches_total. A 429
         -- is counted once, as result throttled: on knarr_patches_total for a
-        -- patch and on knarr_lists_total{resource, result} for a LIST, whose
+        -- patch and on knarr_lists_total{resource, result} for a LIST,
+        -- counted once per LIST however many pages it read (k8s_client
+        -- Pagination), whose
         -- resource is pods, replicasets or deployments (config Discovery,
         -- ticket 19) and whose result is list_result's
         -- label: succeeded for a 2xx, throttled for 429, error for every
@@ -265,8 +271,14 @@ contract Catalogue {
         -- labelled with it is removed, counters included, so a late
         -- response or an opt-out cleanup is counted before the series go:
         -- retire returns the series it is given less every one whose
-        -- deployment label is that name, and a Deployment that returns
-        -- starts its counters at 0. A terminating
+        -- deployment label is that name. Until that moment every series
+        -- stands, the gauges at their last values, and a Deployment that
+        -- returns to the target set before it keeps them all; one that
+        -- returns after it starts its counters at 0. One series goes
+        -- earlier: knarr_polls_skipped_total for a Deployment goes at the
+        -- discovery cycle whose LIST leaves it no scheduled pod, since no
+        -- poll of its pods can be skipped after it (budget Leaving);
+        -- knarr_patches_pending goes with the rest. A terminating
         -- pod counts only in knarr_targets; the tier, standing and pod-state
         -- gauges exclude it. Every count is in memory: a restart starts the
         -- counters at 0, and the per-Deployment gauges carry no series until
@@ -376,9 +388,15 @@ contract Cadence {
         -- not while it stays, and again when it re-enters after leaving.
         -- entered returns every entry of current that seen does not hold;
         -- the caller announces those and keeps current as the next seen.
-        -- foreign and not_ready_with_cost are read from the latest views
-        -- each cycle and contract_absent from reconcile's pod state (reconcile
-        -- Absent); rejected is held from a rejection with purpose apply or
+        -- foreign is read from the latest views each discovery cycle;
+        -- not_ready_with_cost, from the pod's newest view, and
+        -- contract_absent, from reconcile's pod state (reconcile Absent),
+        -- are read for a pod each time a reading of it is observed and for
+        -- every pod each discovery cycle, so a state a reading enters is
+        -- announced then, a state a view change or a restart enters is
+        -- announced at the cycle, and a state entered and left between two
+        -- cycles is announced once; rejected is held from a rejection with
+        -- purpose apply or
         -- yield, and cleanup_rejected from one with purpose cleanup, to the
         -- pod's next accepted patch (Events Rejected). A terminating pod or
         -- one the LIST no longer shows leaves every state, where for
@@ -432,8 +450,9 @@ contract Logs {
         -- stays, again on re-entry, and once for each current state after a
         -- restart.
     @invariant Lines
-        -- The lines the reconcile core emits (ticket 31), by msg and level,
-        -- so an operator and a proof can grep for them. error: "token
+        -- The lines the reconcile core (ticket 31) and the schedule and
+        -- patcher (ticket 46) emit, by msg and level, so an operator and a
+        -- proof can grep for them. error: "token
         -- unreadable" and "namespace unreadable", with reason, when a
         -- cycle's file read fails (k8s_client TokenReload); "list failed",
         -- with resource, pods, replicasets or deployments, and either
@@ -444,12 +463,21 @@ contract Logs {
         -- absent" and "annotation yielded", each with reason and the
         -- Event's fields (AlsoLogged); "event create failed", with reason
         -- and status or error; "not ready with cost", with deployment, pod
-        -- and applied (StateLines). info: "started", once, with version;
-        -- "token changed", with sha256 and expires_at; "discovery", once
-        -- per cycle in which every LIST succeeded, with deployments and
-        -- pods, the counts knarr_targets carries. debug: "poll", with deployment, pod, port,
-        -- path, reading and, for a valid reading, cost and accepting;
-        -- "patch", with deployment, pod, purpose, keys and status or error.
+        -- and applied (StateLines); "poll worker not started", with pod
+        -- and reason, when the scheduler cannot start a poll's worker, the
+        -- poll staying in the queue to be sent again. info: "started",
+        -- once, with version; "token changed", with sha256 and expires_at;
+        -- "discovery", once per cycle in which every LIST succeeded, with
+        -- deployments and pods, the counts knarr_targets carries; "patch
+        -- pause" and "list pause", once per 429 that lengthens the pause of
+        -- that scope, with pause_seconds, the length from that 429 to its
+        -- until, retry_after_seconds when the 429 carried the header, and
+        -- scope, patch or list, where a 429 on a LIST logs "list failed"
+        -- first; "patch pause ended" and "list pause ended", once when the
+        -- pause of that scope is found over, with scope. debug: "poll",
+        -- with deployment, pod, port, path, reading and, for a valid
+        -- reading, cost and accepting; "patch", with deployment, pod,
+        -- purpose, keys and status or error.
     @invariant NeverLogged
         -- No line carries the service-account token or the Authorization
         -- header; k8s_client's TokenReload logs a token change only as the
