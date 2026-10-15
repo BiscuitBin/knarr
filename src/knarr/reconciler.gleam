@@ -1,32 +1,34 @@
-//// The reconcile process: the thin driver on the LIST timer that reconcile's
+//// The reconcile process: the driver on the LIST timer that reconcile's
 //// Loop Cycle states (docs/specs/reconcile.allium). Every tick it reads the
 //// token and the namespace, runs one discovery cycle of three LISTs, derives
-//// the target set (config Discovery), polls every target pod with an IP once
-//// through bounded workers, observes each reading, decides each pod's
-//// desired state against its marker, sends each due write and yield at once
-//// through `k8s_client.patch_pod`, raises the Events, lines and gauges
-//// observability names, and latches readiness. Ticket 46 replaces the poll
-//// fan-out and the direct patch with budget's schedule and bucket.
+//// the target set (config Discovery), remembers every target's newest view,
+//// rebuilds the gauges and announces the states from the latest readings,
+//// and hands the scheduler the listed pods and the joiners, the targets
+//// with a pod IP (budget Leaving, reconcile NoPodIp). Each reading comes
+//// back from the scheduler on its own, at the pod's rung; the reconciler
+//// observes it into the pod's memory, decides the pod's desired state
+//// against its marker and, until the patcher is wired (ticket 46, chunk
+//// F2), sends each due write and yield at once through
+//// `k8s_client.patch_pod`. It raises the Events and lines observability
+//// names and latches readiness.
 ////
 //// Every decision is a pure function of `reconcile`, `config`, `ownership`,
 //// `cost_mapping` and `observability`; the effects are the injected `send`,
-//// `poll`, `now` and `mark_ready`, and `reconciler_ffi` for the files, the
-//// clock and the token's hash. The poll workers are linked to this process
-//// and bounded by its wait, not under a supervisor of their own: a worker
-//// that crashes crashes the reconciler, which its supervisor restarts, and
-//// one that outlives the wait is dropped with the actor's warning line.
-//// That is the one exception to a supervisor per process here, stated as
-//// such in reconcile Cycle, and it ends when ticket 46 replaces `fan_out`
-//// with budget's schedule.
+//// `poll`, `now`, `random` and `mark_ready`, and `reconciler_ffi` for the
+//// files and the token's hash. The reconciler runs last in a set of four
+//// under one supervisor, with the poll-worker factory, the scheduler and
+//// the patcher, so a crash of any restarts them together (budget Restart).
+//// The three actors reach each other by name, through one guarded send.
 
 import gleam/dict.{type Dict}
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process.{type Name, type Subject}
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/otp/factory_supervisor
 import gleam/otp/static_supervisor as supervisor
 import gleam/otp/supervision
 import gleam/string
@@ -42,9 +44,11 @@ import knarr/ownership.{
   type Marker, type Operation, type Owned, type Standing, AppliedRecord,
   Conflict, Write,
 }
+import knarr/patcher
 import knarr/poller.{type Endpoint, Endpoint}
 import knarr/poller_http
 import knarr/reconcile.{type PodState, type Reading}
+import knarr/scheduler
 import knarr/token
 
 pub type Config {
@@ -58,14 +62,41 @@ pub type Config {
     /// One poll of a worker. Production passes `poller.poll` over
     /// `poller_http.send`; a test passes a closure.
     poll: fn(Endpoint) -> poller.Reading,
-    /// The clock, in unix seconds.
+    /// The clock, in unix milliseconds. reconcile, ownership and
+    /// observability take seconds, derived where they are called.
     now: fn() -> Int,
+    /// A draw from 0 to one below the bound given, for budget's phase and
+    /// jitter; production passes `int.random`.
+    random: fn(Int) -> Int,
     /// Latches `/readyz` (observability Probes Readiness).
     mark_ready: fn() -> Nil,
     installed: Installed,
     /// The LIST timer: config.list_interval in milliseconds.
     interval_ms: Int,
     version: String,
+    /// The names of the set's processes, minted once by `names`.
+    names: Names,
+  )
+}
+
+/// The registered names of the set's four processes. Minted once per
+/// config, never in a child's start closure, since every `process.new_name`
+/// is an atom for the life of the VM.
+pub type Names {
+  Names(
+    reconciler: Name(Message),
+    scheduler: Name(scheduler.Message),
+    patcher: Name(patcher.Message),
+    workers: Name(factory_supervisor.Message(scheduler.Job, Nil)),
+  )
+}
+
+pub fn names() -> Names {
+  Names(
+    reconciler: process.new_name("knarr_reconciler"),
+    scheduler: process.new_name("knarr_scheduler"),
+    patcher: process.new_name("knarr_patcher"),
+    workers: process.new_name("knarr_poll_workers"),
   )
 }
 
@@ -95,30 +126,56 @@ pub fn config(
         send: poller_http.send(_, timeout_ms:),
       )
     },
-    now: unix_seconds,
+    now: unix_milliseconds,
+    random: int.random,
     mark_ready: fn() { Nil },
     installed:,
     interval_ms: installed.list_interval * 1000,
     version:,
+    names: names(),
   )
 }
 
 pub type Message {
+  /// The LIST timer, or the initialiser's first cycle.
   Tick
+  /// From the scheduler: one reading returned for a target pod.
+  Polled(scheduler.Polled)
+  /// From the patcher: a turn to patch one pod. Wired in chunk F2 of
+  /// ticket 46; nothing sends the patcher a `Due` until then, so no turn
+  /// arrives.
+  Turn(patcher.Turn)
+  /// From the patcher: nothing of a departed Deployment's pods is pending
+  /// or in turn. Wired in chunk F2 of ticket 46 with `Turn`.
+  Quiet(deployment: String)
 }
 
-/// What this process keeps for one pod across cycles: its reading state and
-/// the operations of a patch a 422 refused, until the next LIST classifies
-/// them (reconcile Rejected422).
+/// What this process keeps for one target pod across cycles: its reading
+/// state, the operations of a patch a 422 refused until the next LIST
+/// classifies them (reconcile Rejected422), its newest view, the LIST's or
+/// a patch response (reconcile Sequence), and its latest reading with the
+/// clock it came at, none before its first poll returns (JustStarted).
 type Memory {
-  Memory(state: PodState, kept: Option(List(Operation)))
+  Memory(
+    state: PodState,
+    kept: Option(List(Operation)),
+    pod: Pod,
+    latest: Option(#(Reading, Int)),
+  )
 }
 
 type State {
   State(
     config: Config,
-    self: Subject(Message),
+    /// The subject the LIST timer is armed on: this process's own, not its
+    /// name. A timer sent to the name is resolved when it fires, so one a
+    /// process armed before a restart would tick the process that replaced
+    /// it and start a second LIST chain; one sent to a dead pid is dropped.
+    ticks: Subject(Message),
     token_sha256: Option(String),
+    /// The namespace and the token read at the last tick, so a reading
+    /// returned between ticks can be acted on.
+    session: Option(#(String, String)),
     targets: List(Target),
     pods: Dict(String, Memory),
     seen: List(Entry),
@@ -134,33 +191,105 @@ type State {
   )
 }
 
-/// The reconciler under its own supervisor: three restarts a minute before
-/// the root sees one failure, so a crashing reconciler cannot take the
-/// listener down with it inside the root's two-in-five-seconds tolerance.
+/// The set under its own supervisor: three restarts a minute before the
+/// root sees one failure, so a crashing child cannot take the listener down
+/// with it inside the root's two-in-five-seconds tolerance.
 pub fn supervised(
   config: Config,
 ) -> supervision.ChildSpecification(supervisor.Supervisor) {
-  supervisor.new(supervisor.OneForOne)
-  |> supervisor.restart_tolerance(intensity: 3, period: 60)
-  |> supervisor.add(
-    supervision.worker(fn() { start(config) })
-    |> supervision.timeout(ms: 15_000),
-  )
-  |> supervisor.supervised
+  set(config) |> supervisor.supervised
 }
 
-/// Starts the reconciler. Its initialiser touches nothing outside the VM:
-/// it drops the per-Deployment series a process before it left in the
-/// registry (observability SeriesLife) and schedules the first tick at once,
-/// so readiness latches as soon as the first cycle can run.
-pub fn start(config: Config) -> actor.StartResult(Subject(Message)) {
+/// The set started on its own, for a test that drives it.
+pub fn start(config: Config) -> actor.StartResult(supervisor.Supervisor) {
+  set(config) |> supervisor.start
+}
+
+/// The four processes under one supervisor, restarted together: the
+/// poll-worker factory first, so the scheduler's first `Listed` finds it;
+/// the scheduler; the patcher; the reconciler last, because its initialiser
+/// resets the per-Deployment series, which the other two touch only once it
+/// has sent them something, and because it is the one that sends unprompted,
+/// so every name it sends to is registered when it starts. Shutdown is the
+/// reverse, and the guarded send covers the window in which the reconciler
+/// is gone and the other two still answer.
+fn set(config: Config) -> supervisor.Builder {
+  let names = config.names
+  supervisor.new(supervisor.OneForAll)
+  |> supervisor.restart_tolerance(intensity: 3, period: 60)
+  |> supervisor.add(scheduler.workers_supervised(names.workers))
+  |> supervisor.add(
+    supervision.worker(fn() { scheduler.start(scheduler_config(config)) }),
+  )
+  |> supervisor.add(
+    supervision.worker(fn() { patcher.start(patcher_config(config)) }),
+  )
+  |> supervisor.add(
+    supervision.worker(fn() { start_reconciler(config) })
+    |> supervision.timeout(ms: 15_000),
+  )
+}
+
+fn scheduler_config(config: Config) -> scheduler.Config {
+  let names = config.names
+  scheduler.Config(
+    self: names.scheduler,
+    workers: names.workers,
+    poll: config.poll,
+    now: config.now,
+    random: config.random,
+    polled: fn(polled) { notify(names.reconciler, Polled(polled)) },
+    poll_timeout_s: config.installed.defaults.poll_timeout,
+    jitter_percent: config.installed.poll_jitter_percent,
+    concurrency: config.installed.poll_concurrency,
+  )
+}
+
+fn patcher_config(config: Config) -> patcher.Config {
+  let names = config.names
+  patcher.Config(
+    self: names.patcher,
+    now: config.now,
+    turn: fn(turn) { notify(names.reconciler, Turn(turn)) },
+    quiet: fn(deployment) { notify(names.reconciler, Quiet(deployment)) },
+    rate_per_second: config.installed.patch_rate_per_second,
+    burst: config.installed.patch_burst,
+    backoff_initial_s: config.installed.backoff_initial,
+    backoff_cap_s: config.installed.backoff_cap,
+  )
+}
+
+/// A send to a named process that is not registered, as during the set's
+/// shutdown, which stops the children in reverse start order, is dropped: a
+/// plain `process.send` to an unregistered name crashes the sender. The one
+/// place a message crosses between the set's processes.
+fn notify(name: Name(message), message: message) -> Nil {
+  case process.named(name) {
+    Ok(_) -> process.send(process.named_subject(name), message)
+    Error(Nil) -> Nil
+  }
+}
+
+/// Starts the reconciler under its name. Its initialiser touches nothing
+/// outside the VM: it drops the per-Deployment series a process before it
+/// left in the registry (observability SeriesLife) and schedules the first
+/// tick at once, so readiness latches as soon as the first cycle can run.
+/// The selector takes the name, for the other two processes and a test,
+/// and the plain subject the ticks come on.
+fn start_reconciler(config: Config) -> actor.StartResult(Subject(Message)) {
   actor.new_with_initialiser(1000, fn(self) {
     metrics.reset_deployment_series()
-    process.send(self, Tick)
+    let ticks = process.new_subject()
+    let selector =
+      process.new_selector()
+      |> process.select(self)
+      |> process.select(ticks)
+    process.send(ticks, Tick)
     actor.initialised(State(
       config:,
-      self:,
+      ticks:,
       token_sha256: None,
+      session: None,
       targets: [],
       pods: dict.new(),
       seen: [],
@@ -169,18 +298,28 @@ pub fn start(config: Config) -> actor.StartResult(Subject(Message)) {
       counters: [],
       ready: False,
     ))
+    |> actor.selecting(selector)
     |> actor.returning(self)
     |> Ok
   })
+  |> actor.named(config.names.reconciler)
   |> actor.on_message(on_message)
   |> actor.start
 }
 
 fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
-  let Tick = message
-  let state = tick(state)
-  process.send_after(state.self, state.config.interval_ms, Tick)
-  actor.continue(state)
+  case message {
+    Tick -> {
+      let state = tick(state)
+      process.send_after(state.ticks, state.config.interval_ms, Tick)
+      actor.continue(state)
+    }
+    Polled(returned) -> actor.continue(polled(state, returned))
+    // Chunk F2 of ticket 46 answers a turn with one attempt and retires a
+    // quiet Deployment's series; until then neither arrives.
+    Turn(_) -> actor.continue(state)
+    Quiet(_) -> actor.continue(state)
+  }
 }
 
 // ------------------------------------------------------------- The cycle ---
@@ -204,8 +343,11 @@ fn tick(state: State) -> State {
           ])
           state
         }
-        Ok(namespace) ->
-          cycle(state:, namespace: string.trim(namespace), token:)
+        Ok(namespace) -> {
+          let namespace = string.trim(namespace)
+          let state = State(..state, session: Some(#(namespace, token)))
+          cycle(state:, namespace:, token:)
+        }
       }
     }
   }
@@ -277,8 +419,9 @@ fn cycle(
   case lists {
     Error(Nil) -> state
     Ok(#(pods, replica_sets, deployments)) -> {
-      // One clock reading after the LISTs is the time of every reading and
-      // write of the cycle (reconcile Cycle).
+      // One clock reading after the LISTs is the time of the cycle's
+      // Events and gauges; each reading and write has the clock of its own
+      // return (reconcile Cycle).
       let now = config.now()
       discovered(
         state:,
@@ -287,7 +430,7 @@ fn cycle(
           namespace:,
           token:,
           now:,
-          at: rfc3339(now),
+          at: rfc3339(now / 1000),
           counters: state.counters,
         ),
         pods:,
@@ -340,7 +483,11 @@ fn discovered(
       State(..state, ready: True)
     }
   }
-  metrics.set(observability.last_discovery_timestamp_seconds, [], cycle.now)
+  metrics.set(
+    observability.last_discovery_timestamp_seconds,
+    [],
+    cycle.now / 1000,
+  )
   metrics.observe(
     observability.discovery_duration_seconds,
     int.to_float(unix_milliseconds() - started_ms) /. 1000.0,
@@ -356,81 +503,65 @@ fn discovered(
   ])
   let #(invalid, cycle) =
     overrides(previous: state.invalid, deployments:, cycle:)
-  // Poll every target with a pod IP, at most poll_concurrency at a time
-  // (reconcile Cycle, NoPodIp).
-  let polled =
+  // Every target's memory, kept from the last cycle or begun here, with the
+  // LIST's view as its newest and a 422's operations classified against it
+  // (reconcile Rejected422, Sequence). A memory of a pod the LIST no longer
+  // shows is dropped with it.
+  let memories =
     list.filter_map(targets, fn(target) {
       case list.find(pods, fn(pod) { pod.name == target.pod_name }) {
-        Ok(k8s_client.Pod(pod_ip: Some(pod_ip), ..) as pod) ->
-          Ok(#(
-            target,
-            pod,
-            Endpoint(
+        Ok(pod) -> {
+          let memory =
+            dict.get(state.pods, pod.name)
+            |> option.from_result
+            |> option.unwrap(Memory(
+              state: reconcile.initial(),
+              kept: None,
+              pod:,
+              latest: None,
+            ))
+          Ok(#(target, classify_kept(Memory(..memory, pod:), pod)))
+        }
+        // Every target is one of the listed pods, so this arm is unreachable.
+        Error(Nil) -> Error(Nil)
+      }
+    })
+  let gauges = gauges(targets:, pods: memories)
+  let state = State(..state, gauges: rebuild(state.gauges, gauges))
+  let #(seen, cycle) = announce(seen: state.seen, pods: memories, cycle:)
+  // The schedule learns joining and leaving from the LIST alone: every
+  // target by name, and a joiner for each with a pod IP (budget Leaving,
+  // reconcile NoPodIp). The scheduler keeps the ladder of a pod it already
+  // has and polls a joiner from its phase.
+  let joining =
+    list.filter_map(memories, fn(item) {
+      let #(target, memory) = item
+      case memory.pod.pod_ip {
+        Some(pod_ip) ->
+          Ok(scheduler.Joiner(
+            pod_name: target.pod_name,
+            deployment: target.deployment_name,
+            interval_s: target.settings.poll_interval,
+            endpoint: Endpoint(
               pod_ip:,
               port: target.settings.status_port,
               path: target.settings.status_path,
             ),
           ))
-        _ -> Error(Nil)
+        None -> Error(Nil)
       }
     })
-  // A worker that does not answer within the wait produced no response
-  // within the deadline: that pod's reading is timed_out (worker_contract
-  // Transport).
-  let readings =
-    fan_out(
-      polled,
-      config.installed.poll_concurrency,
-      config.installed.defaults.poll_timeout * 2000 + 1000,
-      fn(item) { config.poll(item.2) |> reconcile.reading },
-    )
-    |> list.map(fn(pair) {
-      #(
-        pair.0,
-        option.unwrap(
-          pair.1,
-          reconcile.Reading(
-            kind: reconcile.TimedOut,
-            cost: None,
-            draining: False,
-          ),
-        ),
-      )
+  notify(
+    config.names.scheduler,
+    scheduler.Listed(
+      listed: list.map(targets, fn(target) { target.pod_name }),
+      joining:,
+    ),
+  )
+  let memories =
+    list.fold(memories, dict.new(), fn(acc, item) {
+      dict.insert(acc, { item.0 }.pod_name, item.1)
     })
-  let #(pods_after, memories, cycle) =
-    readings
-    |> list.fold(#([], dict.new(), cycle), fn(acc, pair) {
-      let #(views, memories, cycle) = acc
-      let #(#(target, pod, endpoint), reading) = pair
-      let memory =
-        dict.get(state.pods, pod.name)
-        |> option.from_result
-        |> option.unwrap(Memory(state: reconcile.initial(), kept: None))
-      let cycle = polled_line(cycle:, target:, endpoint:, reading:)
-      let memory = classify_kept(memory, pod)
-      let memory =
-        Memory(
-          ..memory,
-          state: reconcile.observe(
-            state: memory.state,
-            reading: reading.kind,
-            at: cycle.now,
-            unknown_polls: config.installed.unknown_polls,
-            absent_after: config.installed.absent_after,
-          ),
-        )
-      let #(pod, memory, cycle) = act(cycle:, target:, pod:, memory:, reading:)
-      #(
-        [#(target, pod, reading), ..views],
-        dict.insert(memories, pod.name, memory),
-        cycle,
-      )
-    })
-  let pods_after = list.reverse(pods_after)
-  let gauges = gauges(targets:, pods: pods_after, memories:)
-  let state = State(..state, gauges: rebuild(state.gauges, gauges))
-  let #(seen, cycle) =
-    announce(seen: state.seen, pods: pods_after, memories:, cycle:)
   // A Deployment has left when no current target carries its name: the
   // series are labelled by name, so one recreated under the same name
   // between two LISTs keeps them (observability SeriesLife).
@@ -451,6 +582,58 @@ fn discovered(
       #(retire(acc.0, deployment), retire(acc.1, deployment))
     })
   State(..state, targets:, pods: memories, seen:, invalid:, gauges:, counters:)
+}
+
+// ----------------------------------------------------------- One reading ---
+
+/// A reading the scheduler returned: logged and counted, observed into the
+/// pod's memory at the clock it came at (reconcile Cycle), and, until chunk
+/// F2 of ticket 46 hands the decision to the patcher, acted on at once from
+/// the pod's newest view, the patch response becoming that view (Sequence).
+/// A reading of a pod no LIST has shown since, or one before any cycle has
+/// run, has nowhere to land and is dropped.
+fn polled(state: State, returned: scheduler.Polled) -> State {
+  let pod_name = returned.pod_name
+  let target =
+    list.find(state.targets, fn(target) { target.pod_name == pod_name })
+  case state.session, dict.get(state.pods, pod_name), target {
+    Some(#(namespace, token)), Ok(memory), Ok(target) -> {
+      let config = state.config
+      let now = returned.at_ms
+      let reading = returned.reading
+      let cycle =
+        Cycle(
+          config:,
+          namespace:,
+          token:,
+          now:,
+          at: rfc3339(now / 1000),
+          counters: state.counters,
+        )
+      let cycle =
+        polled_line(cycle:, target:, endpoint: returned.endpoint, reading:)
+      let memory =
+        Memory(
+          ..memory,
+          state: reconcile.observe(
+            state: memory.state,
+            reading: reading.kind,
+            at: now / 1000,
+            unknown_polls: config.installed.unknown_polls,
+            absent_after: config.installed.absent_after,
+          ),
+          latest: Some(#(reading, now)),
+        )
+      let #(pod, memory, cycle) =
+        act(cycle:, target:, pod: memory.pod, memory:, reading:)
+      State(
+        ..state,
+        pods: dict.insert(state.pods, pod_name, Memory(..memory, pod:)),
+        counters: cycle.counters,
+      )
+    }
+    _, _, _ -> state
+  }
 }
 
 /// The invalid-override Events on entry and the unknown-key lines once per
@@ -902,18 +1085,21 @@ fn raise(
 
 /// The current entries of the states announced on entry, what entered, and
 /// the Events and lines for each (reconcile Absent, NotReadyWithCost;
-/// observability Cadence OnEntry). A terminating pod is in no state.
+/// observability Cadence OnEntry), from each pod's newest view and latest
+/// reading. A terminating pod is in no state, and a pod with no reading yet
+/// is in none either: absent takes readings, and NotReady with cost a known
+/// one.
 fn announce(
   seen seen: List(Entry),
-  pods pods: List(#(Target, Pod, Reading)),
-  memories memories: Dict(String, Memory),
+  pods pods: List(#(Target, Memory)),
   cycle cycle: Cycle,
 ) -> #(List(Entry), Cycle) {
   let current =
     list.flat_map(pods, fn(item) {
-      let #(target, pod, _) = item
-      case pod.deletion_timestamp, dict.get(memories, pod.name) {
-        None, Ok(memory) -> {
+      let #(target, memory) = item
+      let pod = memory.pod
+      case pod.deletion_timestamp, memory.latest {
+        None, Some(_) -> {
           let absent = case memory.state.kind {
             reconcile.Absent -> [
               Entry(
@@ -944,7 +1130,7 @@ fn announce(
   let cycle =
     observability.entered(seen:, current:)
     |> list.fold(cycle, fn(cycle, entry) {
-      case list.find(pods, fn(item) { { item.1 }.name == entry.pod_name }) {
+      case list.find(pods, fn(item) { { item.1 }.pod.name == entry.pod_name }) {
         Ok(item) -> announce_one(cycle:, entry:, item:)
         // Every entry comes from `pods`, so this arm is unreachable.
         Error(Nil) -> cycle
@@ -953,15 +1139,17 @@ fn announce(
   #(current, cycle)
 }
 
-/// A pod is NotReady with cost while its Ready condition is false, its
-/// reading is known and its applied value is above 0 (reconcile
-/// NotReadyWithCost).
+/// A pod is NotReady with cost while its Ready condition is false, a
+/// reading of it is known and not neutral, and its applied value is above 0
+/// (reconcile NotReadyWithCost). A pod's first memory is not neutral but
+/// has no reading, hence the second test.
 fn not_ready_with_cost(
   pod pod: Pod,
   memory memory: Memory,
   views views: Views,
 ) -> Bool {
   !pod.ready
+  && option.is_some(memory.latest)
   && !reconcile.neutral(memory.state)
   && views.cost.applied.usable
   && views.cost.applied.value > 0
@@ -972,11 +1160,12 @@ fn not_ready_with_cost(
 fn announce_one(
   cycle cycle: Cycle,
   entry entry: Entry,
-  item item: #(Target, Pod, Reading),
+  item item: #(Target, Memory),
 ) -> Cycle {
-  let #(target, pod, reading) = item
-  case entry.state {
-    observability.ContractAbsent -> {
+  let #(target, memory) = item
+  let pod = memory.pod
+  case entry.state, memory.latest {
+    observability.ContractAbsent, Some(#(reading, _)) -> {
       let event =
         observability.AbsentEvent(
           deployment_name: target.deployment_name,
@@ -1010,7 +1199,10 @@ fn announce_one(
         ],
       )
     }
-    _ -> {
+    // An absent entry has a reading, since the state takes readings to
+    // enter, so this arm is unreachable.
+    observability.ContractAbsent, None -> cycle
+    _, _ -> {
       let views = view(target:, pod:, marker: ownership.read(pod.annotations))
       log(observability.Warning, "not ready with cost", [
         observability.string_field(
@@ -1031,12 +1223,11 @@ fn announce_one(
 // ---------------------------------------------------------------- Gauges ---
 
 /// Every per-Deployment gauge series of this cycle (observability Tiers,
-/// Standing; reconcile Gauges, NotReadyWithCost). A terminating pod counts
-/// on none of them.
+/// Standing; reconcile Gauges, NotReadyWithCost), from each pod's newest
+/// view and latest reading. A terminating pod counts on none of them.
 fn gauges(
   targets targets: List(Target),
-  pods pods: List(#(Target, Pod, Reading)),
-  memories memories: Dict(String, Memory),
+  pods pods: List(#(Target, Memory)),
 ) -> List(Series) {
   targets
   |> list.map(fn(target) {
@@ -1048,15 +1239,12 @@ fn gauges(
     let live =
       list.filter(pods, fn(item) {
         { item.0 }.deployment_name == name
-        && option.is_none({ item.1 }.deletion_timestamp)
+        && option.is_none({ item.1 }.pod.deletion_timestamp)
       })
     let views =
       list.map(live, fn(item) {
-        let #(target, pod, _) = item
-        let memory =
-          dict.get(memories, pod.name)
-          |> option.from_result
-          |> option.unwrap(Memory(reconcile.initial(), None))
+        let #(target, memory) = item
+        let pod = memory.pod
         #(
           pod,
           memory,
@@ -1179,57 +1367,6 @@ fn count(
 
 // --------------------------------------------------------------- Helpers ---
 
-/// Runs `work` on every item, at most `concurrency` at a time, in linked
-/// worker processes: each item with its result, in the items' order, `None`
-/// for a worker that did not answer within `timeout_ms`. `poller_http.send`
-/// returns within the poll timeout, so a worker that does not answer is one
-/// that crashed, and a crash is linked to this process. A reply that arrives
-/// after the wait is discarded by the actor with a warning line. The workers
-/// are linked to this supervised process and bounded by it, not under a
-/// supervisor of their own, until ticket 46 replaces this fan-out with
-/// budget's schedule.
-fn fan_out(
-  items: List(a),
-  concurrency: Int,
-  timeout_ms: Int,
-  work: fn(a) -> b,
-) -> List(#(a, Option(b))) {
-  items
-  |> list.sized_chunk(concurrency)
-  |> list.flat_map(fn(batch) {
-    let replies = process.new_subject()
-    let indexed = list.index_map(batch, fn(item, index) { #(index, item) })
-    list.each(indexed, fn(pair) {
-      process.spawn(fn() { process.send(replies, #(pair.0, work(pair.1))) })
-    })
-    let answered =
-      gather(replies:, remaining: list.length(batch), timeout_ms:, acc: [])
-    list.map(indexed, fn(pair) {
-      #(pair.1, list.key_find(answered, pair.0) |> option.from_result)
-    })
-  })
-}
-
-fn gather(
-  replies replies: Subject(#(Int, b)),
-  remaining remaining: Int,
-  timeout_ms timeout_ms: Int,
-  acc acc: List(#(Int, b)),
-) -> List(#(Int, b)) {
-  case remaining {
-    0 -> acc
-    _ ->
-      case process.receive(replies, timeout_ms) {
-        Ok(reply) ->
-          gather(replies:, remaining: remaining - 1, timeout_ms:, acc: [
-            reply,
-            ..acc
-          ])
-        Error(Nil) -> acc
-      }
-  }
-}
-
 fn reading_label(kind: reconcile.ReadingKind) -> String {
   observability.reading_label(observability_kind(kind))
 }
@@ -1303,9 +1440,6 @@ fn read_file(path: String) -> Result(String, ReadError)
 
 @external(erlang, "reconciler_ffi", "sha256_hex12")
 fn sha256_hex12(data: String) -> String
-
-@external(erlang, "reconciler_ffi", "unix_seconds")
-fn unix_seconds() -> Int
 
 @external(erlang, "reconciler_ffi", "unix_milliseconds")
 fn unix_milliseconds() -> Int
