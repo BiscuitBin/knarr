@@ -166,9 +166,10 @@ pub type Message {
 
 /// What this process keeps for one target pod across cycles: its reading
 /// state, the operations of a patch a 422 refused until the next LIST
-/// classifies them (reconcile Rejected422), its newest view, the LIST's or
-/// a patch response (reconcile Sequence), and its latest reading with the
-/// clock it came at, none before its first poll returns (JustStarted).
+/// classifies them, during which nothing is due on the pod (reconcile
+/// Rejected422), its newest view, the LIST's or a patch response (reconcile
+/// Sequence), and its latest reading with the clock it came at, none before
+/// its first poll returns (JustStarted).
 type Memory {
   Memory(
     state: PodState,
@@ -350,10 +351,15 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
 
 /// One tick: nothing inside the LIST pause (budget PauseScope), the timer
 /// keeping its cadence; otherwise the files are read and a cycle runs. A
-/// failed read of either file ends the session too (k8s_client
-/// TokenReload: the token is never cached past the cycle that read it), so
-/// until the next good read a turn is answered nothing due and a poll's
-/// entry waits for the LIST to announce it; readings are still observed.
+/// tick inside the pause reads no file either, so a token rotated during
+/// the pause is seen, and its change logged, at the first tick after it:
+/// at most backoff_cap later, or a longer Retry-After, which the cap does
+/// not bound (k8s_client TokenReload: the token is read for a cycle, and a
+/// paused tick makes none; budget BackOff). A failed read of either file
+/// ends the session too (the token is never cached past the cycle that
+/// read it), so until the next good read a turn is answered nothing due
+/// and a poll's entry waits for the LIST to announce it; readings are still
+/// observed.
 fn tick(state: State) -> State {
   let config = state.config
   let now = config.now()
@@ -603,6 +609,12 @@ fn set_list_pause_gauges(paused paused: Int, seconds seconds: Int) -> Nil {
   metrics.set(observability.pause_seconds, [observability.list_scope], seconds)
 }
 
+/// A cycle whose three LISTs succeeded: the target set, the gauges, the
+/// Events and lines, and what the scheduler and the patcher learn from it.
+/// Only a good cycle reaches here, so during a LIST pause both keep the
+/// previous target set: a pod deleted meanwhile stays scheduled and keeps
+/// its pending apply, whose turns fail at the apiserver until the next good
+/// LIST drops it, bounded by the pause (budget PauseScope, Pending).
 fn discovered(
   state state: State,
   cycle cycle: Cycle,
@@ -803,9 +815,11 @@ fn polled(state: State, returned: scheduler.Polled) -> State {
         )
       let pod = memory.pod
       let at = rfc3339(now / 1000)
-      let due = case pod.deletion_timestamp {
-        Some(_) -> False
-        None ->
+      // Nothing is due on a terminating pod, nor on one whose 422 is kept
+      // for the next LIST (reconcile Rejected422: no retry before it).
+      let due = case pod.deletion_timestamp, memory.kept {
+        Some(_), _ | _, Some(_) -> False
+        None, None ->
           conflicts(target:, pod:) != []
           || due_operations(target:, pod:, memory:, reading:, at:) != []
       }
@@ -1098,9 +1112,16 @@ fn due_operations(
 /// conflict's yield if any, else the due writes (reconcile Sequence), and
 /// one answer, always: `Attempted` with the outcome and whether anything
 /// is still due, or `NothingDue` when the pod is gone, terminating, has no
-/// reading yet (JustStarted) or nothing to write. A cleanup turn is nothing
-/// due until ticket 47 derives cleanups; none is sent for one here. An
-/// accepted response becomes the pod's view.
+/// reading yet (JustStarted), holds a 422 for the next LIST (Rejected422)
+/// or has nothing to write. A cleanup turn is nothing due until ticket 47
+/// derives cleanups; none is sent for one here. An accepted response
+/// becomes the pod's view. The request is built at the turn's clock, the
+/// marker's `at` among it, and the answer carries the clock after the
+/// attempt returned, so the pod's interval and a pause run from the
+/// response, not from a request a slow apiserver sat on (budget PerPod,
+/// BackOff). The patcher's target set is the last good LIST's: during a
+/// LIST pause a pod deleted meanwhile keeps its entry, and its turns fail
+/// at the apiserver until the next good LIST drops it.
 fn turn(state: State, granted: patcher.Turn) -> State {
   let patcher.Turn(pod_name:, purpose:) = granted
   let target =
@@ -1116,7 +1137,7 @@ fn turn(state: State, granted: patcher.Turn) -> State {
             granted:,
             attempt: cycle.attempt,
             still_due:,
-            at_ms: now,
+            at_ms: state.config.now(),
           )
           State(
             ..state,
@@ -1137,9 +1158,11 @@ fn nothing_due(state: State, granted: patcher.Turn) -> State {
   state
 }
 
-/// One attempt on the pod's turn, or none when the pod is terminating or
-/// has no reading yet (reconcile Terminating, JustStarted): the pod, the
-/// memory and the cycle after it, and whether anything is still due.
+/// One attempt on the pod's turn, or none when the pod is terminating, has
+/// no reading yet, or holds the operations a 422 refused, which are not
+/// retried before the next LIST (reconcile Terminating, JustStarted,
+/// Rejected422): the pod, the memory and the cycle after it, and whether
+/// anything is still due.
 fn attempt(
   cycle cycle: Cycle,
   target target: Target,
@@ -1147,6 +1170,7 @@ fn attempt(
 ) -> Option(#(Pod, Memory, Cycle, Bool)) {
   let pod = memory.pod
   use <- bool.guard(option.is_some(pod.deletion_timestamp), None)
+  use <- bool.guard(option.is_some(memory.kept), None)
   case conflicts(target:, pod:), memory.latest {
     [conflict, ..], _ ->
       Some(yield_turn(cycle:, target:, pod:, memory:, conflict:))
@@ -1181,7 +1205,9 @@ fn answer(
 }
 
 /// The yield of one conflict on the turn; the apply stays due when another
-/// conflict or a write remains on the view the yield left.
+/// conflict or a write remains on the view the yield left, unless the yield
+/// was refused with a 422, which leaves nothing due before the next LIST
+/// (reconcile Rejected422).
 fn yield_turn(
   cycle cycle: Cycle,
   target target: Target,
@@ -1197,19 +1223,22 @@ fn yield_turn(
     Error(#(memory, cycle)) -> #(pod, memory, cycle)
   }
   let still_due =
-    conflicts(target:, pod:) != []
-    || case memory.latest {
-      Some(#(reading, _)) ->
-        due_operations(target:, pod:, memory:, reading:, at: cycle.at) != []
-      None -> False
+    option.is_none(memory.kept)
+    && {
+      conflicts(target:, pod:) != []
+      || case memory.latest {
+        Some(#(reading, _)) ->
+          due_operations(target:, pod:, memory:, reading:, at: cycle.at) != []
+        None -> False
+      }
     }
   #(pod, memory, cycle, still_due)
 }
 
 /// The due writes on the turn; the apply stays due unless they were
-/// accepted: a 422 is rebuilt from the next LIST (reconcile Rejected422),
-/// a 429 waits out the pause, any other refusal is tried again after the
-/// pod's interval.
+/// accepted or refused with a 422, which is not retried before the next
+/// LIST rebuilds the write (reconcile Rejected422): a 429 waits out the
+/// pause, any other refusal is tried again after the pod's interval.
 fn write_turn(
   cycle cycle: Cycle,
   target target: Target,
@@ -1218,9 +1247,9 @@ fn write_turn(
   reading reading: Reading,
 ) -> #(Pod, Memory, Cycle, Bool) {
   let #(pod, memory, cycle) = write(cycle:, target:, pod:, memory:, reading:)
-  let still_due = case cycle.attempt {
-    Some(attempt) -> outcome(attempt) != patcher.Accepted
-    None -> False
+  let still_due = case memory.kept, cycle.attempt {
+    None, Some(attempt) -> outcome(attempt) != patcher.Accepted
+    Some(_), _ | None, None -> False
   }
   #(pod, memory, cycle, still_due)
 }

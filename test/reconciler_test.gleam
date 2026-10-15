@@ -245,10 +245,12 @@ fn cluster(name: String, pods: List(PodFixture)) -> Table {
 }
 
 /// The scripted apiserver: answers from the table and forwards every
-/// request to `requests`. A LIST is refused with 429 while "list_status"
-/// is "429", a patch answers with "patch_status"; a refusal of either
-/// carries "list_retry_after" or "patch_retry_after" as its Retry-After
-/// header when set.
+/// request to `requests`. A LIST is refused with 429 while "list_status",
+/// or "list_status:" and its resource, is "429"; a patch answers with
+/// "patch_status", after moving the clock to "patch_advances_now" once when
+/// that is set, as a slow response does; a refusal of either carries
+/// "list_retry_after" or "patch_retry_after" as its Retry-After header when
+/// set.
 fn apiserver(
   table: Table,
   requests: Subject(Request(String)),
@@ -258,18 +260,23 @@ fn apiserver(
     let resource =
       request.path |> string.split("/") |> list.last |> result.unwrap("")
     case request.method {
-      http.Get ->
-        case get(table, "list_status"), get(table, resource) {
-          Ok("429"), _ ->
+      http.Get -> {
+        let throttled =
+          get(table, "list_status") == Ok("429")
+          || get(table, "list_status:" <> resource) == Ok("429")
+        case throttled, get(table, resource) {
+          True, _ ->
             Ok(
               response.new(429)
               |> response.set_body("{}")
               |> retry_after(table:, key: "list_retry_after"),
             )
-          _, Ok(body) -> Ok(response.new(200) |> response.set_body(body))
-          _, Error(Nil) -> Error(k8s_http.TlsAlert("unknown_ca"))
+          False, Ok(body) -> Ok(response.new(200) |> response.set_body(body))
+          False, Error(Nil) -> Error(k8s_http.TlsAlert("unknown_ca"))
         }
+      }
       http.Patch -> {
+        advance_clock(table)
         let status =
           get(table, "patch_status")
           |> result.try(int.parse)
@@ -287,6 +294,18 @@ fn apiserver(
       http.Post -> Ok(response.new(201) |> response.set_body("{}"))
       // The reconciler sends no other method.
       _ -> Ok(response.new(405) |> response.set_body(""))
+    }
+  }
+}
+
+/// A slow response: the clock moves to "patch_advances_now", in seconds,
+/// before the patch is answered, once; the key is cleared on the way.
+fn advance_clock(table: Table) -> Nil {
+  case get(table, "patch_advances_now") {
+    Ok("") | Error(Nil) -> Nil
+    Ok(seconds) -> {
+      put(table, "now", seconds)
+      put(table, "patch_advances_now", "")
     }
   }
 }
@@ -574,6 +593,8 @@ pub fn a_cycle_polls_every_target_with_an_ip_and_patches_a_busy_pod_test() -> Ni
     patches(deployment: "busy", purpose: "apply", result: "accepted") <> "1\n",
     1000,
   )
+  // An accepted apply leaves nothing pending (budget Pending).
+  assert await_metric("knarr_patches_pending{deployment=\"busy\"} 0\n", 1000)
   stop_root(set)
 }
 
@@ -659,9 +680,11 @@ pub fn nothing_is_due_between_crossings_test() -> Nil {
   stop_root(set)
 }
 
-// Loop.Rejected422: a 422 keeps the patch's operations until the next LIST,
-// which classifies them, and the write is simply rebuilt from the poll that
-// follows it.
+// Loop.Rejected422: a 422 keeps the patch's operations until the next LIST
+// and is not retried before it: the turn leaves nothing pending, the poll
+// after it hands the patcher nothing, and a patcher wake past the pod's
+// interval sends nothing. The LIST classifies the operations and the write
+// is simply rebuilt from the poll that follows it.
 pub fn a_422_is_left_to_the_next_list_test() -> Nil {
   let harness = harness("422", [pod("1")])
   put(harness.table, "patch_status", "422")
@@ -670,6 +693,21 @@ pub fn a_422_is_left_to_the_next_list_test() -> Nil {
   lists(harness)
   let first = patch_of(next(harness), "1")
   quiet(harness)
+  let refused =
+    patches(deployment: "422", purpose: "apply", result: "precondition_failed")
+  assert await_metric(refused <> "1\n", 1000)
+  assert await_metric("knarr_patches_pending{deployment=\"422\"} 0\n", 1000)
+  wake(harness:, at: 1030)
+  assert await_polls(harness:, count: 2, within: 1000)
+  quiet(harness)
+  patcher_wake(harness:, at: 1060)
+  quiet(harness)
+  let exposition = metrics.collect()
+  assert string.contains(exposition, refused <> "1\n")
+  assert !string.contains(
+    exposition,
+    patches(deployment: "422", purpose: "apply", result: "accepted"),
+  )
   put(harness.table, "patch_status", "200")
   tick(harness:, at: 1300)
   lists(harness)
@@ -678,6 +716,10 @@ pub fn a_422_is_left_to_the_next_list_test() -> Nil {
   assert string.contains(second, "\"500\"")
   assert string.contains(second, at(1300))
   quiet(harness)
+  assert await_metric(
+    patches(deployment: "422", purpose: "apply", result: "accepted") <> "1\n",
+    1000,
+  )
   stop_root(set)
 }
 
@@ -1162,7 +1204,8 @@ pub fn a_conflict_is_yielded_and_its_event_raised_after_the_patch_test() -> Nil 
 }
 
 // ownership Event and Loop.Rejected422: a yield the apiserver refuses with a
-// 422 raises no Event and ends the pod's turn, and the next LIST sees the
+// 422 raises no Event and ends the pod's turn, nothing stays pending and no
+// turn inside the LIST interval yields again; the next LIST sees the
 // conflict again and yields again. The operations the 422 refused are kept
 // for that LIST's classification; ticket 32 gives the classification its
 // signal, so until then nothing here can tell them apart from forgotten ones.
@@ -1178,6 +1221,21 @@ pub fn a_refused_yield_raises_no_event_and_is_rebuilt_from_the_next_list_test() 
   let yield = patch_of(next(harness), "1")
   assert string.contains(yield, "\\\"yielded\\\":\\\"999\\\"")
   quiet(harness)
+  assert await_metric(
+    "knarr_patches_pending{deployment=\"refused-yield\"} 0\n",
+    1000,
+  )
+  patcher_wake(harness:, at: 1060)
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    patches(
+      deployment: "refused-yield",
+      purpose: "yield",
+      result: "precondition_failed",
+    )
+      <> "1\n",
+  )
   put(harness.table, "patch_status", "200")
   put(
     harness.table,
@@ -1336,6 +1394,15 @@ pub fn a_patch_429_is_counted_once_as_throttled_and_pauses_every_pod_test() -> N
     exposition,
     patches(deployment: "throttle", purpose: "apply", result: "accepted"),
   )
+  // Once, as throttled: not as an error or a rejection too.
+  assert !string.contains(
+    exposition,
+    patches(deployment: "throttle", purpose: "apply", result: "error"),
+  )
+  assert !string.contains(
+    exposition,
+    patches(deployment: "throttle", purpose: "apply", result: "rejected"),
+  )
   assert string.contains(exposition, "knarr_paused{scope=\"patch\"} 1\n")
   assert string.contains(
     exposition,
@@ -1360,6 +1427,39 @@ pub fn a_patch_429_is_counted_once_as_throttled_and_pauses_every_pod_test() -> N
       <> "1\n",
   )
   assert string.contains(exposition, "knarr_paused{scope=\"patch\"} 0\n")
+  assert !string.contains(
+    exposition,
+    patches(deployment: "throttle", purpose: "apply", result: "error"),
+  )
+  assert !string.contains(
+    exposition,
+    patches(deployment: "throttle", purpose: "apply", result: "rejected"),
+  )
+  quiet(harness)
+  stop_root(set)
+}
+
+// budget BackOff and PerPod: the pause and the pod's last attempt count from
+// the clock after the attempt returned, not from the one its request was
+// built at. A patch whose 429 with Retry-After 120 arrives ten seconds after
+// it was sent holds every pod for 120 seconds from its arrival.
+pub fn the_pause_counts_from_the_clock_after_the_attempt_returned_test() -> Nil {
+  let harness = harness("slow-429", [pod("1")])
+  put(harness.table, "patch_status", "429")
+  put(harness.table, "patch_retry_after", "120")
+  put(harness.table, "patch_advances_now", "1010")
+  let set = start(harness)
+
+  lists(harness)
+  let request = patch_of(next(harness), "1")
+  assert string.contains(request, at(1000))
+  quiet(harness)
+  assert await_metric("knarr_pause_seconds{scope=\"patch\"} 120\n", 1000)
+  put(harness.table, "patch_status", "200")
+  patcher_wake(harness:, at: 1129)
+  quiet(harness)
+  patcher_wake(harness:, at: 1130)
+  patch_of(next(harness), "1")
   quiet(harness)
   stop_root(set)
 }
@@ -1419,6 +1519,91 @@ pub fn a_list_429_skips_the_cycle_and_withholds_the_ticks_inside_the_pause_test(
     exposition,
     "knarr_last_discovery_timestamp_seconds 1420\n",
   )
+  assert counter(throttled) == before + 1
+  stop_root(set)
+}
+
+// budget PauseScope and ListCadence: a 429 on the replicasets LIST, the
+// second of the cycle, skips the cycle as one on the first does.
+pub fn a_list_429_on_the_replicasets_list_skips_the_cycle_test() -> Nil {
+  a_list_429_on("replicasets")
+}
+
+// budget PauseScope and ListCadence: a 429 on the deployments LIST, the
+// third of the cycle, skips the cycle as one on the first does.
+pub fn a_list_429_on_the_deployments_list_skips_the_cycle_test() -> Nil {
+  a_list_429_on("deployments")
+}
+
+/// A 429 on `resource`, the second or third LIST of a cycle: the LISTs
+/// before it are counted as succeeded and it as throttled, the target set
+/// stands, the pause is the ladder's first second, a tick inside it sends
+/// nothing, and neither actor hears of the cycle: a pod the pod LIST showed
+/// for the first time in it is not polled until the next good cycle, while
+/// the pod already scheduled is polled at its rung.
+fn a_list_429_on(resource: String) -> Nil {
+  let steady = PodFixture(..pod("1"), annotations: marked("500", at(1000)))
+  let harness = harness("list-429-" <> resource, [steady])
+  let set = start(harness)
+
+  lists(harness)
+  quiet(harness)
+  let paths = [
+    #("pods", "/api/v1/namespaces/default/pods"),
+    #("replicasets", "/apis/apps/v1/namespaces/default/replicasets"),
+    #("deployments", "/apis/apps/v1/namespaces/default/deployments"),
+  ]
+  let #(preceding, _) =
+    list.split_while(paths, fn(listed) { listed.0 != resource })
+  let series = fn(resource, result) {
+    "knarr_lists_total{resource=\""
+    <> resource
+    <> "\",result=\""
+    <> result
+    <> "\"}"
+  }
+  let throttled = series(resource, "throttled")
+  let before = counter(throttled)
+  let succeeded_before =
+    list.map(preceding, fn(listed) { counter(series(listed.0, "succeeded")) })
+  set_pods(harness.table, [steady, pod("2")])
+  put(harness.table, "list_status:" <> resource, "429")
+  tick(harness:, at: 1300)
+  let sent = list.take(paths, list.length(preceding) + 1)
+  assert list.map(sent, fn(_) { next(harness).path })
+    == list.map(sent, fn(listed) { listed.1 })
+  quiet(harness)
+  assert await_metric("knarr_paused{scope=\"list\"} 1\n", 1000)
+  assert counter(throttled) == before + 1
+  assert list.map(preceding, fn(listed) {
+      counter(series(listed.0, "succeeded"))
+    })
+    == list.map(succeeded_before, fn(count) { count + 1 })
+  let exposition = metrics.collect()
+  assert string.contains(exposition, "knarr_pause_seconds{scope=\"list\"} 1\n")
+  assert string.contains(exposition, "knarr_targets{kind=\"pods\"} 1\n")
+  // Inside the pause the tick is withheld; the schedule is the old one.
+  tick(harness:, at: 1300)
+  quiet(harness)
+  wake(harness:, at: 1330)
+  assert await_polls(harness:, count: 2, within: 1000)
+  quiet(harness)
+  assert list_of(harness.table, "polled")
+    == ["10.0.0.1:8080/knarr/v1/status", "10.0.0.1:8080/knarr/v1/status"]
+  put(harness.table, "list_status:" <> resource, "200")
+  tick(harness:, at: 1330)
+  lists(harness)
+  patch_of(next(harness), "2")
+  quiet(harness)
+  assert list_of(harness.table, "polled")
+    == [
+      "10.0.0.1:8080/knarr/v1/status",
+      "10.0.0.1:8080/knarr/v1/status",
+      "10.0.0.2:8080/knarr/v1/status",
+    ]
+  let exposition = metrics.collect()
+  assert string.contains(exposition, "knarr_paused{scope=\"list\"} 0\n")
+  assert string.contains(exposition, "knarr_targets{kind=\"pods\"} 2\n")
   assert counter(throttled) == before + 1
   stop_root(set)
 }
