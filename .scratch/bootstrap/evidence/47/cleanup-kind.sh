@@ -83,16 +83,22 @@ await_annotation() {
 }
 
 # Scrapes /metrics into the numbered file given, its first line the epoch
-# second of the scrape. A failed scrape leaves the file without knarr_targets
-# and reopens the forward, whether or not its kubectl is still running, since
-# a forward can stop carrying connections while its process lives on; the
-# file never reads as a retirement.
+# second of the scrape. The body lands beside the file and is kept only when
+# curl reports the whole transfer done; a failed transfer, one cut off part
+# way included, keeps none of its body, only a "# scrape failed" line, so the
+# file has no knarr_targets and never reads as a retirement. A failure also
+# reopens the forward, whether or not its kubectl is still running, since a
+# forward can stop carrying connections while its process lives on.
 scrape() {
   file=$1
   echo "# at $(date +%s)" > "$file"
-  if ! curl -sS --max-time 3 "http://127.0.0.1:$metrics_port/metrics" >> "$file" 2>&1; then
+  if curl -sS --max-time 3 "http://127.0.0.1:$metrics_port/metrics" > "$file.body" 2> "$file.err"; then
+    cat "$file.body" >> "$file"
+  else
+    echo "# scrape failed: $(head -1 "$file.err")" >> "$file"
     open_metrics_forward
   fi
+  rm -f "$file.body" "$file.err"
 }
 
 # True when the scrape answered: knarr_targets is always exposed.

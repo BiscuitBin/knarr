@@ -443,7 +443,9 @@ contract Loop {
         -- Retry-After, or rejected, and whether the pod is still due, or
         -- with nothing due, which also answers a turn for a terminating
         -- pod, one without a reading or one the LIST no longer shows, and a
-        -- cleanup turn whose due is now empty. On a cleanup turn the due
+        -- cleanup turn whose due is now empty, or blocked, for a pod held
+        -- until the next LIST, which spends no token and keeps the entry.
+        -- On a cleanup turn the due
         -- names are re-derived with lifecycle's due from the cycle's View,
         -- its held following the pod's newest view, the LIST's or knarr's
         -- own accepted patch response, every due name passes to ownership's
@@ -451,8 +453,13 @@ contract Loop {
         -- (lifecycle Cleanup Scope, Marker and Label). An accepted cleanup
         -- ends the pod's rejection run; a 400 or 403 is a rejection at once
         -- and stays due (lifecycle Cleanup Retry).
-        -- A 422 ends the entry: nothing of the pod is handed over again
-        -- until the next LIST refreshes the view, and a kept 422 on any
+        -- A 422 ends the entry of the purpose it refused: nothing of the
+        -- pod is attempted again until the next LIST refreshes the view. A
+        -- turn meanwhile for the pod's other purpose, or for either purpose
+        -- of a pod whose view an accepted patch left stale, is answered
+        -- blocked: its entry stays pending from when the change first
+        -- became due and is granted again once that LIST arrives (budget
+        -- Pending; lifecycle Cleanup Order). A kept 422 on any
         -- listed pod, target or not, is classified against that LIST, a
         -- cleanup's under the label it was counted under (Rejected422); a
         -- 429 or a transport failure stays due and a 429 waits out the

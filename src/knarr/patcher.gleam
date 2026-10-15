@@ -3,8 +3,9 @@
 //// pause, the pending set and each pod's last attempt, and grants the
 //// reconciler one patch turn at a time: the oldest-due pending change that
 //// budget allows, the bucket's token spent when the reconciler answers that
-//// it attempted the patch and none when it found nothing due, so the bucket
-//// of the moment of the attempt bounds the attempts (budget Threshold).
+//// it attempted the patch and none when it found nothing due or the pod
+//// held until the next LIST, so the bucket of the moment of the attempt
+//// bounds the attempts (budget Threshold).
 //// Every decision is budget's; the clock is injected, the one timer carries
 //// every wake, and every turn and every quiet Deployment leave through the
 //// injected sinks, so this module never names the reconciler. Nothing here
@@ -119,7 +120,8 @@ pub type Message {
   Wake
   /// From the reconciler: its answer to a turn, after one attempt on the
   /// pod, which spends one token. `still_due` keeps the entry with its
-  /// original due_since.
+  /// original due_since; otherwise it leaves, as after a 422, whose purpose
+  /// the next LIST makes due again from its view (reconcile Rejected422).
   Attempted(
     pod_name: String,
     purpose: Purpose,
@@ -128,14 +130,23 @@ pub type Message {
     at_ms: Int,
   )
   /// From the reconciler: its answer to a turn when the re-derived change
-  /// was nothing. The entry leaves and no token is spent.
+  /// was nothing, the pod gone, terminating or without a change of that
+  /// purpose. The entry leaves and no token is spent.
   NothingDue(pod_name: String, purpose: Purpose)
+  /// From the reconciler: its answer to a turn on a pod that nothing may be
+  /// patched on until the next LIST, a 422's operations kept for it or an
+  /// accepted patch having left its view stale (reconcile Rejected422,
+  /// Sequence). No token is spent and the last attempt is unchanged; the
+  /// entry stays pending with its due_since and is not granted again before
+  /// the next `Listed` (budget Pending).
+  Blocked(pod_name: String, purpose: Purpose)
 }
 
-/// One pending change: budget's entry, the pod's Deployment and its patch
-/// interval in seconds.
+/// One pending change: budget's entry, the pod's Deployment, its patch
+/// interval in seconds, and whether it is blocked, not granted before the
+/// next `Listed`.
 type Entry {
-  Entry(pending: Pending, deployment: String, interval_s: Int)
+  Entry(pending: Pending, deployment: String, interval_s: Int, blocked: Bool)
 }
 
 type State {
@@ -219,6 +230,7 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
     Attempted(pod_name:, purpose:, outcome:, still_due:, at_ms:) ->
       attempted(state:, pod_name:, purpose:, outcome:, still_due:, at_ms:)
     NothingDue(pod_name:, purpose:) -> nothing_due(state:, pod_name:, purpose:)
+    Blocked(pod_name:, purpose:) -> blocked(state:, pod_name:, purpose:)
   }
   |> grant
 }
@@ -229,6 +241,8 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
 /// became due (budget Pending): a second Due of the same key keeps the
 /// entry's due_since and refreshes its interval and Deployment, so a changed
 /// override (PerPod) reaches a held pod. The copy in turn is refreshed too.
+/// A Due unblocks the entry: the reconciler sends one, or a cycle's
+/// cleaning, only for a pod nothing holds until the next LIST.
 fn due(
   state state: State,
   pod_name pod_name: String,
@@ -238,7 +252,9 @@ fn due(
   at_ms at_ms: Int,
 ) -> State {
   let key = #(pod_name, purpose)
-  let refresh = fn(entry: Entry) { Entry(..entry, deployment:, interval_s:) }
+  let refresh = fn(entry: Entry) {
+    Entry(..entry, deployment:, interval_s:, blocked: False)
+  }
   let entry = case dict.get(state.pending, key) {
     Ok(entry) -> refresh(entry)
     Error(Nil) ->
@@ -246,6 +262,7 @@ fn due(
         pending: Pending(pod_name:, purpose:, due_since: at_ms),
         deployment:,
         interval_s:,
+        blocked: False,
       )
   }
   let in_turn = case state.in_turn {
@@ -273,7 +290,10 @@ fn due(
 /// patcher. A pod the LIST shows under another uid is that case within one
 /// LIST: its apply and cleanup are discarded with their due_since and its
 /// last attempt forgotten, while a turn already out is answered as any
-/// other is (PerPod, Pending). Then every cleanup the cycle makes due is
+/// other is (PerPod, Pending). Every entry kept is unblocked: the LIST has
+/// classified the 422 that held its pod and replaced a stale view, so the
+/// entry is granted again with its due_since (budget Pending; reconcile
+/// Rejected422, Sequence). Then every cleanup the cycle makes due is
 /// pending as `due` makes it: a kept entry keeps its due_since and takes
 /// the interval and Deployment the cycle derived, and a replaced pod's,
 /// pruned just before, starts at the cycle's clock. Last, the departing
@@ -309,6 +329,7 @@ fn listed(
           set.contains(targets, key.0) && !set.contains(terminating, key.0)
       }
     })
+    |> dict.map_values(fn(_, entry) { Entry(..entry, blocked: False) })
   let last_attempt =
     dict.filter(state.last_attempt, fn(pod_name, _) {
       set.contains(listed, pod_name) && !set.contains(replaced, pod_name)
@@ -400,6 +421,24 @@ fn nothing_due(
     pending: dict.delete(state.pending, #(pod_name, purpose)),
     in_turn: None,
   )
+}
+
+/// The turn found its pod held until the next LIST: the entry stays with its
+/// due_since, blocked, and the bucket and the pod's last attempt are
+/// unchanged, since no attempt was made. An entry a LIST discarded while
+/// the turn was out is not brought back.
+fn blocked(
+  state state: State,
+  pod_name pod_name: String,
+  purpose purpose: Purpose,
+) -> State {
+  use <- bool.guard(!in_turn(state:, pod_name:, purpose:), state)
+  let key = #(pod_name, purpose)
+  let pending = case dict.get(state.pending, key) {
+    Ok(entry) -> dict.insert(state.pending, key, Entry(..entry, blocked: True))
+    Error(Nil) -> state.pending
+  }
+  State(..state, pending:, in_turn: None)
 }
 
 fn in_turn(
@@ -497,12 +536,11 @@ fn grant(state: State) -> actor.Next(State, Message) {
   actor.continue(State(..state, wake: rearm(state, now)))
 }
 
-/// The first entry, in budget's oldest-due order with ties by name, for
-/// which budget allows the patch now, under the pause, the pod's interval
-/// and the bucket.
+/// The first entry not blocked, in budget's oldest-due order with ties by
+/// name, for which budget allows the patch now, under the pause, the pod's
+/// interval and the bucket.
 fn first_allowed(state: State, now: Int) -> Option(Entry) {
-  state.pending
-  |> dict.values
+  grantable(state)
   |> list.sort(by_name)
   |> list.map(fn(entry) { entry.pending })
   |> budget.order
@@ -530,6 +568,13 @@ fn first_allowed(state: State, now: Int) -> Option(Entry) {
   |> option.from_result
 }
 
+/// The entries a grant may pick: every pending one not blocked.
+fn grantable(state: State) -> List(Entry) {
+  state.pending
+  |> dict.values
+  |> list.filter(fn(entry) { !entry.blocked })
+}
+
 fn by_name(a: Entry, b: Entry) -> Order {
   case string.compare(a.pending.pod_name, b.pending.pod_name) {
     Eq -> string.compare(purpose_name(a.pending), purpose_name(b.pending))
@@ -545,8 +590,8 @@ fn purpose_name(pending: Pending) -> String {
 }
 
 /// knarr_patches_pending per Deployment, 0 for one that lost its last
-/// entry until it is quiet, and the age of the oldest pending change
-/// (observability Budget).
+/// entry until it is quiet, and the age of the oldest pending change, a
+/// blocked entry counted as any other (observability Budget).
 fn gauges(state: State, now: Int) -> State {
   let entries = dict.values(state.pending)
   let counts =
@@ -574,8 +619,8 @@ fn gauges(state: State, now: Int) -> State {
   State(..state, series:)
 }
 
-/// A departing Deployment is quiet once no entry of its pods is pending and
-/// none is in turn: it stops departing, its pending series leaves and the
+/// A departing Deployment is quiet once no entry of its pods is pending, a
+/// blocked one included, and none is in turn: it stops departing, its pending series leaves and the
 /// sink hears its name (observability SeriesLife). Only a Deployment the
 /// last `Listed` named departing is settled, so one a later cycle withdrew
 /// keeps its pending series; a quiet sent before the withdrawing `Listed`
@@ -602,8 +647,9 @@ fn settle_departing(state: State) -> State {
 /// The one timer, re-armed for the next instant the state changes without
 /// a message: the pause's end while a pause lasts, whatever is pending, so
 /// the pause gauges clear when it ends (PauseScope); else, with something
-/// pending and no turn out, the next whole refill second when the bucket is
-/// empty, else the earliest interval end of a held pod. The timer last
+/// grantable and no turn out, the next whole refill second when the bucket
+/// is empty, else the earliest interval end of a held pod. A blocked entry
+/// arms nothing: only the next `Listed` unblocks it. The timer last
 /// armed is always cancelled first, fired or not, since cancelling a spent
 /// timer is harmless and the recorded timer is the only one this process
 /// may have running; a `Wake` arriving from an earlier timer therefore
@@ -619,15 +665,12 @@ fn rearm(state: State, now: Int) -> Option(process.Timer) {
   use <- bool.lazy_guard(now < state.pause.until, fn() {
     Some(process.send_after(state.self, state.pause.until - now, Wake))
   })
-  use <- bool.guard(
-    dict.is_empty(state.pending) || option.is_some(state.in_turn),
-    None,
-  )
+  let grantable = grantable(state)
+  use <- bool.guard(grantable == [] || option.is_some(state.in_turn), None)
   let at = case state.bucket.tokens <= 0 {
     True -> Some(state.bucket.refilled_at + 1000)
     False ->
-      state.pending
-      |> dict.values
+      grantable
       |> list.filter_map(fn(entry) {
         case dict.get(state.last_attempt, entry.pending.pod_name) {
           Ok(last) if last + entry.interval_s * 1000 > now ->

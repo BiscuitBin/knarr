@@ -3844,6 +3844,128 @@ pub fn an_unseen_accepted_patch_holds_the_other_purpose_until_the_next_list_test
   stop_root(set)
 }
 
+// budget Pending, lifecycle Cleanup Order, reconcile Rejected422: a cleanup
+// whose turn comes while the pod's apply waits on a kept 422 sends nothing
+// and stays pending from when it first became due, so its age keeps
+// counting. The apply due since the poll at 1030 goes at 1060 and is refused
+// with 422; the cleanup the LIST at 1040 made due gets its turn at 1120 and
+// is held. The LIST at 1300 classifies the apply's 422 as a rejection and
+// the cleanup goes at once.
+pub fn a_cleanup_turn_while_an_apply_waits_on_a_kept_422_stays_pending_test() -> Nil {
+  let harness =
+    harness("blocked-cleanup", [
+      PodFixture(..pod("1"), annotations: owning_both("500", "true")),
+    ])
+  put(harness.table, "reading:10.0.0.1", "2000")
+  let listed = PodFixture(..pod("1"), annotations: owning_both("2000", "true"))
+  put(harness.table, "patched:1", pod_json(listed))
+  set_deployment(harness.table, safe_to_evict_on)
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  put(harness.table, "reading:10.0.0.1", "4000")
+  wake(harness:, at: 1030)
+  assert await_polls(harness:, count: 2, within: 1000)
+  quiet(harness)
+  set_pods(harness.table, [listed])
+  set_deployment(harness.table, "{}")
+  tick(harness:, at: 1040)
+  lists(harness)
+  quiet(harness)
+  put(harness.table, "patch_status", "422")
+  patcher_wake(harness:, at: 1060)
+  let apply = patch_of(next(harness), "1")
+  assert string.contains(apply, "\"4000\"")
+  quiet(harness)
+  assert await_metric(
+    patches(
+      deployment: "blocked-cleanup",
+      purpose: "apply",
+      result: "precondition_failed",
+    )
+      <> "1\n",
+    1000,
+  )
+  patcher_wake(harness:, at: 1120)
+  quiet(harness)
+  settle(harness)
+  let exposition = metrics.collect()
+  assert string.contains(exposition, pending("blocked-cleanup") <> "1\n")
+  assert string.contains(exposition, "knarr_patch_pending_oldest_seconds 80\n")
+  put(harness.table, "patch_status", "200")
+  tick(harness:, at: 1300)
+  lists(harness)
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "PatchRejected"
+  let cleanup = patch_of(next(harness), "1")
+  assert string.contains(cleanup, remove_of(ste_key))
+  quiet(harness)
+  stop_root(set)
+}
+
+// budget Pending, reconcile Rejected422, lifecycle Cleanup Retry: the
+// mirror case. An apply whose turn comes while the pod's cleanup waits on a
+// kept 422 sends nothing and stays pending from its poll. The cleanup the
+// LIST at 1010 made due goes at 1060 and is refused with 422; the apply due
+// since the poll at 1030 gets its turn at 1120 and is held. The LIST at 1300
+// classifies the cleanup's 422 as a rejection, and the apply goes at once,
+// built from the poll's reading, without waiting for another poll.
+pub fn an_apply_turn_while_a_cleanup_waits_on_a_kept_422_stays_pending_test() -> Nil {
+  let harness =
+    harness("blocked-apply", [
+      PodFixture(..pod("1"), annotations: owning_both("500", "true")),
+    ])
+  put(harness.table, "reading:10.0.0.1", "2000")
+  let listed = PodFixture(..pod("1"), annotations: owning_both("2000", "true"))
+  put(harness.table, "patched:1", pod_json(listed))
+  set_deployment(harness.table, safe_to_evict_on)
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  set_pods(harness.table, [listed])
+  set_deployment(harness.table, "{}")
+  tick(harness:, at: 1010)
+  lists(harness)
+  quiet(harness)
+  put(harness.table, "reading:10.0.0.1", "4000")
+  wake(harness:, at: 1030)
+  assert await_polls(harness:, count: 2, within: 1000)
+  quiet(harness)
+  put(harness.table, "patch_status", "422")
+  patcher_wake(harness:, at: 1060)
+  let cleanup = patch_of(next(harness), "1")
+  assert string.contains(cleanup, remove_of(ste_key))
+  quiet(harness)
+  assert await_metric(
+    patches(
+      deployment: "blocked-apply",
+      purpose: "cleanup",
+      result: "precondition_failed",
+    )
+      <> "1\n",
+    1000,
+  )
+  patcher_wake(harness:, at: 1120)
+  quiet(harness)
+  settle(harness)
+  let exposition = metrics.collect()
+  assert string.contains(exposition, pending("blocked-apply") <> "1\n")
+  assert string.contains(exposition, "knarr_patch_pending_oldest_seconds 90\n")
+  put(harness.table, "patch_status", "200")
+  tick(harness:, at: 1300)
+  lists(harness)
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "CleanupRejected"
+  let apply = patch_of(next(harness), "1")
+  assert string.contains(apply, "\"4000\"")
+  quiet(harness)
+  stop_root(set)
+}
+
 // lifecycle Cleanup Retry, budget PerPod: a cleanup that fails in transport
 // is counted as an error, is no rejection, and stays due: it is sent again
 // no sooner than the patch interval.

@@ -1471,15 +1471,21 @@ fn due_operations(
 
 /// A turn the patcher granted: one patch attempt on the pod, re-derived
 /// from its newest view (budget Pending), and one answer, always:
-/// `Attempted` with the outcome and whether anything is still due, or
-/// `NothingDue` when nothing was attempted. An apply turn takes the latest
+/// `Attempted` with the outcome and whether anything is still due,
+/// `Blocked` when the pod is held until the next LIST, or `NothingDue` when
+/// nothing else was attempted. An apply turn takes the latest
 /// reading too and sends the first conflict's yield if any, else the due
 /// writes (reconcile Sequence); it attempts nothing when the pod is no
 /// target, has no reading yet (JustStarted) or nothing to write. A cleanup
 /// turn sends the removals the pod's lifecycle View makes due on that view
 /// (lifecycle Cleanup); it attempts nothing when the pod has no View or
-/// nothing to release. Neither attempts anything on a pod gone, terminating,
-/// holding a 422 for the next LIST (Rejected422) or stale. An accepted
+/// nothing to release. Neither attempts anything on a pod gone or
+/// terminating in its newest view, which answers `NothingDue` (reconcile
+/// Terminating, Cycle), nor on one whose 422's operations wait for the next
+/// LIST (Rejected422) or whose view an accepted patch left stale (Sequence),
+/// which answers `Blocked`: whichever purpose was refused or left the view
+/// stale, the other's entry keeps its due_since until that LIST and is then
+/// granted again (budget Pending; lifecycle Cleanup Order). An accepted
 /// response becomes the pod's view. The request is built at the turn's
 /// clock, the marker's `at` among it, and the answer carries the clock
 /// after the attempt returned, so the pod's interval and a pause run from
@@ -1493,6 +1499,18 @@ fn turn(state: State, granted: patcher.Turn) -> State {
     list.find(state.targets, fn(target) { target.pod_name == pod_name })
   case state.session, dict.get(state.pods, pod_name) {
     Some(#(namespace, token)), Ok(memory) -> {
+      let has_work = case purpose, target {
+        budget.Apply, Ok(_) -> True
+        budget.Apply, Error(Nil) -> False
+        budget.Cleanup, _ -> option.is_some(memory.cleanup_view)
+      }
+      use <- bool.lazy_guard(
+        !has_work || option.is_some(memory.pod.deletion_timestamp),
+        fn() { nothing_due(state, granted) },
+      )
+      use <- bool.lazy_guard(option.is_some(memory.kept) || memory.stale, fn() {
+        blocked(state, granted)
+      })
       let now = state.config.now()
       let cycle = context(state:, namespace:, token:, now:)
       let attempted = case purpose, target {
@@ -1528,17 +1546,25 @@ fn nothing_due(state: State, granted: patcher.Turn) -> State {
   state
 }
 
+/// The answer to a turn on a pod held until the next LIST, a 422's
+/// operations kept or its view stale: no attempt was made, and the entry
+/// waits for that LIST (reconcile Rejected422, Sequence; budget Pending).
+fn blocked(state: State, granted: patcher.Turn) -> State {
+  let patcher.Turn(pod_name:, purpose:) = granted
+  notify(state.config.names.patcher, patcher.Blocked(pod_name:, purpose:))
+  state
+}
+
 /// One attempt on the pod's turn, or none when the pod has no reading yet
-/// or nothing is due on it until the next LIST (reconcile JustStarted,
-/// `held`): the pod, the memory and the cycle after it, and whether
-/// anything is still due.
+/// (reconcile JustStarted); `turn` has ruled out a pod terminating or held
+/// until the next LIST: the pod, the memory and the cycle after it, and
+/// whether anything is still due.
 fn attempt(
   cycle cycle: Cycle,
   target target: Target,
   memory memory: Memory,
 ) -> Option(#(Pod, Memory, Cycle, Bool)) {
   let pod = memory.pod
-  use <- bool.guard(held(memory), None)
   case conflicts(target:, pod:), memory.latest {
     [conflict, ..], _ ->
       Some(yield_turn(cycle:, target:, pod:, memory:, conflict:))
@@ -1557,11 +1583,11 @@ fn attempt(
 /// accepted since does not cost the cleanup a 422 (lifecycle Cleanup View,
 /// Scope; ownership Adoption). Every name `due` returns goes to ownership's
 /// cleanup together, one patch for the pod (Marker; ownership Released),
-/// counted under the View's deployment (Label). `held` gates it as it does
+/// counted under the View's deployment (Label). `turn` gates it as it does
 /// an apply: no patch to a pod terminating in the newest view (reconcile
-/// Terminating), none while a 422's operations wait for the next LIST
-/// (Rejected422), and none on a view an accepted patch left stale, which
-/// the next LIST replaces (Sequence). The outcome is settled as an apply's:
+/// Terminating), and none, the entry blocked until the next LIST, while a
+/// 422's operations wait for that LIST (Rejected422) or on a view an
+/// accepted patch left stale, which the LIST replaces (Sequence). The outcome is settled as an apply's:
 /// still due after a 400, 403, 429 or transport failure, at the interval or
 /// after the pause; not after an accepted patch; and not after a 422, which
 /// the next LIST classifies and makes due again from its view (lifecycle
@@ -1572,7 +1598,6 @@ fn cleanup(
 ) -> Option(#(Pod, Memory, Cycle, Bool)) {
   let pod = memory.pod
   use view <- option.then(memory.cleanup_view)
-  use <- bool.guard(held(memory), None)
   let marker = ownership.read(pod.annotations)
   let view =
     lifecycle.View(
