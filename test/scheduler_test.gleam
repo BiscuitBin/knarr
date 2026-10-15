@@ -38,6 +38,18 @@ fn get(table: Table, key: String) -> Result(String, Nil)
 @external(erlang, "reconciler_test_ffi", "stop_root")
 fn stop_root(pid: Pid) -> Nil
 
+@external(erlang, "reconciler_test_ffi", "children")
+fn children(supervisor: Pid) -> List(Pid)
+
+@external(erlang, "reconciler_test_ffi", "capture_logs")
+fn capture_logs(table: Table) -> Nil
+
+@external(erlang, "reconciler_test_ffi", "release_logs")
+fn release_logs() -> Nil
+
+@external(erlang, "reconciler_test_ffi", "table_list")
+fn list_of(table: Table, key: String) -> List(String)
+
 @external(erlang, "reconciler_ffi", "unix_milliseconds")
 fn unix_milliseconds() -> Int
 
@@ -717,5 +729,43 @@ pub fn a_poll_that_returned_is_not_timed_out_when_its_deadline_would_have_fired_
   process.send(held.release, valid(1))
   assert next_polled(harness).reading.kind == reconcile.Valid
   assert process.receive(harness.sink, 3500) == Error(Nil)
+  stop_root(harness.root)
+}
+
+// Leaving, and the worker factory: a dropped pod's worker is stopped the
+// way its supervisor would stop it, with a shutdown exit, so a routine drop
+// leaves no child_terminated error report in the log. The capture handler
+// takes every line the formatter renders, and the factory is asked for its
+// children after the worker is dead, so the exit was handled before the
+// log is read.
+pub fn a_dropped_workers_exit_is_a_shutdown_and_not_an_error_report_test() -> Nil {
+  let table = table_new()
+  put(table, "now", "1000")
+  put(table, "draws", "0")
+  let gate = process.new_subject()
+  let harness =
+    start(
+      table:,
+      gate:,
+      poll: held(gate),
+      concurrency: 1,
+      poll_timeout_s: 1,
+      now: fn() { scripted_now(table) },
+    )
+  listed(harness, [joiner("a", "dropped")])
+  let held = next_held(harness)
+  capture_logs(table)
+  listed(harness, [])
+  assert await(fn() { !process.is_alive(held.worker) }, 50)
+  let synced = case children(harness.root) {
+    [factory, ..] -> list.length(children(factory)) >= 0
+    [] -> False
+  }
+  assert synced
+  let reports =
+    list_of(table, "logs")
+    |> list.filter(string.contains(_, "child_terminated"))
+  release_logs()
+  assert reports == []
   stop_root(harness.root)
 }

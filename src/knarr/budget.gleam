@@ -106,8 +106,8 @@ pub fn jitter_bound(
 /// being the caller's draw for this rung (Jitter). The draw is clamped to
 /// that range. `outstanding` is kept, since a rung is skipped while a poll is
 /// outstanding (NoOverlap). The caller calls `next` once per rung until the
-/// due time is after now; `advance` does that, which is why `now` is unread
-/// here.
+/// due time is after now; the scheduler's `skip_passed` is that loop, which
+/// is why `now` is unread here.
 pub fn next(
   schedule schedule: Schedule,
   now _now: Int,
@@ -121,32 +121,6 @@ pub fn next(
     ..schedule,
     next_due: schedule.next_due + { interval + delay } * 1000,
   )
-}
-
-/// `next` applied once per rung, each with a fresh draw from `draw`, until the
-/// due time is after now, so a rung already passed is skipped (Jitter). Not a
-/// contract signature: it is the loop the clause tells the caller to run. An
-/// interval of 0 or less, outside config's range, moves one rung only, so the
-/// loop ends.
-pub fn advance(
-  schedule schedule: Schedule,
-  now now: Int,
-  interval interval: Int,
-  jitter_percent jitter_percent: Int,
-  draw draw: fn(Int) -> Int,
-) -> Schedule {
-  let moved =
-    next(
-      schedule:,
-      now:,
-      interval:,
-      jitter_percent:,
-      random: draw(jitter_bound(interval:, jitter_percent:) + 1),
-    )
-  case moved.next_due > now || interval <= 0 {
-    True -> moved
-    False -> advance(schedule: moved, now:, interval:, jitter_percent:, draw:)
-  }
 }
 
 /// True for a due poll while fewer than `concurrency` polls are sent and not

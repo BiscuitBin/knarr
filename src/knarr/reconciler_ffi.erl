@@ -1,6 +1,5 @@
 -module(reconciler_ffi).
--export([read_file/1, sha256_hex12/1, unix_seconds/0, unix_milliseconds/0, rfc3339/1,
-  notify/2]).
+-export([read_file/1, sha256_hex12/1, unix_milliseconds/0, rfc3339/1, notify/2]).
 
 %% A send to a registered name that drops the message when the name is not
 %% registered, instead of raising badarg as `!` does: the reconciler's one
@@ -26,8 +25,6 @@ read_file(Path) ->
 %% log line, never enough to reconstruct the input.
 sha256_hex12(Data) ->
   binary:part(binary:encode_hex(crypto:hash(sha256, Data), lowercase), 0, 12).
-
-unix_seconds() -> erlang:system_time(second).
 
 unix_milliseconds() -> erlang:system_time(millisecond).
 

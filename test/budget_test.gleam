@@ -6,7 +6,6 @@
 //// out. Timestamps are unix milliseconds; durations and draws are seconds.
 
 import gleam/bool
-import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -197,77 +196,6 @@ pub fn next_keeps_outstanding_as_it_is_test() -> Nil {
   ).outstanding
 }
 
-// PollSchedule.Jitter: a poll due at 0 that returns at 40 with a 30-second
-// interval and no jitter is next due at 60, not 40; a return at exactly 60 is
-// due at 90; a return at 20 is due at 30.
-pub fn advance_skips_rungs_already_passed_test() -> Nil {
-  assert budget.advance(
-      schedule: due("w", 0),
-      now: 40_000,
-      interval: 30,
-      jitter_percent: 0,
-      draw: fn(_) { 0 },
-    ).next_due
-    == 60_000
-  assert budget.advance(
-      schedule: due("w", 0),
-      now: 60_000,
-      interval: 30,
-      jitter_percent: 0,
-      draw: fn(_) { 0 },
-    ).next_due
-    == 90_000
-  assert budget.advance(
-      schedule: due("w", 0),
-      now: 20_000,
-      interval: 30,
-      jitter_percent: 0,
-      draw: fn(_) { 0 },
-    ).next_due
-    == 30_000
-}
-
-// PollSchedule.Jitter: each rung is the previous plus the interval plus its
-// own draw; the draw is handed the bound plus one, as int.random takes it.
-pub fn advance_draws_afresh_for_every_rung_test() -> Nil {
-  // The bound at 30 s and 10 percent is 3, so the draw is handed 4 and
-  // every rung adds 3: rungs at 33 s and 66 s.
-  assert budget.advance(
-      schedule: due("w", 0),
-      now: 40_000,
-      interval: 30,
-      jitter_percent: 10,
-      draw: fn(n) { n - 1 },
-    ).next_due
-    == 66_000
-  assert budget.advance(
-      schedule: due("w", 0),
-      now: 40_000,
-      interval: 30,
-      jitter_percent: 10,
-      draw: fn(_) { 0 },
-    ).next_due
-    == 60_000
-  // The draw is made once per rung, not once and reused: from due 0 to past
-  // 60 s with draw 0 takes three rungs (30, 60, 90), so three draws.
-  let draws = process.new_subject()
-  assert budget.advance(
-      schedule: due("w", 0),
-      now: 60_000,
-      interval: 30,
-      jitter_percent: 10,
-      draw: fn(n) {
-        process.send(draws, n)
-        0
-      },
-    ).next_due
-    == 90_000
-  assert process.receive(draws, 0) == Ok(4)
-  assert process.receive(draws, 0) == Ok(4)
-  assert process.receive(draws, 0) == Ok(4)
-  assert process.receive(draws, 0) == Error(Nil)
-}
-
 // PollSchedule.Jitter: for any interval 5 to 300, jitter 0 to 100 and
 // in-range draw, the next due is at least the previous plus the interval and
 // at most that plus the bound.
@@ -290,19 +218,6 @@ pub fn next_never_shortens_the_gap_property_test() -> Nil {
   assert budget.jitter_bound(interval:, jitter_percent:) == bound
   assert moved.next_due >= schedule.next_due + interval * 1000
   assert moved.next_due <= schedule.next_due + { interval + bound } * 1000
-}
-
-// PollSchedule.Jitter: an interval of 0, outside config's range, advances one
-// rung and returns rather than looping (a guard beyond the clause).
-pub fn advance_ends_for_a_zero_interval_test() -> Nil {
-  assert budget.advance(
-      schedule: due("w", 0),
-      now: 1000,
-      interval: 0,
-      jitter_percent: 0,
-      draw: fn(_) { 0 },
-    ).next_due
-    == 0
 }
 
 // PollSchedule.Jitter: the bound rounds down, so 10 percent of 19 s is 1 s.
@@ -353,20 +268,6 @@ pub fn admit_does_not_read_outstanding_test() -> Nil {
     sent: 63,
     concurrency: 64,
   )
-}
-
-// PollSchedule.NoOverlap: a poll due while the previous is outstanding is
-// skipped and the next is due on the next rung counted from the skipped due
-// time.
-pub fn a_skipped_poll_is_due_on_the_rung_after_the_skipped_one_test() -> Nil {
-  assert budget.advance(
-      schedule: Schedule(pod_name: "w", next_due: 30_000, outstanding: True),
-      now: 30_000,
-      interval: 30,
-      jitter_percent: 0,
-      draw: fn(_) { 0 },
-    )
-    == Schedule(pod_name: "w", next_due: 60_000, outstanding: True)
 }
 
 // ------------------------------------------- ListCadence, Leaving, Restart ---
@@ -1008,20 +909,6 @@ pub fn every_function_is_pure_by_repeated_application_test() -> Nil {
       jitter_percent: 10,
       random: 2,
     )
-  assert budget.advance(
-      schedule:,
-      now: 100_000,
-      interval: 30,
-      jitter_percent: 10,
-      draw: fn(_) { 1 },
-    )
-    == budget.advance(
-      schedule:,
-      now: 100_000,
-      interval: 30,
-      jitter_percent: 10,
-      draw: fn(_) { 1 },
-    )
   assert budget.admit(schedule:, now: 30_000, sent: 3, concurrency: 64)
     == budget.admit(schedule:, now: 30_000, sent: 3, concurrency: 64)
   assert budget.on_list(schedules: [schedule], listed: ["w", "x"], joining: [
@@ -1168,8 +1055,7 @@ pub fn pause_is_an_until_and_a_count_test() -> Nil {
 // Schedule. The phase tests above discharge it.
 
 // contract-signature.PollSchedule.next: (schedule, now, interval,
-// jitter_percent, random) -> Schedule. The next and advance tests above
-// discharge it.
+// jitter_percent, random) -> Schedule. The next tests above discharge it.
 
 // contract-signature.PollSchedule.admit: (schedule, now, sent, concurrency) ->
 // Boolean. The admit tests above discharge it.

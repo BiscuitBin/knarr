@@ -18,6 +18,7 @@ import gleam/string
 import gleeunit/should
 import knarr/budget.{type Purpose}
 import knarr/metrics
+import knarr/observability
 import knarr/patcher.{
   type Turn, Accepted, Attempted, Departed, Due, Listed, NothingDue, Rejected,
   Throttled, Turn, Wake,
@@ -169,6 +170,24 @@ fn done(harness harness: Harness, pod pod: String, at at: Int) -> Nil {
 fn wake(harness harness: Harness, at at: Int) -> Nil {
   put(harness.table, "now_ms", int.to_string(at))
   process.send(harness.patcher, Wake)
+}
+
+/// A gauge value no pending age in these tests reaches, written before a
+/// send so the grant that follows the message is seen to overwrite it.
+const sentinel = 99
+
+/// Sends a message and returns once the patcher has settled after it: every
+/// grant sets knarr_patch_pending_oldest_seconds, so the sentinel written
+/// before the send is gone once the message is processed. A test moves the
+/// scripted clock only after this returns, so no message sees a later clock
+/// than the one it was sent under.
+fn send_settled(harness: Harness, message: patcher.Message) -> Nil {
+  metrics.set(observability.patch_pending_oldest_seconds, [], sentinel)
+  process.send(harness.patcher, message)
+  assert await(
+    fn() { !string.contains(metrics.collect(), oldest_line(sentinel)) },
+    100,
+  )
 }
 
 fn next_turn(harness: Harness) -> Turn {
@@ -965,5 +984,96 @@ pub fn the_oldest_pending_age_is_exported_and_zero_when_empty_test() -> Nil {
   quiet(harness)
   assert await_metric(oldest_line(0))
   assert await_metric(pending_line("oldest", 0))
+  stop_root(harness.root)
+}
+
+// The wake timer: a Wake that is not the recorded timer's, as one from a
+// timer that fired before a later message re-armed, leaves no second timer
+// running. The clock is scripted and the timer real: a held pod arms the
+// timer for its two-second interval; a stale Wake and a Due that stretches
+// the interval to ten re-arm for ten; the clock is moved past the hold, and
+// nothing grants within the first timer's two seconds.
+pub fn a_stale_wake_leaves_no_second_timer_running_test() -> Nil {
+  let harness = harness()
+  due_with_interval(
+    harness:,
+    pod: "a",
+    deployment: "stale",
+    interval_s: 2,
+    at: start_ms,
+  )
+  assert next_turn(harness).pod_name == "a"
+  attempted(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    outcome: Rejected,
+    still_due: True,
+    at: start_ms,
+  )
+  send_settled(harness, Wake)
+  send_settled(
+    harness,
+    Due(
+      pod_name: "a",
+      purpose: budget.Apply,
+      deployment: "stale",
+      interval_s: 10,
+      at_ms: start_ms,
+    ),
+  )
+  put(harness.table, "now_ms", int.to_string(start_ms + 10_000))
+  assert process.receive(harness.sink, 2500) == Error(Nil)
+  stop_root(harness.root)
+}
+
+// PerPod, Leaving: a pod the LIST no longer shows is forgotten with its last
+// attempt, so one that returns under the same name is new to the patcher
+// and not held by an interval it never started, while a pod the LIST keeps
+// stays held from its last attempt.
+pub fn a_list_forgets_the_last_attempt_of_a_pod_it_no_longer_shows_test() -> Nil {
+  let harness = harness()
+  due(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    deployment: "prune",
+    at: start_ms,
+  )
+  assert next_turn(harness).pod_name == "a"
+  done(harness:, pod: "a", at: start_ms)
+  due(
+    harness:,
+    pod: "b",
+    purpose: budget.Apply,
+    deployment: "prune",
+    at: start_ms,
+  )
+  assert next_turn(harness).pod_name == "b"
+  done(harness:, pod: "b", at: start_ms)
+  send_settled(
+    harness,
+    Listed(targets: ["b"], terminating: [], deployments: ["prune"]),
+  )
+  send_settled(
+    harness,
+    Listed(targets: ["a", "b"], terminating: [], deployments: ["prune"]),
+  )
+  due(
+    harness:,
+    pod: "b",
+    purpose: budget.Apply,
+    deployment: "prune",
+    at: start_ms,
+  )
+  quiet(harness)
+  due(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    deployment: "prune",
+    at: start_ms,
+  )
+  assert next_turn(harness) == Turn(pod_name: "a", purpose: budget.Apply)
   stop_root(harness.root)
 }

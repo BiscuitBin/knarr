@@ -153,6 +153,11 @@ pub type Message {
   /// A cycle asked for from outside, as a test does: run, with nothing
   /// armed, so it starts no second chain.
   Tick
+  /// The LIST pause's own timer, armed on the process-owned subject when
+  /// a 429 lengthens the pause, for the `until` it then had: it clears the
+  /// pause gauges when the pause ends, runs no cycle and arms nothing. One
+  /// for an `until` a later 429 has lengthened past is nothing.
+  ListPauseEnded(until: Int)
   /// From the scheduler: one reading returned for a target pod.
   Polled(scheduler.Polled)
   /// From the patcher: a turn to make one patch attempt on one pod, for
@@ -204,8 +209,8 @@ type State {
     counters: List(Series),
     ready: Bool,
     /// The LIST pause a 429 on a LIST lengthens (budget PauseScope); its
-    /// `until` is set to 0 once a tick finds it over, so the gauges clear
-    /// once.
+    /// `until` is set to 0 once its timer or a tick finds it over, so the
+    /// gauges clear once.
     list_pause: budget.Pause,
     /// Deployments that left the target set and are not yet quiet; their
     /// series are held until the patcher says so (observability SeriesLife).
@@ -341,6 +346,7 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
       actor.continue(state)
     }
     Tick -> actor.continue(tick(state))
+    ListPauseEnded(until:) -> actor.continue(list_pause_ended(state, until))
     Polled(returned) -> actor.continue(polled(state, returned))
     Turn(granted) -> actor.continue(turn(state, granted))
     Quiet(deployment) -> actor.continue(quiet(state, deployment))
@@ -562,7 +568,10 @@ fn status_of(error: k8s_client.ClientError(SendError)) -> Option(Int) {
 
 /// A 429 on a LIST: the pause lengthens as budget's BackOff says, with the
 /// gauges and the line of scope list (observability Budget); the target set
-/// and the schedules stand, so neither actor hears of this cycle.
+/// and the schedules stand, so neither actor hears of this cycle. A pause
+/// that lengthened arms its end on the process-owned subject, so the gauges
+/// clear when it ends and not at the next tick; one that did not lengthen
+/// is covered by the timer already armed.
 fn list_throttled(state: State, retry_after: Option(Int)) -> State {
   let installed = state.config.installed
   let now = state.config.now()
@@ -589,12 +598,30 @@ fn list_throttled(state: State, retry_after: Option(Int)) -> State {
       observability.string_field(name: "scope", value: observability.list_scope),
     ])
   ])
+  case pause.until > state.list_pause.until {
+    True -> {
+      process.send_after(
+        state.ticks,
+        pause.until - now,
+        ListPauseEnded(until: pause.until),
+      )
+      Nil
+    }
+    False -> Nil
+  }
   State(..state, list_pause: pause)
 }
 
-/// The first tick sent after the pause's end clears the gauges once and
-/// says so; `until` is left at 0, which a later 429 cannot shorten since it
-/// is already past.
+/// The pause's timer: the pause it was armed for is over if `until` is
+/// still the pause's, else a later 429 lengthened it and armed its own.
+fn list_pause_ended(state: State, until: Int) -> State {
+  use <- bool.guard(state.list_pause.until != until, state)
+  list_pause_lifted(state)
+}
+
+/// The pause's end, on its timer or the first tick sent after it: the
+/// gauges clear once and the line says so; `until` is left at 0, which a
+/// later 429 cannot shorten since it is already past.
 fn list_pause_lifted(state: State) -> State {
   use <- bool.guard(state.list_pause.until == 0, state)
   set_list_pause_gauges(paused: 0, seconds: 0)

@@ -63,6 +63,9 @@ fn children(supervisor: Pid) -> List(Pid)
 @external(erlang, "reconciler_test_ffi", "await_new_children")
 fn await_new_children(supervisor: Pid, previous: List(Pid)) -> List(Pid)
 
+@external(erlang, "reconciler_ffi", "unix_milliseconds")
+fn unix_milliseconds() -> Int
+
 @external(erlang, "reconciler_test_ffi", "stop_root")
 fn stop_root(pid: Pid) -> Nil
 
@@ -1523,6 +1526,35 @@ pub fn a_list_429_skips_the_cycle_and_withholds_the_ticks_inside_the_pause_test(
   stop_root(set)
 }
 
+// budget PauseScope and observability Budget: knarr_paused{scope="list"} is
+// 1 while the pause lasts and returns to 0 when it ends, on the reconciler's
+// own timer, with no tick sent and no cycle run; the LIST chain is left as
+// it was. The clock is real: a 429 with Retry-After 1 pauses the LISTs for
+// one second.
+pub fn the_list_pause_ends_on_its_own_timer_test() -> Nil {
+  let scripted = harness("list-pause-timer", [pod("1")])
+  let harness =
+    Harness(
+      ..scripted,
+      config: reconciler.Config(..scripted.config, now: unix_milliseconds),
+    )
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  put(harness.table, "list_status", "429")
+  put(harness.table, "list_retry_after", "1")
+  tick(harness:, at: 1300)
+  assert next(harness).path == "/api/v1/namespaces/default/pods"
+  assert await_metric("knarr_paused{scope=\"list\"} 1\n", 1000)
+  assert await_metric("knarr_pause_seconds{scope=\"list\"} 1\n", 1000)
+  assert await_metric("knarr_paused{scope=\"list\"} 0\n", 2000)
+  assert await_metric("knarr_pause_seconds{scope=\"list\"} 0\n", 1000)
+  quiet(harness)
+  stop_root(set)
+}
+
 // budget PauseScope and ListCadence: a 429 on the replicasets LIST, the
 // second of the cycle, skips the cycle as one on the first does.
 pub fn a_list_429_on_the_replicasets_list_skips_the_cycle_test() -> Nil {
@@ -1537,8 +1569,8 @@ pub fn a_list_429_on_the_deployments_list_skips_the_cycle_test() -> Nil {
 
 /// A 429 on `resource`, the second or third LIST of a cycle: the LISTs
 /// before it are counted as succeeded and it as throttled, the target set
-/// stands, the pause is the ladder's first second, a tick inside it sends
-/// nothing, and neither actor hears of the cycle: a pod the pod LIST showed
+/// stands, the pause is the Retry-After of 120 seconds, a tick inside it
+/// sends nothing, and neither actor hears of the cycle: a pod the pod LIST showed
 /// for the first time in it is not polled until the next good cycle, while
 /// the pod already scheduled is polled at its rung.
 fn a_list_429_on(resource: String) -> Nil {
@@ -1568,6 +1600,7 @@ fn a_list_429_on(resource: String) -> Nil {
     list.map(preceding, fn(listed) { counter(series(listed.0, "succeeded")) })
   set_pods(harness.table, [steady, pod("2")])
   put(harness.table, "list_status:" <> resource, "429")
+  put(harness.table, "list_retry_after", "120")
   tick(harness:, at: 1300)
   let sent = list.take(paths, list.length(preceding) + 1)
   assert list.map(sent, fn(_) { next(harness).path })
@@ -1580,10 +1613,13 @@ fn a_list_429_on(resource: String) -> Nil {
     })
     == list.map(succeeded_before, fn(count) { count + 1 })
   let exposition = metrics.collect()
-  assert string.contains(exposition, "knarr_pause_seconds{scope=\"list\"} 1\n")
+  assert string.contains(
+    exposition,
+    "knarr_pause_seconds{scope=\"list\"} 120\n",
+  )
   assert string.contains(exposition, "knarr_targets{kind=\"pods\"} 1\n")
   // Inside the pause the tick is withheld; the schedule is the old one.
-  tick(harness:, at: 1300)
+  tick(harness:, at: 1350)
   quiet(harness)
   wake(harness:, at: 1330)
   assert await_polls(harness:, count: 2, within: 1000)
@@ -1591,12 +1627,14 @@ fn a_list_429_on(resource: String) -> Nil {
   assert list_of(harness.table, "polled")
     == ["10.0.0.1:8080/knarr/v1/status", "10.0.0.1:8080/knarr/v1/status"]
   put(harness.table, "list_status:" <> resource, "200")
-  tick(harness:, at: 1330)
+  tick(harness:, at: 1420)
   lists(harness)
   patch_of(next(harness), "2")
   quiet(harness)
+  // At 1420 pod 1's rung is due again, oldest first, then pod 2's phase.
   assert list_of(harness.table, "polled")
     == [
+      "10.0.0.1:8080/knarr/v1/status",
       "10.0.0.1:8080/knarr/v1/status",
       "10.0.0.1:8080/knarr/v1/status",
       "10.0.0.2:8080/knarr/v1/status",

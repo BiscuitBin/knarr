@@ -11,6 +11,7 @@
 
 import gleam/bool
 import gleam/dict.{type Dict}
+import gleam/erlang/atom
 import gleam/erlang/process.{type Name, type Pid, type Subject}
 import gleam/int
 import gleam/list
@@ -214,11 +215,11 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
 /// ladder, its outstanding poll and its queue place, and takes the
 /// Deployment, interval and endpoint the LIST now shows, and
 /// `budget.on_list` drops every pod the LIST no longer shows, its queued
-/// poll with it. A dropped pod's flight is released and its worker killed,
-/// so a poll of it never outlives it and a pod that rejoins has one poll
-/// running at most. A Deployment that no entry names any more, its pods
-/// gone or moved to another Deployment, loses its skipped-poll series
-/// (observability SeriesLife).
+/// poll with it. A dropped pod's flight is released and its worker
+/// stopped, so a poll of it never outlives it and a pod that rejoins has
+/// one poll running at most. A Deployment that no entry names any more,
+/// its pods gone or moved to another Deployment, loses its skipped-poll
+/// series (observability SeriesLife).
 fn join(
   state state: State,
   listed listed: List(String),
@@ -285,7 +286,7 @@ fn join(
       let #(pod_name, flight) = pair
       use <- bool.guard(dict.has_key(schedules, pod_name), flights)
       release(flight)
-      process.kill(flight.worker)
+      stop(flight.worker)
       dict.delete(flights, pod_name)
     })
   let remaining = deployments(schedules)
@@ -332,7 +333,7 @@ fn returned(
 }
 
 /// The watchdog fired for a flight still out: the worker broke
-/// `poller_http.send`'s bound and is killed, and the pod's reading is
+/// `poller_http.send`'s bound and is stopped, and the pod's reading is
 /// timed_out at the timeout (worker_contract Transport). A deadline whose
 /// worker is no longer the pod's flight, as after the poll returned, the pod
 /// left, or this process restarted, is nothing.
@@ -344,7 +345,7 @@ fn overdue(
   case dict.get(state.flights, pod_name) {
     Ok(flight) if flight.worker == worker -> {
       release(flight)
-      process.kill(worker)
+      stop(worker)
       State(..state, flights: dict.delete(state.flights, pod_name))
       |> timed_out(pod_name)
     }
@@ -389,6 +390,15 @@ fn release(flight: Flight) -> Nil {
   process.demonitor_process(flight.monitor)
 }
 
+/// Stops a worker with the exit its supervisor would send, `shutdown`,
+/// which the worker does not trap and so dies of; a temporary child that
+/// exits with `shutdown` is a routine stop to the factory, where a `kill`
+/// is a crash it reports as an error (child_terminated) on every drop or
+/// deadline.
+fn stop(worker: Pid) -> Nil {
+  process.send_abnormal_exit(worker, atom.create("shutdown"))
+}
+
 /// One reading delivered: observed on the duration histogram, handed to the
 /// sink, and the pod no longer outstanding, with every rung that passed
 /// while its poll was out skipped (budget Jitter, NoOverlap).
@@ -426,12 +436,12 @@ fn deliver(
 
 /// After every message: the due polls join the queue, the queue is served
 /// under the bound, the gauge is set and the timer re-armed for the next
-/// due time.
+/// due time, or within a second when the factory refused a worker.
 fn settle(state: State) -> actor.Next(State, Message) {
   let now = state.config.now()
-  let state = state |> mark(now) |> dispatch(now)
+  let #(state, refused) = state |> mark(now) |> dispatch(now)
   metrics.set(observability.poll_queue_depth, [], list.length(queue(state)))
-  actor.continue(State(..state, wake: rearm(state, now)))
+  actor.continue(State(..state, wake: rearm(state:, now:, refused:)))
 }
 
 /// An entry whose rung has come joins the queue, served for that rung, with
@@ -461,10 +471,11 @@ fn mark(state: State, now: Int) -> State {
 
 /// The queue served oldest rung first while budget admits the rung each
 /// poll is for (Concurrency). A worker the factory refused leaves its poll
-/// queued for the next settle.
-fn dispatch(state: State, now: Int) -> State {
+/// queued, and the refusal is reported so the next settle is within a
+/// second rather than at the next message.
+fn dispatch(state: State, now: Int) -> #(State, Bool) {
   case queue(state) {
-    [] -> state
+    [] -> #(state, False)
     [entry, ..] -> {
       let admitted =
         budget.admit(
@@ -473,10 +484,10 @@ fn dispatch(state: State, now: Int) -> State {
           sent: dict.size(state.flights),
           concurrency: state.config.concurrency,
         )
-      use <- bool.guard(!admitted, state)
+      use <- bool.guard(!admitted, #(state, False))
       case send(state, entry) {
         Some(state) -> dispatch(state, now)
-        None -> state
+        None -> #(state, True)
       }
     }
   }
@@ -561,11 +572,17 @@ fn by_served(a: Entry, b: Entry) -> Order {
 
 /// The one timer, re-armed for the earliest next rung of any entry: the
 /// rung a waiting pod is polled on, or the one a queued or in-flight pod
-/// skips. The timer last armed is always cancelled first, fired or not,
-/// since cancelling a spent timer is harmless and the recorded timer is the
-/// only one this process may have running; a `Wake` arriving from an
-/// earlier timer therefore never leaves a second chain behind.
-fn rearm(state: State, now: Int) -> Option(process.Timer) {
+/// skips; or one second from now, if sooner, after the factory refused a
+/// worker, so the queued poll is tried again without waiting for an
+/// unrelated message. The timer last armed is always cancelled first, fired
+/// or not, since cancelling a spent timer is harmless and the recorded
+/// timer is the only one this process may have running; a `Wake` arriving
+/// from an earlier timer therefore never leaves a second chain behind.
+fn rearm(
+  state state: State,
+  now now: Int,
+  refused refused: Bool,
+) -> Option(process.Timer) {
   case state.wake {
     Some(timer) -> {
       process.cancel_timer(timer)
@@ -573,10 +590,15 @@ fn rearm(state: State, now: Int) -> Option(process.Timer) {
     }
     None -> Nil
   }
+  let retry = case refused {
+    True -> [now + 1000]
+    False -> []
+  }
   let earliest =
     state.schedules
     |> dict.values
     |> list.map(fn(entry) { entry.schedule.next_due })
+    |> list.append(retry)
     |> list.reduce(int.min)
   case earliest {
     Ok(due) -> Some(process.send_after(state.self, int.max(0, due - now), Wake))
@@ -605,10 +627,9 @@ fn next_rung(entry: Entry, config: Config) -> Schedule {
 
 /// Every rung at or before now skipped, each counted on
 /// knarr_polls_skipped_total, so the next poll is due on the first rung
-/// after now (budget Jitter, NoOverlap). `budget.advance` climbs the same
-/// ladder but always moves one rung and counts nothing, so this loop is the
-/// scheduler's own. An interval outside config's range moves one rung at
-/// most, so the loop ends.
+/// after now (budget Jitter, NoOverlap): the loop over `budget.next` the
+/// Jitter clause leaves to the caller. An interval outside config's range
+/// moves one rung at most, so the loop ends.
 fn skip_passed(
   entry entry: Entry,
   config config: Config,

@@ -106,6 +106,10 @@ contract PollSchedule {
         -- is a timed_out outcome. The timeout is install-wide, valid from 1
         -- second to below config.poll_interval, and no Deployment overrides
         -- it, so Interval's floor keeps it below every effective interval.
+        -- The scheduler abandons a poll whose worker has crashed or has not
+        -- returned within twice config.poll_timeout plus one second and
+        -- hands back a timed_out reading, observed at config.poll_timeout
+        -- on knarr_poll_duration_seconds.
     @invariant Phase
         -- A pod joining the schedule, at startup or when a LIST first shows
         -- it, is first due at now plus a random delay of 0 to one interval

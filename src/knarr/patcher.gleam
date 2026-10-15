@@ -19,6 +19,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order.{type Order, Eq}
 import gleam/otp/actor
+import gleam/result
 import gleam/set.{type Set}
 import gleam/string
 import knarr/budget.{
@@ -91,8 +92,8 @@ pub type Message {
   Departed(deployment: String)
   /// The pause, refill or interval timer, or a test moving the clock. The
   /// timer is armed on this process's name, so one that fires after a
-  /// restart reaches the replacement, which settles again: a `Wake` is
-  /// idempotent, whichever timer sent it.
+  /// restart reaches the replacement, which grants again: any `Wake` is a
+  /// grant and nothing more, whichever timer sent it.
   Wake
   /// From the reconciler: its answer to a turn, after one attempt on the
   /// pod, which spends one token. `still_due` keeps the entry with its
@@ -126,7 +127,8 @@ type State {
     /// By pod name and purpose. The entry in turn stays here until the
     /// reconciler answers, or a LIST discards it.
     pending: Dict(#(String, Purpose), Entry),
-    /// By pod name, across purposes.
+    /// By pod name, across purposes, for the pods the last LIST showed or
+    /// that still have an entry; a LIST forgets the rest.
     last_attempt: Dict(String, Int),
     /// The turn granted and not yet answered, carrying its Deployment so a
     /// departure waits for it even after a LIST discarded its entry.
@@ -135,6 +137,8 @@ type State {
     departing: List(String),
     /// Deployments with a knarr_patches_pending series, removed at quiet.
     series: Set(String),
+    /// The one timer last armed, cancelled before every re-arm so no second
+    /// chain of wakes starts, whichever `Wake` is being handled.
     wake: Option(process.Timer),
   )
 }
@@ -174,7 +178,7 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
     Listed(targets:, terminating:, deployments:) ->
       listed(state:, targets:, terminating:, deployments:)
     Departed(deployment) -> departed(state, deployment)
-    Wake -> State(..state, wake: None)
+    Wake -> state
     Attempted(pod_name:, purpose:, outcome:, still_due:, at_ms:) ->
       attempted(state:, pod_name:, purpose:, outcome:, still_due:, at_ms:)
     NothingDue(pod_name:, purpose:) -> nothing_due(state:, pod_name:, purpose:)
@@ -218,8 +222,12 @@ fn due(
 
 /// The apply of a pod the LIST no longer shows, or shows terminating, is
 /// discarded, its turn in flight included; a cleanup is kept (budget
-/// Pending, Leaving). A Deployment the LIST shows in the target set is no
-/// longer departing (observability SeriesLife).
+/// Pending, Leaving). The last attempt of a pod the LIST no longer shows
+/// and that has no entry left is forgotten with it, so a pod that returns
+/// under the same name is new to the patcher (PerPod: the interval is held
+/// from a pod's last attempt, and this is not that pod). A Deployment the
+/// LIST shows in the target set is no longer departing (observability
+/// SeriesLife).
 fn listed(
   state state: State,
   targets targets: List(String),
@@ -236,11 +244,17 @@ fn listed(
           set.contains(targets, key.0) && !set.contains(terminating, key.0)
       }
     })
+  let last_attempt =
+    dict.filter(state.last_attempt, fn(pod_name, _) {
+      set.contains(targets, pod_name)
+      || set.contains(terminating, pod_name)
+      || list.any(dict.keys(pending), fn(key) { key.0 == pod_name })
+    })
   let departing =
     list.filter(state.departing, fn(departed) {
       !list.contains(deployments, departed)
     })
-  State(..state, pending:, departing:)
+  State(..state, pending:, last_attempt:, departing:)
 }
 
 fn departed(state: State, deployment: String) -> State {
@@ -482,7 +496,7 @@ fn gauges(state: State, now: Int) -> State {
     metrics.set(
       observability.patches_pending,
       [deployment],
-      dict.get(counts, deployment) |> result_or_zero,
+      dict.get(counts, deployment) |> result.unwrap(0),
     )
   })
   let oldest =
@@ -494,13 +508,6 @@ fn gauges(state: State, now: Int) -> State {
     |> option.unwrap(0)
   metrics.set(observability.patch_pending_oldest_seconds, [], oldest)
   State(..state, series:)
-}
-
-fn result_or_zero(count: Result(Int, Nil)) -> Int {
-  case count {
-    Ok(count) -> count
-    Error(Nil) -> 0
-  }
 }
 
 /// A departed Deployment is quiet once no entry of its pods is pending and
@@ -528,7 +535,11 @@ fn settle_departing(state: State) -> State {
 /// a message: the pause's end while a pause lasts, whatever is pending, so
 /// the pause gauges clear when it ends (PauseScope); else, with something
 /// pending and no turn out, the next whole refill second when the bucket is
-/// empty, else the earliest interval end of a held pod.
+/// empty, else the earliest interval end of a held pod. The timer last
+/// armed is always cancelled first, fired or not, since cancelling a spent
+/// timer is harmless and the recorded timer is the only one this process
+/// may have running; a `Wake` arriving from an earlier timer therefore
+/// never leaves a second chain behind.
 fn rearm(state: State, now: Int) -> Option(process.Timer) {
   case state.wake {
     Some(timer) -> {

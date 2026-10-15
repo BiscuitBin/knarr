@@ -407,10 +407,11 @@ contract Loop {
         -- the latest reading (Pending) and one patch attempt is made
         -- through k8s_client's patch_pod, whatever its outcome (Sequence;
         -- budget PerPod); the turn is answered exactly once, with the
-        -- attempt's status and Retry-After and whether the pod is still
-        -- due, or with nothing due, which also answers a turn for a
-        -- terminating pod, one without a reading or one the LIST no longer
-        -- shows, and every cleanup turn until lifecycle's Cleanup is built.
+        -- attempt's outcome, accepted, throttled with its Retry-After, or
+        -- rejected, and whether the pod is still due, or with nothing due,
+        -- which also answers a turn for a terminating pod, one without a
+        -- reading or one the LIST no longer shows, and every cleanup turn
+        -- until lifecycle's Cleanup is built.
         -- A 422 ends the entry: nothing of the pod is handed over again
         -- until the next LIST refreshes the view (Rejected422); a 429
         -- stays due and waits out the pause, and any other refusal stays
