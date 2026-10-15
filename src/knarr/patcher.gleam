@@ -89,28 +89,29 @@ pub type Message {
   /// From the reconciler after every successful discovery cycle: every pod
   /// the unselected pod LIST shows, the target pods among them, which of
   /// the targets are terminating, which pods are listed under another uid
-  /// than the cycle before, the Deployments in the target set, and every
-  /// cleanup the cycle makes due. The apply of a target not listed,
-  /// terminating or replaced is discarded; a cleanup is kept only while
-  /// its pod is cleaning and not replaced; the last attempt of every listed
-  /// pod not replaced is kept and every other forgotten. Then each cleaning
-  /// entry is pending as a cleanup `Due` would make it, a replaced pod's
-  /// afresh. A turn already out is answered as any other is. A listed
-  /// Deployment is no longer departing, so one that rejoins before it is
-  /// quiet is never quiet. The one message carries the whole cycle, so
+  /// than the cycle before, every cleanup the cycle makes due, and the
+  /// Deployments departing: out of the target set with nothing due in the
+  /// cycle's Views (lifecycle Cleanup Done). The apply of a target not
+  /// listed, terminating or replaced is discarded; a cleanup is kept only
+  /// while its pod is cleaning and not replaced; the last attempt of every
+  /// listed pod not replaced is kept and every other forgotten. Then each
+  /// cleaning entry is pending as a cleanup `Due` would make it, a replaced
+  /// pod's afresh, and the departing Deployments are exactly the cycle's,
+  /// each answered on `quiet` once nothing of its pods is pending or in
+  /// turn. A Deployment the cycle no longer names, one that rejoined the
+  /// target set or that a View made due again, is no longer departing, so
+  /// it is not quiet and keeps its pending series. A turn already out is
+  /// answered as any other is. The one message carries the whole cycle, so
   /// nothing is granted and no Deployment is quiet from a state between the
-  /// prune and the cycle's cleanups.
+  /// prune, the cycle's cleanups and its departures.
   Listed(
     listed: List(String),
     targets: List(String),
     terminating: List(String),
     replaced: List(String),
-    deployments: List(String),
     cleaning: List(Cleaning),
+    departing: List(String),
   )
-  /// From the reconciler: a Deployment left the target set. Answered on
-  /// `quiet` once nothing of its pods is pending or in turn.
-  Departed(deployment: String)
   /// The pause, refill or interval timer, or a test moving the clock. The
   /// timer is armed on this process's name, so one that fires after a
   /// restart reaches the replacement, which grants again: any `Wake` is a
@@ -155,7 +156,7 @@ type State {
     /// The turn granted and not yet answered, carrying its Deployment so a
     /// departure waits for it even after a LIST discarded its entry.
     in_turn: Option(Entry),
-    /// Deployments departed and not yet quiet.
+    /// The Deployments the last `Listed` named departing and not yet quiet.
     departing: List(String),
     /// Deployments with a knarr_patches_pending series, removed at quiet.
     series: Set(String),
@@ -202,8 +203,8 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
       targets:,
       terminating:,
       replaced:,
-      deployments:,
       cleaning:,
+      departing:,
     ) ->
       listed(
         state:,
@@ -211,10 +212,9 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
         targets:,
         terminating:,
         replaced:,
-        deployments:,
         cleaning:,
+        departing:,
       )
-    Departed(deployment) -> departed(state, deployment)
     Wake -> state
     Attempted(pod_name:, purpose:, outcome:, still_due:, at_ms:) ->
       attempted(state:, pod_name:, purpose:, outcome:, still_due:, at_ms:)
@@ -273,23 +273,26 @@ fn due(
 /// patcher. A pod the LIST shows under another uid is that case within one
 /// LIST: its apply and cleanup are discarded with their due_since and its
 /// last attempt forgotten, while a turn already out is answered as any
-/// other is (PerPod, Pending). A Deployment the LIST shows in the target set
-/// is no longer departing (observability SeriesLife). Then every cleanup
-/// the cycle makes due is pending as `due` makes it: a kept entry keeps
-/// its due_since and takes the interval and Deployment the cycle derived,
-/// and a replaced pod's, pruned just before, starts at the cycle's clock.
-/// Both happen in this one message, before the grant that follows it, so
-/// no turn is granted on an interval the cycle has replaced and no
-/// departed Deployment is quiet for want of a cleanup the cycle makes due
-/// (lifecycle Cleanup Retry, Done; budget PerPod).
+/// other is (PerPod, Pending). Then every cleanup the cycle makes due is
+/// pending as `due` makes it: a kept entry keeps its due_since and takes
+/// the interval and Deployment the cycle derived, and a replaced pod's,
+/// pruned just before, starts at the cycle's clock. Last, the departing
+/// Deployments become exactly the cycle's (observability SeriesLife,
+/// lifecycle Cleanup Done), so one the cycle withdrew, back in the target
+/// set or due again, stops departing in the same step that registers its
+/// cleanup. All of it happens in this one message, before the grant and
+/// the settling that follow it, so no turn is granted on an interval the
+/// cycle has replaced, no departed Deployment is quiet for want of a
+/// cleanup the cycle makes due, and none the cycle withdrew is quiet at
+/// all (lifecycle Cleanup Retry, Done; budget PerPod).
 fn listed(
   state state: State,
   listed listed: List(String),
   targets targets: List(String),
   terminating terminating: List(String),
   replaced replaced: List(String),
-  deployments deployments: List(String),
   cleaning cleaning: List(Cleaning),
+  departing departing: List(String),
 ) -> State {
   let listed = set.from_list(listed)
   let targets = set.from_list(targets)
@@ -310,10 +313,6 @@ fn listed(
     dict.filter(state.last_attempt, fn(pod_name, _) {
       set.contains(listed, pod_name) && !set.contains(replaced, pod_name)
     })
-  let departing =
-    list.filter(state.departing, fn(departed) {
-      !list.contains(deployments, departed)
-    })
   let state = State(..state, pending:, last_attempt:, departing:)
   list.fold(cleaning, state, fn(state, cleanup) {
     due(
@@ -325,11 +324,6 @@ fn listed(
       at_ms: cleanup.at_ms,
     )
   })
-}
-
-fn departed(state: State, deployment: String) -> State {
-  use <- bool.guard(list.contains(state.departing, deployment), state)
-  State(..state, departing: [deployment, ..state.departing])
 }
 
 /// The turn answered: the attempt spends one token of the bucket refilled
@@ -580,9 +574,13 @@ fn gauges(state: State, now: Int) -> State {
   State(..state, series:)
 }
 
-/// A departed Deployment is quiet once no entry of its pods is pending and
-/// none is in turn: its pending series leaves and the sink hears its name
-/// (observability SeriesLife).
+/// A departing Deployment is quiet once no entry of its pods is pending and
+/// none is in turn: it stops departing, its pending series leaves and the
+/// sink hears its name (observability SeriesLife). Only a Deployment the
+/// last `Listed` named departing is settled, so one a later cycle withdrew
+/// keeps its pending series; a quiet sent before the withdrawing `Listed`
+/// arrived is answered stale by the reconciler, and the series is set
+/// again at the first grant that finds anything of it pending.
 fn settle_departing(state: State) -> State {
   let busy = fn(deployment: String) {
     list.any(dict.values(state.pending), fn(entry) {

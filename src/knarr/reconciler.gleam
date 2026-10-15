@@ -17,9 +17,9 @@
 //// every removal the pod's lifecycle View makes due on that view (lifecycle
 //// Cleanup Marker); the turn is answered with the attempt's outcome or with
 //// nothing due, exactly once. A 429 on a LIST
-//// pauses the cycles (budget PauseScope); a Deployment that left the target
-//// set is retired once the patcher says it is quiet (observability
-//// SeriesLife). It raises the Events and lines observability names, the
+//// pauses the cycles (budget PauseScope); a Deployment out of the target
+//// set is retired once a cycle finds its cleanup done and the patcher says
+//// it is quiet (observability SeriesLife, lifecycle Cleanup Done). It raises the Events and lines observability names, the
 //// rejections among them, from a turn's result or from the LIST that
 //// classifies a 422 (ownership Rejected), and latches readiness.
 ////
@@ -170,7 +170,8 @@ pub type Message {
   /// outcome or with nothing due.
   Turn(patcher.Turn)
   /// From the patcher: nothing of a departed Deployment's pods is pending
-  /// or in turn, so its series may go (observability SeriesLife).
+  /// or in turn, the outstanding half of lifecycle Cleanup Done, so its
+  /// series may go if it is still departing (observability SeriesLife).
   Quiet(deployment: String)
 }
 
@@ -239,8 +240,11 @@ type State {
     /// `until` is set to 0 once its timer or a tick finds it over, so the
     /// gauges clear once.
     list_pause: budget.Pause,
-    /// Deployments that left the target set and are not yet quiet; their
-    /// series are held until the patcher says so (observability SeriesLife).
+    /// The Deployments the last cycle in which every LIST succeeded found
+    /// out of the target set with their cleanup done from its Views, named
+    /// in its `Listed` to the patcher and not yet retired; each retires when
+    /// the patcher says it is quiet, unless a later cycle has dropped it, in
+    /// the patcher too (observability SeriesLife, lifecycle Cleanup Done).
     departing: List(String),
   )
 }
@@ -753,7 +757,26 @@ fn discovered(
       }
     })
   let current = gauges(targets:, pods: memories, others:)
-  let #(seen, cycle) = announce(seen: state.seen, pods: memories, cycle:)
+  // A pod the LIST shows under another uid is a new pod, begun as a restart
+  // begins it, so the states its predecessor was in are not its own and
+  // are announced again if it is in them (observability Cadence OnEntry,
+  // Restart; reconcile Cycle).
+  let replaced =
+    list.filter_map(listed_pods, fn(item) {
+      let #(_, memory, _) = item
+      case dict.get(state.pods, memory.pod.name) {
+        Ok(before) if before.pod.uid != memory.pod.uid -> Ok(memory.pod.name)
+        _ -> Error(Nil)
+      }
+    })
+  let #(seen, cycle) =
+    announce(
+      seen: list.filter(state.seen, fn(entry) {
+        !list.contains(replaced, entry.pod_name)
+      }),
+      pods: memories,
+      cycle:,
+    )
   // The schedule learns joining and leaving from the LIST alone: every
   // target by name, and a joiner for each with a pod IP (budget Leaving,
   // reconcile NoPodIp). The scheduler keeps the ladder of a pod it already
@@ -783,25 +806,18 @@ fn discovered(
   // listed, or listed terminating, is discarded (budget Pending, Leaving),
   // the apply, the cleanup and the last attempt of a pod listed under
   // another uid are forgotten (budget PerPod, Pending), the last attempt of
-  // every pod the LIST shows is kept, and a listed Deployment is not
-  // departing; then every View with a Removal is a pending cleanup, a kept
-  // one refreshed with the interval this cycle derives. One message, so the
-  // patcher grants nothing and settles no departure between the prune and
-  // the cleanups, and before any departure, so a Deployment a cleanup holds
-  // is busy when it departs. Every cleanup of this cycle carries the
+  // every pod the LIST shows is kept; then every View with a Removal is a
+  // pending cleanup, a kept one refreshed with the interval this cycle
+  // derives, and the departing Deployments are this cycle's. One message,
+  // so the patcher grants nothing and settles no departure between the
+  // prune, the cleanups and the departures: a Deployment a cleanup holds is
+  // busy when it departs, and one this cycle withdrew stops departing as
+  // its cleanup is registered. Every cleanup of this cycle carries the
   // cycle's clock, so the first cycle after a start derives every due
   // cleanup at once with one due_since (lifecycle Cleanup Order, Retry,
   // Restart NoStartupStep; budget Restart); a repeat keeps its own. The
   // interval is the target's, config.patch_interval for a pod that is not
   // one (budget PerPod).
-  let replaced =
-    list.filter_map(listed_pods, fn(item) {
-      let #(_, memory, _) = item
-      case dict.get(state.pods, memory.pod.name) {
-        Ok(before) if before.pod.uid != memory.pod.uid -> Ok(memory.pod.name)
-        _ -> Error(Nil)
-      }
-    })
   let cleaning =
     list.filter_map(listed_pods, fn(item) {
       let #(target, _, view) = item
@@ -819,6 +835,23 @@ fn discovered(
     })
   let deployment_names =
     list.map(targets, fn(target) { target.deployment_name }) |> list.unique
+  // A Deployment's series retire once it is not in the target set, its
+  // cleanup is done and the patcher has nothing of its pods pending or in
+  // turn (observability SeriesLife, lifecycle Cleanup Done). The series are
+  // labelled by name, so one recreated under the same name between two
+  // LISTs keeps them. This cycle decides the Views' half and names the
+  // Deployments departing in its Listed; the patcher, which keeps the
+  // pending set, decides the rest and answers quiet (`quiet`).
+  let views = list.map(listed_pods, fn(item) { item.2 })
+  let candidates =
+    retirable(
+      series: list.flatten([state.gauges, current, cycle.counters]),
+      targets: deployment_names,
+    )
+  let departing =
+    list.filter(candidates, fn(deployment) {
+      lifecycle.done(views:, outstanding: [], deployment:)
+    })
   notify(
     config.names.patcher,
     patcher.Listed(
@@ -831,8 +864,8 @@ fn discovered(
         }
       }),
       replaced:,
-      deployments: deployment_names,
       cleaning:,
+      departing:,
     ),
   )
   let memories =
@@ -840,35 +873,16 @@ fn discovered(
       let #(_, memory, _) = item
       dict.insert(acc, memory.pod.name, memory)
     })
-  // A Deployment has left when no current target carries its name: the
-  // series are labelled by name, so one recreated under the same name
-  // between two LISTs keeps them (observability SeriesLife). One that left
-  // is departing until the patcher says it is quiet; one that rejoined
-  // before that is not.
-  let gone =
-    list.filter_map(state.targets, fn(previous) {
-      case list.contains(deployment_names, previous.deployment_name) {
-        True -> Error(Nil)
-        False -> Ok(previous.deployment_name)
-      }
+  // The gauge series of a Deployment not in the target set are held at
+  // their last values until it retires, done or not; every other series of
+  // the last cycle that this one did not set leaves the exposition, and so
+  // does a held name's knarr_annotations, which the Views rebuild each cycle
+  // (observability Standing). A held series this cycle set again is kept
+  // once.
+  let #(held, previous) =
+    list.partition(state.gauges, fn(series) {
+      series.name != observability.annotations && labelled(series, candidates)
     })
-    |> list.unique
-  list.each(gone, fn(deployment) {
-    notify(config.names.patcher, patcher.Departed(deployment:))
-  })
-  let departing =
-    state.departing
-    |> list.filter(fn(deployment) {
-      !list.contains(deployment_names, deployment)
-    })
-    |> list.append(gone)
-    |> list.unique
-  // The gauge series of a departing Deployment are held, not rebuilt away,
-  // until it is quiet; every other series of the last cycle that this one
-  // did not set leaves the exposition. A held series this cycle set again,
-  // as knarr_annotations for a departing Deployment's pods that are no
-  // longer targets, is kept once.
-  let #(held, previous) = list.partition(state.gauges, labelled(_, departing))
   let held = list.filter(held, fn(series) { !list.contains(current, series) })
   let gauges = list.append(rebuild(previous, current), held)
   State(
@@ -959,6 +973,31 @@ fn cleanup_view(
       annotations: pod.annotations,
     ),
   )
+}
+
+/// The Deployments whose series may retire: every deployment label a
+/// series carries, less the Deployments in the target set (observability
+/// SeriesLife). A name only a View carries needs no separate place: a View
+/// adds to done only through a non-empty due, which only an annotation
+/// standing owned makes, and that annotation counts on knarr_annotations
+/// under the View's deployment (Standing), so its name is on a series of
+/// this cycle; a name with no series has nothing to retire and is not sent
+/// to the patcher again after it retired.
+fn retirable(
+  series series: List(Series),
+  targets targets: List(String),
+) -> List(String) {
+  series
+  |> list.filter_map(fn(one) {
+    list.find_map(one.labels, fn(label) {
+      case label.name == "deployment" {
+        True -> Ok(label.value)
+        False -> Error(Nil)
+      }
+    })
+  })
+  |> list.unique
+  |> list.filter(fn(deployment) { !list.contains(targets, deployment) })
 }
 
 /// Whether a series is labelled with one of the Deployments given.
@@ -1656,10 +1695,15 @@ fn outcome(attempt: Attempt) -> patcher.Outcome {
 }
 
 /// The patcher has nothing of a departed Deployment's pods pending or in
-/// turn: its series go now (observability SeriesLife). A quiet for a
-/// Deployment that is not departing, one that rejoined the target set
-/// included, since `discovered` drops it from `departing`, changes nothing;
-/// the target check is a second guard on the same fact.
+/// turn, and the last cycle found it out of the target set with nothing due
+/// in its Views: its cleanup is done and its series go now, counters
+/// included (observability SeriesLife, lifecycle Cleanup Done). The Views'
+/// half is read at cycles only, so an opt-out's series last until the first
+/// LIST after its cleanup is accepted. A quiet for a Deployment that is not
+/// departing changes nothing: one that rejoined the target set, or that a
+/// later cycle found due again, is dropped from `departing` by `discovered`,
+/// so a quiet answering its earlier departure is stale. The target check is
+/// a second guard on the same fact.
 fn quiet(state: State, deployment: String) -> State {
   use <- bool.guard(!list.contains(state.departing, deployment), state)
   let departing = list.filter(state.departing, fn(d) { d != deployment })
@@ -2018,8 +2062,8 @@ fn raise(
 /// the Events and lines for each (reconcile Absent, NotReadyWithCost;
 /// observability Cadence OnEntry), from each pod's newest view and latest
 /// reading. A terminating pod is in no state, and a pod with no reading yet
-/// is in none either: absent takes readings, and NotReady with cost a known
-/// one.
+/// is in foreign alone: absent takes readings, and NotReady with cost a
+/// known one.
 fn announce(
   seen seen: List(Entry),
   pods pods: List(#(Target, Memory)),
@@ -2042,15 +2086,18 @@ fn announce(
 /// The announced states one pod is in, from its newest view and latest
 /// reading: contract_absent from reconcile's state, not_ready_with_cost and
 /// foreign from the view (observability OnEntry; ownership Adoption). A
-/// terminating pod is in no state, and a pod with no reading yet is in none
-/// either: absent takes readings, NotReady with cost a known one, and a
-/// foreign annotation is announced with the pod's first reading, as the
-/// other two are. The rejection runs are not here: they are held per pod
-/// and announced by `rejection` as they start.
+/// terminating pod is in no state. A pod with no reading yet is in neither
+/// reading state, since absent takes readings and NotReady with cost a known
+/// one, but foreign is read from the view alone, so a target with no pod IP,
+/// never polled, is in it from the LIST that shows it, and gaining or losing
+/// the IP neither enters nor leaves it. The rejection runs are not here:
+/// they are held per pod and announced by `rejection` as they start.
 fn entries(target target: Target, memory memory: Memory) -> List(Entry) {
   let pod = memory.pod
-  case pod.deletion_timestamp, memory.latest {
-    None, Some(_) -> {
+  use <- bool.guard(option.is_some(pod.deletion_timestamp), [])
+  let views = view(target:, pod:, marker: ownership.read(pod.annotations))
+  let read = case memory.latest {
+    Some(_) -> {
       let absent = case memory.state.kind {
         reconcile.Absent -> [
           Entry(
@@ -2061,7 +2108,6 @@ fn entries(target target: Target, memory memory: Memory) -> List(Entry) {
         ]
         _ -> []
       }
-      let views = view(target:, pod:, marker: ownership.read(pod.annotations))
       let not_ready = case not_ready_with_cost(pod:, memory:, views:) {
         True -> [
           Entry(
@@ -2072,10 +2118,11 @@ fn entries(target target: Target, memory memory: Memory) -> List(Entry) {
         ]
         False -> []
       }
-      list.flatten([absent, not_ready, foreign_entries(pod:, views:)])
+      list.append(absent, not_ready)
     }
-    _, _ -> []
+    None -> []
   }
+  list.append(read, foreign_entries(pod:, views:))
 }
 
 /// One foreign entry per considered owned annotation standing foreign on
