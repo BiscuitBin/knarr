@@ -132,8 +132,9 @@ pub const pods_contract_absent = "knarr_pods_contract_absent"
 pub const yields_total = "knarr_yields_total"
 
 /// Counts every rejection when it is known, by deployment and purpose
-/// (Catalogue Patches). `knarr_patches_total` is declared by the patcher of
-/// ticket 46, not here.
+/// (Catalogue Patches); `knarr_patches_total` counts every attempt at
+/// response time, a 400 or 403 as rejected and a 422 as
+/// precondition_failed.
 pub const patch_rejections_total = "knarr_patch_rejections_total"
 
 pub const last_discovery_timestamp_seconds =
@@ -146,6 +147,29 @@ pub const events_total = "knarr_events_total"
 pub const targets = "knarr_targets"
 
 pub const build_info = "knarr_build_info"
+
+pub const patches_total = "knarr_patches_total"
+
+pub const lists_total = "knarr_lists_total"
+
+pub const polls_skipped_total = "knarr_polls_skipped_total"
+
+pub const patches_pending = "knarr_patches_pending"
+
+pub const patch_pending_oldest_seconds = "knarr_patch_pending_oldest_seconds"
+
+pub const paused = "knarr_paused"
+
+pub const pause_seconds = "knarr_pause_seconds"
+
+pub const poll_queue_depth = "knarr_poll_queue_depth"
+
+pub const poll_duration_seconds = "knarr_poll_duration_seconds"
+
+/// The scope label values of the two pauses (Budget).
+pub const patch_scope = "patch"
+
+pub const list_scope = "list"
 
 /// The tier label of an applied pod-deletion-cost value: "drained" for -1,
 /// else cost_mapping's tier under `thresholds` in decimal, so "0" for a pod

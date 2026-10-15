@@ -93,8 +93,10 @@ pub type Target {
 
 /// Every install-wide value the application reads at start, checked
 /// (Installed). `max_body_bytes` is worker_contract's, `unknown_polls` and
-/// `absent_after` reconcile's, `list_interval` and `poll_concurrency`
-/// budget's, `log_level` observability's; the rest are in `defaults`.
+/// `absent_after` reconcile's, `list_interval`, `poll_concurrency`,
+/// `poll_jitter_percent`, `patch_rate_per_second`, `patch_burst`,
+/// `backoff_initial` and `backoff_cap` budget's, `log_level`
+/// observability's; the rest are in `defaults`.
 pub type Installed {
   Installed(
     defaults: Defaults,
@@ -103,6 +105,11 @@ pub type Installed {
     absent_after: Int,
     list_interval: Int,
     poll_concurrency: Int,
+    poll_jitter_percent: Int,
+    patch_rate_per_second: Int,
+    patch_burst: Int,
+    backoff_initial: Int,
+    backoff_cap: Int,
     log_level: Level,
   )
 }
@@ -234,8 +241,10 @@ fn controlled_by(
 /// threshold_margin 0 or more and below the first threshold; unknown_polls 1
 /// to 100; absent_after 30 to 3600; poll_interval 5 to 300; poll_timeout 1
 /// to poll_interval less one; patch_interval 0 to 3600; list_interval 10 to
-/// 600; poll_concurrency 1 to 1024. The first key refused, in that order,
-/// is the error (Installed).
+/// 600; poll_concurrency 1 to 1024; poll_jitter_percent 0 to 100;
+/// patch_rate_per_second 1 to 100; patch_burst 1 to 200; backoff_cap 1 to
+/// 600; backoff_initial 1 to backoff_cap, which is read first. The first key
+/// refused, in that order, is the error (Installed).
 pub fn installed(
   values: List(#(String, Dynamic)),
 ) -> Result(Installed, InstalledError) {
@@ -300,6 +309,15 @@ pub fn installed(
   use patch_interval <- result.try(int_in("patch_interval", 0, 3600))
   use list_interval <- result.try(int_in("list_interval", 10, 600))
   use poll_concurrency <- result.try(int_in("poll_concurrency", 1, 1024))
+  use poll_jitter_percent <- result.try(int_in("poll_jitter_percent", 0, 100))
+  use patch_rate_per_second <- result.try(int_in(
+    "patch_rate_per_second",
+    1,
+    100,
+  ))
+  use patch_burst <- result.try(int_in("patch_burst", 1, 200))
+  use backoff_cap <- result.try(int_in("backoff_cap", 1, 600))
+  use backoff_initial <- result.try(int_in("backoff_initial", 1, backoff_cap))
   use log_level <- result.try(
     installed_value(values, "log_level", decode.string, NotAString, fn(text) {
       option.to_result(observability.parse_level(text), NotALevel)
@@ -321,6 +339,11 @@ pub fn installed(
     absent_after:,
     list_interval:,
     poll_concurrency:,
+    poll_jitter_percent:,
+    patch_rate_per_second:,
+    patch_burst:,
+    backoff_initial:,
+    backoff_cap:,
     log_level:,
   ))
 }

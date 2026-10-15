@@ -1,6 +1,6 @@
 -module(application_ffi).
 -behaviour(application).
--export([start/2, stop/1, await_shutdown/0]).
+-export([start/2, stop/1, await_shutdown/0, values/0]).
 
 %% The install-wide values and their defaults (config Installed): each is
 %% OTP application configuration, `-knarr <key> <value>` in ERL_FLAGS, read
@@ -38,6 +38,11 @@ values() ->
     {<<"patch_interval">>, application:get_env(knarr, patch_interval, 60)},
     {<<"list_interval">>, application:get_env(knarr, list_interval, 60)},
     {<<"poll_concurrency">>, application:get_env(knarr, poll_concurrency, 64)},
+    {<<"poll_jitter_percent">>, application:get_env(knarr, poll_jitter_percent, 10)},
+    {<<"patch_rate_per_second">>, application:get_env(knarr, patch_rate_per_second, 5)},
+    {<<"patch_burst">>, application:get_env(knarr, patch_burst, 10)},
+    {<<"backoff_initial">>, application:get_env(knarr, backoff_initial, 1)},
+    {<<"backoff_cap">>, application:get_env(knarr, backoff_cap, 60)},
     {<<"log_level">>, text(application:get_env(knarr, log_level, info))}
   ].
 
@@ -52,9 +57,12 @@ text(Value) when is_list(Value) ->
   end;
 text(Value) -> Value.
 
-%% The log level is the seventh field of the Installed record, an atom the
-%% Gleam Level enum shares with logger.
-level({installed, _Defaults, _MaxBody, _Unknown, _Absent, _List, _Concurrency, Level}) -> Level.
+%% The log level is the last field of the Installed record, an atom the Gleam
+%% Level enum shares with logger.
+level(
+  {installed, _Defaults, _MaxBody, _Unknown, _Absent, _List, _Concurrency,
+    _Jitter, _Rate, _Burst, _BackoffInitial, _BackoffCap, Level}
+) -> Level.
 
 %% Discovery is off unless `-knarr discovery true` (knarr NoPodEffects). On,
 %% it reads the in-cluster environment the pod carries; a missing variable
