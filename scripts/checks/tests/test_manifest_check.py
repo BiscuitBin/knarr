@@ -8,14 +8,11 @@ any gleam command runs, and never writes. The cases are 0003's.
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-from conftest import CHECKS
-
-CHECK = CHECKS / "manifest_check.py"
+from conftest import run_checker
 
 GLEAM_TOML = """\
 name = "probe"
@@ -49,11 +46,9 @@ def project(tmp_path: Path, gleam: str = GLEAM_TOML, manifest: str = MANIFEST_TO
     return tmp_path
 
 
-def check(directory: Path) -> subprocess.CompletedProcess[str]:
+def check(directory: Path, *, cli: bool = False) -> subprocess.CompletedProcess[str]:
     before = {p.name: p.read_bytes() for p in directory.iterdir()}
-    result = subprocess.run(
-        [sys.executable, str(CHECK), str(directory)], check=False, capture_output=True, text=True
-    )
+    result = run_checker("manifest_check", directory, str(directory), cli=cli)
     after = {p.name: p.read_bytes() for p in directory.iterdir()}
     assert after == before, "the pre-check must never write"
     return result
@@ -122,3 +117,13 @@ def test_a_missing_manifest_is_refused(tmp_path: Path) -> None:
     result = check(tmp_path)
     assert result.returncode == 2
     assert "manifest.toml" in result.stderr
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_cli_contract(tmp_path: Path, broken: bool) -> None:
+    root = project(tmp_path)
+    if broken:
+        (root / "manifest.toml").unlink()
+    result = check(root, cli=True)
+    assert result.returncode == (2 if broken else 0), result.stderr
+    assert "missing" in result.stderr if broken else "matches gleam.toml" in result.stdout
