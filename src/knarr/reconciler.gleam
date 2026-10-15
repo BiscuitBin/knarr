@@ -6,20 +6,28 @@
 //// and hands the scheduler the listed pods and the joiners, the targets
 //// with a pod IP (budget Leaving, reconcile NoPodIp). Each reading comes
 //// back from the scheduler on its own, at the pod's rung; the reconciler
-//// observes it into the pod's memory, decides the pod's desired state
-//// against its marker and, until the patcher is wired (ticket 46, chunk
-//// F2), sends each due write and yield at once through
-//// `k8s_client.patch_pod`. It raises the Events and lines observability
-//// names and latches readiness.
+//// observes it into the pod's memory and decides whether anything is due
+//// on the pod against its marker; if so it tells the patcher, which grants
+//// one turn at a time as budget's WriteBudget allows. On a turn the change
+//// is re-derived from the newest view and the latest reading (budget
+//// Pending) and one patch is sent through `k8s_client.patch_pod`: a
+//// conflict's yield, else the due writes; the turn is answered with the
+//// attempt's outcome or with nothing due, exactly once. A 429 on a LIST
+//// pauses the cycles (budget PauseScope); a Deployment that left the target
+//// set is retired once the patcher says it is quiet (observability
+//// SeriesLife). It raises the Events and lines observability names and
+//// latches readiness.
 ////
 //// Every decision is a pure function of `reconcile`, `config`, `ownership`,
-//// `cost_mapping` and `observability`; the effects are the injected `send`,
-//// `poll`, `now`, `random` and `mark_ready`, and `reconciler_ffi` for the
-//// files and the token's hash. The reconciler runs last in a set of four
-//// under one supervisor, with the poll-worker factory, the scheduler and
-//// the patcher, so a crash of any restarts them together (budget Restart).
-//// The three actors reach each other by name, through one guarded send.
+//// `cost_mapping`, `budget` and `observability`; the effects are the
+//// injected `send`, `poll`, `now`, `random` and `mark_ready`, and
+//// `reconciler_ffi` for the files and the token's hash. The reconciler runs
+//// last in a set of four under one supervisor, with the poll-worker
+//// factory, the scheduler and the patcher, so a crash of any restarts them
+//// together (budget Restart). The three actors reach each other by name,
+//// through one guarded send.
 
+import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Name, type Subject}
 import gleam/http/request.{type Request}
@@ -32,6 +40,7 @@ import gleam/otp/factory_supervisor
 import gleam/otp/static_supervisor as supervisor
 import gleam/otp/supervision
 import gleam/string
+import knarr/budget
 import knarr/config.{type Installed, type Target}
 import knarr/cost_mapping.{Mapped}
 import knarr/k8s_client.{type Deployment, type Pod, type ReplicaSet}
@@ -137,16 +146,21 @@ pub fn config(
 }
 
 pub type Message {
-  /// The LIST timer, or the initialiser's first cycle.
+  /// The LIST timer's own message, the initialiser's first among them:
+  /// one cycle, then the next armed config.list_interval later, so there
+  /// is one chain (reconcile Cycle).
+  Timer
+  /// A cycle asked for from outside, as a test does: run, with nothing
+  /// armed, so it starts no second chain.
   Tick
   /// From the scheduler: one reading returned for a target pod.
   Polled(scheduler.Polled)
-  /// From the patcher: a turn to patch one pod. Wired in chunk F2 of
-  /// ticket 46; nothing sends the patcher a `Due` until then, so no turn
-  /// arrives.
+  /// From the patcher: a turn to make one patch attempt on one pod, for
+  /// the purpose it names. Answered exactly once, with the attempt's
+  /// outcome or with nothing due.
   Turn(patcher.Turn)
   /// From the patcher: nothing of a departed Deployment's pods is pending
-  /// or in turn. Wired in chunk F2 of ticket 46 with `Turn`.
+  /// or in turn, so its series may go (observability SeriesLife).
   Quiet(deployment: String)
 }
 
@@ -188,6 +202,13 @@ type State {
     gauges: List(Series),
     counters: List(Series),
     ready: Bool,
+    /// The LIST pause a 429 on a LIST lengthens (budget PauseScope); its
+    /// `until` is set to 0 once a tick finds it over, so the gauges clear
+    /// once.
+    list_pause: budget.Pause,
+    /// Deployments that left the target set and are not yet quiet; their
+    /// series are held until the patcher says so (observability SeriesLife).
+    departing: List(String),
   )
 }
 
@@ -260,44 +281,48 @@ fn patcher_config(config: Config) -> patcher.Config {
 }
 
 /// A send to a named process that is not registered, as during the set's
-/// shutdown, which stops the children in reverse start order, is dropped: a
-/// plain `process.send` to an unregistered name crashes the sender. The one
-/// place a message crosses between the set's processes.
-fn notify(name: Name(message), message: message) -> Nil {
-  case process.named(name) {
-    Ok(_) -> process.send(process.named_subject(name), message)
-    Error(Nil) -> Nil
-  }
-}
+/// shutdown, which stops the children in reverse start order, or between a
+/// crash and the restart, is dropped: a plain `process.send` to an
+/// unregistered name crashes the sender, and a check before it leaves the
+/// window between the two. The one place a message crosses between the
+/// set's processes, in one non-asserting send in `reconciler_ffi`.
+@external(erlang, "reconciler_ffi", "notify")
+fn notify(name: Name(message), message: message) -> Nil
 
 /// Starts the reconciler under its name. Its initialiser touches nothing
 /// outside the VM: it drops the per-Deployment series a process before it
-/// left in the registry (observability SeriesLife) and schedules the first
-/// tick at once, so readiness latches as soon as the first cycle can run.
-/// The selector takes the name, for the other two processes and a test,
-/// and the plain subject the ticks come on.
+/// left in the registry (observability SeriesLife), declares the LIST pause
+/// over (budget Restart) and schedules the first tick at once, so readiness
+/// latches as soon as the first cycle can run. The selector takes the name,
+/// for the other two processes and a test, and the plain subject the ticks
+/// come on.
 fn start_reconciler(config: Config) -> actor.StartResult(Subject(Message)) {
   actor.new_with_initialiser(1000, fn(self) {
     metrics.reset_deployment_series()
+    set_list_pause_gauges(paused: 0, seconds: 0)
     let ticks = process.new_subject()
     let selector =
       process.new_selector()
       |> process.select(self)
       |> process.select(ticks)
-    process.send(ticks, Tick)
-    actor.initialised(State(
-      config:,
-      ticks:,
-      token_sha256: None,
-      session: None,
-      targets: [],
-      pods: dict.new(),
-      seen: [],
-      invalid: dict.new(),
-      gauges: [],
-      counters: [],
-      ready: False,
-    ))
+    process.send(ticks, Timer)
+    actor.initialised(
+      State(
+        config:,
+        ticks:,
+        token_sha256: None,
+        session: None,
+        targets: [],
+        pods: dict.new(),
+        seen: [],
+        invalid: dict.new(),
+        gauges: [],
+        counters: [],
+        ready: False,
+        list_pause: budget.Pause(until: 0, consecutive: 0),
+        departing: [],
+      ),
+    )
     |> actor.selecting(selector)
     |> actor.returning(self)
     |> Ok
@@ -309,29 +334,37 @@ fn start_reconciler(config: Config) -> actor.StartResult(Subject(Message)) {
 
 fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
   case message {
-    Tick -> {
+    Timer -> {
       let state = tick(state)
-      process.send_after(state.ticks, state.config.interval_ms, Tick)
+      process.send_after(state.ticks, state.config.interval_ms, Timer)
       actor.continue(state)
     }
+    Tick -> actor.continue(tick(state))
     Polled(returned) -> actor.continue(polled(state, returned))
-    // Chunk F2 of ticket 46 answers a turn with one attempt and retires a
-    // quiet Deployment's series; until then neither arrives.
-    Turn(_) -> actor.continue(state)
-    Quiet(_) -> actor.continue(state)
+    Turn(granted) -> actor.continue(turn(state, granted))
+    Quiet(deployment) -> actor.continue(quiet(state, deployment))
   }
 }
 
 // ------------------------------------------------------------- The cycle ---
 
+/// One tick: nothing inside the LIST pause (budget PauseScope), the timer
+/// keeping its cadence; otherwise the files are read and a cycle runs. A
+/// failed read of either file ends the session too (k8s_client
+/// TokenReload: the token is never cached past the cycle that read it), so
+/// until the next good read a turn is answered nothing due and a poll's
+/// entry waits for the LIST to announce it; readings are still observed.
 fn tick(state: State) -> State {
   let config = state.config
+  let now = config.now()
+  use <- bool.guard(now < state.list_pause.until, state)
+  let state = list_pause_lifted(state)
   case read_file(config.token_file) {
     Error(ReadFailed(reason)) -> {
       log(observability.Error, "token unreadable", [
         observability.string_field(name: "reason", value: reason),
       ])
-      state
+      State(..state, session: None)
     }
     Ok(token) -> {
       let token = string.trim(token)
@@ -341,7 +374,7 @@ fn tick(state: State) -> State {
           log(observability.Error, "namespace unreadable", [
             observability.string_field(name: "reason", value: reason),
           ])
-          state
+          State(..state, session: None)
         }
         Ok(namespace) -> {
           let namespace = string.trim(namespace)
@@ -369,8 +402,10 @@ fn note_token(state: State, token: String) -> State {
   }
 }
 
-/// What one cycle carries through its steps: the credentials, the clock
-/// readings, and the counter series incremented so far.
+/// What one cycle, one reading or one turn carries through its steps: the
+/// credentials, the clock readings, the counter series incremented so far,
+/// and the last patch attempt made, with the status and Retry-After the
+/// patcher's outcome is read from.
 type Cycle {
   Cycle(
     config: Config,
@@ -379,18 +414,49 @@ type Cycle {
     now: Int,
     at: String,
     counters: List(Series),
+    attempt: Option(Attempt),
   )
 }
 
+/// How the apiserver answered a patch: its status, `None` for a transport
+/// or decode failure, and the Retry-After of a refusal in whole seconds.
+type Attempt {
+  Attempt(status: Option(Int), retry_after: Option(Int))
+}
+
+/// A `Cycle` for work between ticks, from the session the last tick read,
+/// at the clock given in milliseconds.
+fn context(
+  state state: State,
+  namespace namespace: String,
+  token token: String,
+  now now: Int,
+) -> Cycle {
+  Cycle(
+    config: state.config,
+    namespace:,
+    token:,
+    now:,
+    at: rfc3339(now / 1000),
+    counters: state.counters,
+    attempt: None,
+  )
+}
+
+/// One discovery cycle: the three LISTs, each counted on knarr_lists_total;
+/// a 429 on any pauses the LISTs and keeps the target set and the schedules
+/// (budget PauseScope); any other failure keeps them too; a cycle in which
+/// all three succeeded ends the pause's run.
 fn cycle(
   state state: State,
   namespace namespace: String,
   token token: String,
 ) -> State {
   let config = state.config
+  let installed = config.installed
   let started_ms = unix_milliseconds()
-  let lists = {
-    use pods <- try_list("pods", fn() {
+  let #(counters, lists) = {
+    use pods, counters <- try_list("pods", state.counters, fn() {
       k8s_client.list_pods(
         target: config.target,
         namespace:,
@@ -398,7 +464,7 @@ fn cycle(
         send: config.send,
       )
     })
-    use replica_sets <- try_list("replicasets", fn() {
+    use replica_sets, counters <- try_list("replicasets", counters, fn() {
       k8s_client.list_replica_sets(
         target: config.target,
         namespace:,
@@ -406,7 +472,7 @@ fn cycle(
         send: config.send,
       )
     })
-    use deployments <- try_list("deployments", fn() {
+    use deployments, counters <- try_list("deployments", counters, fn() {
       k8s_client.list_deployments(
         target: config.target,
         namespace:,
@@ -414,25 +480,33 @@ fn cycle(
         send: config.send,
       )
     })
-    Ok(#(pods, replica_sets, deployments))
+    #(counters, Ok(#(pods, replica_sets, deployments)))
   }
+  let state = State(..state, counters:)
   case lists {
-    Error(Nil) -> state
+    Error(k8s_client.Refused(k8s_client.Failure(status: 429, retry_after:, ..))) ->
+      list_throttled(state, retry_after)
+    // Logged by `try_list`; the previous target set stands.
+    Error(k8s_client.Refused(_))
+    | Error(k8s_client.SendFailed(_))
+    | Error(k8s_client.UndecodableBody(_)) -> state
     Ok(#(pods, replica_sets, deployments)) -> {
       // One clock reading after the LISTs is the time of the cycle's
       // Events and gauges; each reading and write has the clock of its own
       // return (reconcile Cycle).
       let now = config.now()
-      discovered(
-        state:,
-        cycle: Cycle(
-          config:,
-          namespace:,
-          token:,
+      let list_pause =
+        budget.pause(
+          pause: state.list_pause,
+          status: 200,
+          retry_after: None,
           now:,
-          at: rfc3339(now / 1000),
-          counters: state.counters,
-        ),
+          initial: installed.backoff_initial,
+          cap: installed.backoff_cap,
+        )
+      discovered(
+        state: State(..state, list_pause:),
+        cycle: context(state:, namespace:, token:, now:),
         pods:,
         replica_sets:,
         deployments:,
@@ -442,23 +516,91 @@ fn cycle(
   }
 }
 
-/// One LIST; a failure ends the cycle with an error line (Logs Lines) and
-/// the previous target set stands (config Discovery).
+/// One LIST, counted on knarr_lists_total by its result (observability
+/// Budget); a failure ends the cycle with an error line (Logs Lines) and the
+/// previous target set stands (config Discovery). The counter series are
+/// threaded through, since the `Cycle` is built after the LISTs.
 fn try_list(
   resource: String,
+  counters: List(Series),
   list: fn() -> Result(a, k8s_client.ClientError(SendError)),
-  next: fn(a) -> Result(b, Nil),
-) -> Result(b, Nil) {
+  next: fn(a, List(Series)) ->
+    #(List(Series), Result(b, k8s_client.ClientError(SendError))),
+) -> #(List(Series), Result(b, k8s_client.ClientError(SendError))) {
+  let counted = fn(status) {
+    remember(counters:, name: observability.lists_total, labels: [
+      resource,
+      observability.list_result(status),
+    ])
+  }
   case list() {
-    Ok(items) -> next(items)
+    Ok(items) -> next(items, counted(Some(200)))
     Error(error) -> {
       log(observability.Error, "list failed", [
         observability.string_field(name: "resource", value: resource),
         ..describe(error)
       ])
-      Error(Nil)
+      #(counted(status_of(error)), Error(error))
     }
   }
+}
+
+/// The status a client error carries: a refusal's, none for a transport or
+/// decode failure.
+fn status_of(error: k8s_client.ClientError(SendError)) -> Option(Int) {
+  case error {
+    k8s_client.Refused(failure) -> Some(failure.status)
+    k8s_client.SendFailed(_) | k8s_client.UndecodableBody(_) -> None
+  }
+}
+
+/// A 429 on a LIST: the pause lengthens as budget's BackOff says, with the
+/// gauges and the line of scope list (observability Budget); the target set
+/// and the schedules stand, so neither actor hears of this cycle.
+fn list_throttled(state: State, retry_after: Option(Int)) -> State {
+  let installed = state.config.installed
+  let now = state.config.now()
+  let pause =
+    budget.pause(
+      pause: state.list_pause,
+      status: 429,
+      retry_after:,
+      now:,
+      initial: installed.backoff_initial,
+      cap: installed.backoff_cap,
+    )
+  let seconds = { pause.until - now } / 1000
+  set_list_pause_gauges(paused: 1, seconds:)
+  let retry_field = case retry_after {
+    Some(value) -> [
+      observability.int_field(name: "retry_after_seconds", value:),
+    ]
+    None -> []
+  }
+  log(observability.Info, "list pause", [
+    observability.int_field(name: "pause_seconds", value: seconds),
+    ..list.append(retry_field, [
+      observability.string_field(name: "scope", value: observability.list_scope),
+    ])
+  ])
+  State(..state, list_pause: pause)
+}
+
+/// The first tick sent after the pause's end clears the gauges once and
+/// says so; `until` is left at 0, which a later 429 cannot shorten since it
+/// is already past.
+fn list_pause_lifted(state: State) -> State {
+  use <- bool.guard(state.list_pause.until == 0, state)
+  set_list_pause_gauges(paused: 0, seconds: 0)
+  log(observability.Info, "list pause ended", [
+    observability.string_field(name: "scope", value: observability.list_scope),
+  ])
+  State(..state, list_pause: budget.Pause(..state.list_pause, until: 0))
+}
+
+fn set_list_pause_gauges(paused paused: Int, seconds seconds: Int) -> Nil {
+  metrics.set(observability.paused, [observability.list_scope], paused)
+  metrics.set(observability.pause_seconds, [observability.list_scope], seconds)
 }
 
 fn discovered(
@@ -526,8 +668,7 @@ fn discovered(
         Error(Nil) -> Error(Nil)
       }
     })
-  let gauges = gauges(targets:, pods: memories)
-  let state = State(..state, gauges: rebuild(state.gauges, gauges))
+  let current = gauges(targets:, pods: memories)
   let #(seen, cycle) = announce(seen: state.seen, pods: memories, cycle:)
   // The schedule learns joining and leaving from the LIST alone: every
   // target by name, and a joiner for each with a pod IP (budget Leaving,
@@ -551,11 +692,24 @@ fn discovered(
         None -> Error(Nil)
       }
     })
+  let listed = list.map(targets, fn(target) { target.pod_name })
+  notify(config.names.scheduler, scheduler.Listed(listed:, joining:))
+  // The patcher learns the same: the apply of a pod not listed, or listed
+  // terminating, is discarded (budget Pending, Leaving), and a listed
+  // Deployment is not departing.
+  let deployment_names =
+    list.map(targets, fn(target) { target.deployment_name }) |> list.unique
   notify(
-    config.names.scheduler,
-    scheduler.Listed(
-      listed: list.map(targets, fn(target) { target.pod_name }),
-      joining:,
+    config.names.patcher,
+    patcher.Listed(
+      targets: listed,
+      terminating: list.filter_map(memories, fn(item) {
+        case { item.1 }.pod.deletion_timestamp {
+          Some(_) -> Ok({ item.0 }.pod_name)
+          None -> Error(Nil)
+        }
+      }),
+      deployments: deployment_names,
     ),
   )
   let memories =
@@ -564,54 +718,77 @@ fn discovered(
     })
   // A Deployment has left when no current target carries its name: the
   // series are labelled by name, so one recreated under the same name
-  // between two LISTs keeps them (observability SeriesLife).
+  // between two LISTs keeps them (observability SeriesLife). One that left
+  // is departing until the patcher says it is quiet; one that rejoined
+  // before that is not.
   let gone =
     list.filter_map(state.targets, fn(previous) {
-      case
-        list.any(targets, fn(t) {
-          t.deployment_name == previous.deployment_name
-        })
-      {
+      case list.contains(deployment_names, previous.deployment_name) {
         True -> Error(Nil)
         False -> Ok(previous.deployment_name)
       }
     })
     |> list.unique
-  let #(gauges, counters) =
-    list.fold(gone, #(state.gauges, cycle.counters), fn(acc, deployment) {
-      #(retire(acc.0, deployment), retire(acc.1, deployment))
+  list.each(gone, fn(deployment) {
+    notify(config.names.patcher, patcher.Departed(deployment:))
+  })
+  let departing =
+    state.departing
+    |> list.filter(fn(deployment) {
+      !list.contains(deployment_names, deployment)
     })
-  State(..state, targets:, pods: memories, seen:, invalid:, gauges:, counters:)
+    |> list.append(gone)
+    |> list.unique
+  // The gauge series of a departing Deployment are held, not rebuilt away,
+  // until it is quiet; every other series of the last cycle that this one
+  // did not set leaves the exposition.
+  let #(held, previous) = list.partition(state.gauges, labelled(_, departing))
+  let gauges = list.append(rebuild(previous, current), held)
+  State(
+    ..state,
+    targets:,
+    pods: memories,
+    seen:,
+    invalid:,
+    departing:,
+    gauges:,
+    counters: cycle.counters,
+  )
+}
+
+/// Whether a series is labelled with one of the Deployments given.
+fn labelled(series: Series, deployments: List(String)) -> Bool {
+  list.any(deployments, fn(deployment) {
+    observability.retire(series: [series], deployment:) == []
+  })
 }
 
 // ----------------------------------------------------------- One reading ---
 
 /// A reading the scheduler returned: logged and counted, observed into the
-/// pod's memory at the clock it came at (reconcile Cycle), and, until chunk
-/// F2 of ticket 46 hands the decision to the patcher, acted on at once from
-/// the pod's newest view, the patch response becoming that view (Sequence).
-/// A reading of a pod no LIST has shown since, or one before any cycle has
-/// run, has nowhere to land and is dropped.
+/// pod's memory at the clock it came at (reconcile Cycle), and decided on
+/// from the pod's newest view: when a yield or a write is due, the patcher
+/// is told the apply is pending, with the pod's patch interval (budget
+/// Pending, PerPod); nothing is sent to the apiserver here. The change is
+/// re-derived on the turn, so a later reading that leaves nothing due costs
+/// nothing but a turn. A reading of a pod no LIST has shown since, or one
+/// before any cycle has run, has nowhere to land and is dropped.
 fn polled(state: State, returned: scheduler.Polled) -> State {
   let pod_name = returned.pod_name
   let target =
     list.find(state.targets, fn(target) { target.pod_name == pod_name })
-  case state.session, dict.get(state.pods, pod_name), target {
-    Some(#(namespace, token)), Ok(memory), Ok(target) -> {
+  case dict.get(state.pods, pod_name), target {
+    Ok(memory), Ok(target) -> {
       let config = state.config
       let now = returned.at_ms
       let reading = returned.reading
-      let cycle =
-        Cycle(
-          config:,
-          namespace:,
-          token:,
-          now:,
-          at: rfc3339(now / 1000),
+      let counters =
+        polled_line(
           counters: state.counters,
+          target:,
+          endpoint: returned.endpoint,
+          reading:,
         )
-      let cycle =
-        polled_line(cycle:, target:, endpoint: returned.endpoint, reading:)
       let memory =
         Memory(
           ..memory,
@@ -624,16 +801,75 @@ fn polled(state: State, returned: scheduler.Polled) -> State {
           ),
           latest: Some(#(reading, now)),
         )
-      let #(pod, memory, cycle) =
-        act(cycle:, target:, pod: memory.pod, memory:, reading:)
+      let pod = memory.pod
+      let at = rfc3339(now / 1000)
+      let due = case pod.deletion_timestamp {
+        Some(_) -> False
+        None ->
+          conflicts(target:, pod:) != []
+          || due_operations(target:, pod:, memory:, reading:, at:) != []
+      }
+      case due {
+        True ->
+          notify(
+            config.names.patcher,
+            patcher.Due(
+              pod_name:,
+              purpose: budget.Apply,
+              deployment: target.deployment_name,
+              interval_s: target.settings.patch_interval,
+              at_ms: now,
+            ),
+          )
+        False -> Nil
+      }
+      // The states this reading entered are announced now, with it, not
+      // at the next LIST (observability OnEntry; reconcile Absent names the
+      // reading that entered). Without a session the Event cannot be
+      // created, so the entry is left for the LIST after the next good
+      // read to announce, if the pod is still in the state then.
+      let #(seen, counters) = case state.session {
+        Some(#(namespace, token)) -> {
+          let cycle =
+            Cycle(..context(state:, namespace:, token:, now:), counters:)
+          let #(seen, cycle) =
+            announce_polled(seen: state.seen, target:, memory:, cycle:)
+          #(seen, cycle.counters)
+        }
+        None -> #(state.seen, counters)
+      }
       State(
         ..state,
-        pods: dict.insert(state.pods, pod_name, Memory(..memory, pod:)),
-        counters: cycle.counters,
+        pods: dict.insert(state.pods, pod_name, memory),
+        seen:,
+        counters:,
       )
     }
-    _, _, _ -> state
+    _, _ -> state
   }
+}
+
+/// The pod's part of the announced states after a reading: the states it
+/// is in now, less those it was already in, announced; the pod's entries
+/// in `seen` replaced by the current ones, so the LIST after announces
+/// nothing of them again, and a state left and re-entered between LISTs
+/// is announced again (observability OnEntry).
+fn announce_polled(
+  seen seen: List(Entry),
+  target target: Target,
+  memory memory: Memory,
+  cycle cycle: Cycle,
+) -> #(List(Entry), Cycle) {
+  let pod_name = target.pod_name
+  let #(mine, others) =
+    list.partition(seen, fn(entry) { entry.pod_name == pod_name })
+  let current = entries(target:, memory:)
+  let cycle =
+    observability.entered(seen: mine, current:)
+    |> list.fold(cycle, fn(cycle, entry) {
+      announce_one(cycle:, entry:, item: #(target, memory))
+    })
+  #(list.append(others, current), cycle)
 }
 
 /// The invalid-override Events on entry and the unknown-key lines once per
@@ -694,11 +930,11 @@ fn overrides(
 }
 
 fn polled_line(
-  cycle cycle: Cycle,
+  counters counters: List(Series),
   target target: Target,
   endpoint endpoint: Endpoint,
   reading reading: Reading,
-) -> Cycle {
+) -> List(Series) {
   let kind = reading_label(reading.kind)
   let fields = [
     observability.string_field(
@@ -719,7 +955,7 @@ fn polled_line(
     _ -> fields
   }
   log(observability.Debug, "poll", fields)
-  count(cycle:, name: observability.polls_total, labels: [
+  remember(counters:, name: observability.polls_total, labels: [
     target.deployment_name,
     kind,
   ])
@@ -810,30 +1046,215 @@ fn view(target target: Target, pod pod: Pod, marker marker: Marker) -> Views {
   )
 }
 
-/// Decides and sends for one pod: yields first, then the due writes from
-/// the newest view (reconcile Sequence, Terminating).
-fn act(
+/// The owned annotations in conflict on a view, cost first (reconcile
+/// Conflict, ownership Adoption): each is due a yield.
+fn conflicts(target target: Target, pod pod: Pod) -> List(OwnedView) {
+  let views = view(target:, pod:, marker: ownership.read(pod.annotations))
+  [views.cost, views.safe]
+  |> list.filter(fn(owned) { owned.considered && owned.standing == Conflict })
+}
+
+/// The operations of the write due on a view from the latest reading
+/// (reconcile Desired, Due; ownership WriteMode), empty when nothing is.
+fn due_operations(
+  target target: Target,
+  pod pod: Pod,
+  memory memory: Memory,
+  reading reading: Reading,
+  at at: String,
+) -> List(Operation) {
+  let marker = ownership.read(pod.annotations)
+  let Views(cost:, safe:) = view(target:, pod:, marker:)
+  let safe_applied = case safe.considered {
+    True -> safe.safe_to_evict
+    False -> None
+  }
+  let desired =
+    reconcile.desired(
+      state: memory.state,
+      reading:,
+      applied: cost.applied,
+      safe_to_evict: safe_applied,
+      thresholds: target.settings.thresholds,
+      margin: target.settings.threshold_margin,
+    )
+  let writes =
+    reconcile.due(desired:, applied: cost.applied, safe_to_evict: safe_applied)
+    |> list.filter_map(fn(name) {
+      let #(owned, value) = case name == cost.owned.name {
+        True -> #(cost, cost_mapping.render(Mapped(desired.cost)))
+        False -> #(safe, desired.safe_to_evict)
+      }
+      case ownership.may_write(owned.standing) {
+        True -> Ok(Write(owned.owned, value))
+        False -> Error(Nil)
+      }
+    })
+  ownership.patch(marker:, annotations: pod.annotations, writes:, at:)
+}
+
+/// A turn the patcher granted: one patch attempt on the pod, re-derived
+/// from its newest view and latest reading (budget Pending), the first
+/// conflict's yield if any, else the due writes (reconcile Sequence), and
+/// one answer, always: `Attempted` with the outcome and whether anything
+/// is still due, or `NothingDue` when the pod is gone, terminating, has no
+/// reading yet (JustStarted) or nothing to write. A cleanup turn is nothing
+/// due until ticket 47 derives cleanups; none is sent for one here. An
+/// accepted response becomes the pod's view.
+fn turn(state: State, granted: patcher.Turn) -> State {
+  let patcher.Turn(pod_name:, purpose:) = granted
+  let target =
+    list.find(state.targets, fn(target) { target.pod_name == pod_name })
+  case purpose, state.session, dict.get(state.pods, pod_name), target {
+    budget.Apply, Some(#(namespace, token)), Ok(memory), Ok(target) -> {
+      let now = state.config.now()
+      let cycle = context(state:, namespace:, token:, now:)
+      case attempt(cycle:, target:, memory:) {
+        Some(#(pod, memory, cycle, still_due)) -> {
+          answer(
+            state:,
+            granted:,
+            attempt: cycle.attempt,
+            still_due:,
+            at_ms: now,
+          )
+          State(
+            ..state,
+            pods: dict.insert(state.pods, pod_name, Memory(..memory, pod:)),
+            counters: cycle.counters,
+          )
+        }
+        None -> nothing_due(state, granted)
+      }
+    }
+    _, _, _, _ -> nothing_due(state, granted)
+  }
+}
+
+/// The answer to a turn on which no attempt was made.
+fn nothing_due(state: State, granted: patcher.Turn) -> State {
+  answer(state:, granted:, attempt: None, still_due: False, at_ms: 0)
+  state
+}
+
+/// One attempt on the pod's turn, or none when the pod is terminating or
+/// has no reading yet (reconcile Terminating, JustStarted): the pod, the
+/// memory and the cycle after it, and whether anything is still due.
+fn attempt(
+  cycle cycle: Cycle,
+  target target: Target,
+  memory memory: Memory,
+) -> Option(#(Pod, Memory, Cycle, Bool)) {
+  let pod = memory.pod
+  use <- bool.guard(option.is_some(pod.deletion_timestamp), None)
+  case conflicts(target:, pod:), memory.latest {
+    [conflict, ..], _ ->
+      Some(yield_turn(cycle:, target:, pod:, memory:, conflict:))
+    [], None -> None
+    [], Some(#(reading, _)) ->
+      Some(write_turn(cycle:, target:, pod:, memory:, reading:))
+  }
+}
+
+/// The one answer to a turn, with the turn's own key: the attempt made, or
+/// nothing due when none was.
+fn answer(
+  state state: State,
+  granted granted: patcher.Turn,
+  attempt attempt: Option(Attempt),
+  still_due still_due: Bool,
+  at_ms at_ms: Int,
+) -> Nil {
+  let patcher.Turn(pod_name:, purpose:) = granted
+  let message = case attempt {
+    Some(attempt) ->
+      patcher.Attempted(
+        pod_name:,
+        purpose:,
+        outcome: outcome(attempt),
+        still_due:,
+        at_ms:,
+      )
+    None -> patcher.NothingDue(pod_name:, purpose:)
+  }
+  notify(state.config.names.patcher, message)
+}
+
+/// The yield of one conflict on the turn; the apply stays due when another
+/// conflict or a write remains on the view the yield left.
+fn yield_turn(
+  cycle cycle: Cycle,
+  target target: Target,
+  pod pod: Pod,
+  memory memory: Memory,
+  conflict conflict: OwnedView,
+) -> #(Pod, Memory, Cycle, Bool) {
+  let marker = ownership.read(pod.annotations)
+  let #(pod, memory, cycle) = case
+    yields(cycle:, target:, pod:, marker:, conflicts: [conflict], memory:)
+  {
+    Ok(#(pod, cycle)) -> #(pod, memory, cycle)
+    Error(#(memory, cycle)) -> #(pod, memory, cycle)
+  }
+  let still_due =
+    conflicts(target:, pod:) != []
+    || case memory.latest {
+      Some(#(reading, _)) ->
+        due_operations(target:, pod:, memory:, reading:, at: cycle.at) != []
+      None -> False
+    }
+  #(pod, memory, cycle, still_due)
+}
+
+/// The due writes on the turn; the apply stays due unless they were
+/// accepted: a 422 is rebuilt from the next LIST (reconcile Rejected422),
+/// a 429 waits out the pause, any other refusal is tried again after the
+/// pod's interval.
+fn write_turn(
   cycle cycle: Cycle,
   target target: Target,
   pod pod: Pod,
   memory memory: Memory,
   reading reading: Reading,
-) -> #(Pod, Memory, Cycle) {
-  case pod.deletion_timestamp {
-    Some(_) -> #(pod, memory, cycle)
-    None -> {
-      let marker = ownership.read(pod.annotations)
-      let views = view(target:, pod:, marker:)
-      let conflicts =
-        [views.cost, views.safe]
-        |> list.filter(fn(owned) {
-          owned.considered && owned.standing == Conflict
-        })
-      case yields(cycle:, target:, pod:, marker:, conflicts:, memory:) {
-        Ok(#(pod, cycle)) -> write(cycle:, target:, pod:, memory:, reading:)
-        Error(#(memory, cycle)) -> #(pod, memory, cycle)
-      }
-    }
+) -> #(Pod, Memory, Cycle, Bool) {
+  let #(pod, memory, cycle) = write(cycle:, target:, pod:, memory:, reading:)
+  let still_due = case cycle.attempt {
+    Some(attempt) -> outcome(attempt) != patcher.Accepted
+    None -> False
+  }
+  #(pod, memory, cycle, still_due)
+}
+
+/// The patcher's reading of an attempt: a 2xx accepted, a 429 throttled
+/// with its Retry-After, anything else rejected, a transport failure
+/// included.
+fn outcome(attempt: Attempt) -> patcher.Outcome {
+  case attempt.status {
+    Some(status) if status >= 200 && status < 300 -> patcher.Accepted
+    Some(429) -> patcher.Throttled(retry_after_s: attempt.retry_after)
+    Some(_) | None -> patcher.Rejected
+  }
+}
+
+/// The patcher has nothing of a departed Deployment's pods pending or in
+/// turn: its series go now (observability SeriesLife). A quiet for a
+/// Deployment that is not departing, one that rejoined the target set
+/// included, since `discovered` drops it from `departing`, changes nothing;
+/// the target check is a second guard on the same fact.
+fn quiet(state: State, deployment: String) -> State {
+  use <- bool.guard(!list.contains(state.departing, deployment), state)
+  let departing = list.filter(state.departing, fn(d) { d != deployment })
+  case
+    list.any(state.targets, fn(target) { target.deployment_name == deployment })
+  {
+    True -> State(..state, departing:)
+    False ->
+      State(
+        ..state,
+        departing:,
+        gauges: retire(state.gauges, deployment),
+        counters: retire(state.counters, deployment),
+      )
   }
 }
 
@@ -867,7 +1288,9 @@ fn yields(
           annotations: pod.annotations,
           owned: conflict.owned,
         )
-      case send_patch(cycle:, target:, pod:, operations:, purpose: "yield") {
+      let #(cycle, result) =
+        send_patch(cycle:, target:, pod:, operations:, purpose: "yield")
+      case result {
         Ok(pod) -> {
           let cycle =
             count(cycle:, name: observability.yields_total, labels: [
@@ -922,7 +1345,7 @@ fn yields(
 }
 
 /// The due writes may_write allows, in one patch (reconcile Desired, Due;
-/// ownership WriteMode).
+/// ownership WriteMode); nothing is sent when none is due.
 fn write(
   cycle cycle: Cycle,
   target target: Target,
@@ -930,44 +1353,12 @@ fn write(
   memory memory: Memory,
   reading reading: Reading,
 ) -> #(Pod, Memory, Cycle) {
-  let marker = ownership.read(pod.annotations)
-  let Views(cost:, safe:) = view(target:, pod:, marker:)
-  let safe_applied = case safe.considered {
-    True -> safe.safe_to_evict
-    False -> None
-  }
-  let desired =
-    reconcile.desired(
-      state: memory.state,
-      reading:,
-      applied: cost.applied,
-      safe_to_evict: safe_applied,
-      thresholds: target.settings.thresholds,
-      margin: target.settings.threshold_margin,
-    )
-  let writes =
-    reconcile.due(desired:, applied: cost.applied, safe_to_evict: safe_applied)
-    |> list.filter_map(fn(name) {
-      let #(owned, value) = case name == cost.owned.name {
-        True -> #(cost, cost_mapping.render(Mapped(desired.cost)))
-        False -> #(safe, desired.safe_to_evict)
-      }
-      case ownership.may_write(owned.standing) {
-        True -> Ok(Write(owned.owned, value))
-        False -> Error(Nil)
-      }
-    })
-  case
-    ownership.patch(
-      marker:,
-      annotations: pod.annotations,
-      writes:,
-      at: cycle.at,
-    )
-  {
+  case due_operations(target:, pod:, memory:, reading:, at: cycle.at) {
     [] -> #(pod, memory, cycle)
-    operations ->
-      case send_patch(cycle:, target:, pod:, operations:, purpose: "apply") {
+    operations -> {
+      let #(cycle, result) =
+        send_patch(cycle:, target:, pod:, operations:, purpose: "apply")
+      case result {
         Ok(pod) -> #(pod, memory, cycle)
         Error(PreconditionFailed) -> #(
           pod,
@@ -976,6 +1367,7 @@ fn write(
         )
         Error(OtherFailure) -> #(pod, memory, cycle)
       }
+    }
   }
 }
 
@@ -986,14 +1378,17 @@ type PatchFailure {
   OtherFailure
 }
 
-/// Sends one patch and logs it.
+/// Sends one patch, logs it, counts it on knarr_patches_total by its
+/// result (observability Patches) and records the attempt on the cycle, so
+/// a turn can answer with its outcome: a 429 is counted once, as throttled,
+/// and is `OtherFailure` to the callers, which read it off the attempt.
 fn send_patch(
   cycle cycle: Cycle,
   target target: Target,
   pod pod: Pod,
   operations operations: List(Operation),
   purpose purpose: String,
-) -> Result(Pod, PatchFailure) {
+) -> #(Cycle, Result(Pod, PatchFailure)) {
   let config = cycle.config
   let keys = ownership.keys(operations)
   let fields = [
@@ -1014,7 +1409,7 @@ fn send_patch(
       document: ownership.document(operations),
       send: config.send,
     )
-  case result {
+  let outcome = case result {
     Ok(patched) -> {
       log(
         observability.Debug,
@@ -1038,6 +1433,21 @@ fn send_patch(
       }
     }
   }
+  let #(status, retry_after) = case result {
+    Ok(_) -> #(Some(200), None)
+    Error(k8s_client.Refused(failure)) -> #(
+      Some(failure.status),
+      failure.retry_after,
+    )
+    Error(error) -> #(status_of(error), None)
+  }
+  let cycle =
+    count(cycle:, name: observability.patches_total, labels: [
+      target.deployment_name,
+      purpose,
+      observability.patch_result(status),
+    ])
+  #(Cycle(..cycle, attempt: Some(Attempt(status:, retry_after:))), outcome)
 }
 
 // ------------------------------------------------------- Events and lines ---
@@ -1095,38 +1505,7 @@ fn announce(
   cycle cycle: Cycle,
 ) -> #(List(Entry), Cycle) {
   let current =
-    list.flat_map(pods, fn(item) {
-      let #(target, memory) = item
-      let pod = memory.pod
-      case pod.deletion_timestamp, memory.latest {
-        None, Some(_) -> {
-          let absent = case memory.state.kind {
-            reconcile.Absent -> [
-              Entry(
-                pod_name: pod.name,
-                annotation: None,
-                state: observability.ContractAbsent,
-              ),
-            ]
-            _ -> []
-          }
-          let views =
-            view(target:, pod:, marker: ownership.read(pod.annotations))
-          let not_ready = case not_ready_with_cost(pod:, memory:, views:) {
-            True -> [
-              Entry(
-                pod_name: pod.name,
-                annotation: None,
-                state: observability.NotReadyWithCost,
-              ),
-            ]
-            False -> []
-          }
-          list.append(absent, not_ready)
-        }
-        _, _ -> []
-      }
-    })
+    list.flat_map(pods, fn(item) { entries(target: item.0, memory: item.1) })
   let cycle =
     observability.entered(seen:, current:)
     |> list.fold(cycle, fn(cycle, entry) {
@@ -1137,6 +1516,42 @@ fn announce(
       }
     })
   #(current, cycle)
+}
+
+/// The announced states one pod is in, from its newest view and latest
+/// reading: contract_absent from reconcile's state and not_ready_with_cost
+/// from the view (observability OnEntry). A terminating pod is in no state,
+/// and a pod with no reading yet is in none either: absent takes readings,
+/// and NotReady with cost a known one.
+fn entries(target target: Target, memory memory: Memory) -> List(Entry) {
+  let pod = memory.pod
+  case pod.deletion_timestamp, memory.latest {
+    None, Some(_) -> {
+      let absent = case memory.state.kind {
+        reconcile.Absent -> [
+          Entry(
+            pod_name: pod.name,
+            annotation: None,
+            state: observability.ContractAbsent,
+          ),
+        ]
+        _ -> []
+      }
+      let views = view(target:, pod:, marker: ownership.read(pod.annotations))
+      let not_ready = case not_ready_with_cost(pod:, memory:, views:) {
+        True -> [
+          Entry(
+            pod_name: pod.name,
+            annotation: None,
+            state: observability.NotReadyWithCost,
+          ),
+        ]
+        False -> []
+      }
+      list.append(absent, not_ready)
+    }
+    _, _ -> []
+  }
 }
 
 /// A pod is NotReady with cost while its Ready condition is false, a
@@ -1353,15 +1768,24 @@ fn count(
   name name: String,
   labels labels: List(String),
 ) -> Cycle {
+  Cycle(..cycle, counters: remember(counters: cycle.counters, name:, labels:))
+}
+
+/// `count` for a step before the cycle has its `Cycle`: the LISTs.
+fn remember(
+  counters counters: List(Series),
+  name name: String,
+  labels labels: List(String),
+) -> List(Series) {
   metrics.inc(name, labels)
   let series =
     Series(
       name,
       list.map2(metrics.label_names(name), labels, observability.Label),
     )
-  case list.contains(cycle.counters, series) {
-    True -> cycle
-    False -> Cycle(..cycle, counters: [series, ..cycle.counters])
+  case list.contains(counters, series) {
+    True -> counters
+    False -> [series, ..counters]
   }
 }
 

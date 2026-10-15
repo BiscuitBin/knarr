@@ -5,8 +5,9 @@
 //// readiness are injected. The reconciler runs in its set beside the
 //// scheduler, the patcher and the poll-worker factory. Each cycle is driven
 //// by a Tick the test sends, with the timer held off; the draw is 0, so a
-//// pod the LIST joins is polled at once and its patch follows within the
-//// second; a Wake the test sends moves the scheduler's clock between LISTs.
+//// pod the LIST joins is polled at once, its due change is handed to the
+//// patcher and its patch follows on the turn within the second; a Wake the
+//// test sends moves the scheduler's or the patcher's clock between LISTs.
 
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Pid, type Subject}
@@ -20,12 +21,15 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleeunit/should
+import knarr/budget
 import knarr/config.{Defaults, Installed}
 import knarr/k8s_client
 import knarr/k8s_http
 import knarr/metrics
 import knarr/observability
+import knarr/patcher
 import knarr/poller.{type Endpoint}
+import knarr/reconcile
 import knarr/reconciler
 import knarr/runtime
 import knarr/scheduler
@@ -241,7 +245,10 @@ fn cluster(name: String, pods: List(PodFixture)) -> Table {
 }
 
 /// The scripted apiserver: answers from the table and forwards every
-/// request to `requests`.
+/// request to `requests`. A LIST is refused with 429 while "list_status"
+/// is "429", a patch answers with "patch_status"; a refusal of either
+/// carries "list_retry_after" or "patch_retry_after" as its Retry-After
+/// header when set.
 fn apiserver(
   table: Table,
   requests: Subject(Request(String)),
@@ -252,9 +259,15 @@ fn apiserver(
       request.path |> string.split("/") |> list.last |> result.unwrap("")
     case request.method {
       http.Get ->
-        case get(table, resource) {
-          Ok(body) -> Ok(response.new(200) |> response.set_body(body))
-          Error(Nil) -> Error(k8s_http.TlsAlert("unknown_ca"))
+        case get(table, "list_status"), get(table, resource) {
+          Ok("429"), _ ->
+            Ok(
+              response.new(429)
+              |> response.set_body("{}")
+              |> retry_after(table:, key: "list_retry_after"),
+            )
+          _, Ok(body) -> Ok(response.new(200) |> response.set_body(body))
+          _, Error(Nil) -> Error(k8s_http.TlsAlert("unknown_ca"))
         }
       http.Patch -> {
         let status =
@@ -265,12 +278,28 @@ fn apiserver(
           Ok(body) -> body
           Error(Nil) -> pod_json(pod(resource))
         }
-        Ok(response.new(status) |> response.set_body(body))
+        Ok(
+          response.new(status)
+          |> response.set_body(body)
+          |> retry_after(table:, key: "patch_retry_after"),
+        )
       }
       http.Post -> Ok(response.new(201) |> response.set_body("{}"))
       // The reconciler sends no other method.
       _ -> Ok(response.new(405) |> response.set_body(""))
     }
+  }
+}
+
+/// The Retry-After header the table holds under `key`, when it holds one.
+fn retry_after(
+  response response: Response(String),
+  table table: Table,
+  key key: String,
+) -> Response(String) {
+  case get(table, key) {
+    Ok(seconds) -> response.set_header(response, "retry-after", seconds)
+    Error(Nil) -> response
   }
 }
 
@@ -379,7 +408,8 @@ fn quiet(harness: Harness) -> Nil {
   assert process.receive(harness.requests, 200) == Error(Nil)
 }
 
-/// Moves the clock and sends the reconciler a tick, as its timer would.
+/// Moves the clock and asks the reconciler for a cycle; unlike its timer,
+/// a tick arms nothing, so the chain the timer runs is left alone.
 fn tick(harness harness: Harness, at at: Int) -> Nil {
   put(harness.table, "now", int.to_string(at))
   process.send(
@@ -395,6 +425,33 @@ fn wake(harness harness: Harness, at at: Int) -> Nil {
     process.named_subject(harness.config.names.scheduler),
     scheduler.Wake,
   )
+}
+
+/// Moves the clock and wakes the patcher, as its timer would.
+fn patcher_wake(harness harness: Harness, at at: Int) -> Nil {
+  put(harness.table, "now", int.to_string(at))
+  to_patcher(harness, patcher.Wake)
+}
+
+/// A message to the patcher from outside the set: a pending change the
+/// reconciler has not derived, so a turn the reconciler must still answer.
+fn to_patcher(harness: Harness, message: patcher.Message) -> Nil {
+  process.send(process.named_subject(harness.config.names.patcher), message)
+}
+
+/// The patch counter series of `deployment` with `purpose` and `result`.
+fn patches(
+  deployment deployment: String,
+  purpose purpose: String,
+  result result: String,
+) -> String {
+  "knarr_patches_total{deployment=\""
+  <> deployment
+  <> "\",purpose=\""
+  <> purpose
+  <> "\",result=\""
+  <> result
+  <> "\"} "
 }
 
 /// True once the exposition carries `line`, within `ms`: a series set
@@ -441,6 +498,21 @@ fn await(condition: fn() -> Bool, attempts: Int) -> Bool {
   }
 }
 
+/// The value of the counter series `line` names in the exposition, 0 when
+/// absent: a counter without a Deployment label is never reset, so a test
+/// asserts the increase it caused.
+fn counter(line: String) -> Int {
+  metrics.collect()
+  |> string.split("\n")
+  |> list.find_map(fn(row) {
+    case string.split_once(row, " ") {
+      Ok(#(series, value)) if series == line -> int.parse(value)
+      _ -> Error(Nil)
+    }
+  })
+  |> result.unwrap(0)
+}
+
 fn patch_of(request: Request(String), pod: String) -> String {
   assert request.method == http.Patch
   assert request.path == "/api/v1/namespaces/default/pods/" <> pod
@@ -469,11 +541,13 @@ fn at(seconds: Int) -> String {
 
 // ------------------------------------------------------------------ Cycle ---
 
-// Loop.Cycle, Desired, Due, budget Leaving and ownership WriteMode: one
-// cycle lists and joins every target with a pod IP to the schedule, each
-// is polled at its phase, at once with draw 0, and a busy pod is patched
-// with the value and the marker in one document; a terminating pod is
-// polled but never patched; a pod without an IP is neither (NoPodIp).
+// Loop.Cycle, Desired, Due, budget Leaving, Pending and ownership WriteMode:
+// one cycle lists and joins every target with a pod IP to the schedule,
+// each is polled at its phase, at once with draw 0, its due change is
+// handed to the patcher and, on the turn it grants, a busy pod is patched
+// with the value and the marker in one document, counted on
+// knarr_patches_total (observability Patches); a terminating pod is polled
+// but never patched; a pod without an IP is neither (NoPodIp).
 pub fn a_cycle_polls_every_target_with_an_ip_and_patches_a_busy_pod_test() -> Nil {
   let harness =
     harness("busy", [
@@ -496,6 +570,10 @@ pub fn a_cycle_polls_every_target_with_an_ip_and_patches_a_busy_pod_test() -> Ni
   quiet(harness)
   assert list.sort(list_of(harness.table, "polled"), string.compare)
     == ["10.0.0.1:8080/knarr/v1/status", "10.0.0.3:8080/knarr/v1/status"]
+  assert await_metric(
+    patches(deployment: "busy", purpose: "apply", result: "accepted") <> "1\n",
+    1000,
+  )
   stop_root(set)
 }
 
@@ -632,11 +710,11 @@ pub fn the_neutral_removal_follows_three_failures_test() -> Nil {
   stop_root(set)
 }
 
-// Fallback.Absent, observability Events ContractAbsent and Cadence
-// Restart: the Event is raised once on entry, with the port, path and
-// reading, not again while the pod stays, and once more after a restart.
-// The state is entered by the poll at 1300 and announced by the LIST after
-// it, since the states are announced once a cycle from the latest readings.
+// Fallback.Absent, observability Events ContractAbsent and Cadence OnEntry,
+// Restart: the Event is raised once, at the poll whose reading enters the
+// state, with the port, path and that reading, not again at the LISTs or
+// polls while the pod stays, and once more after a restart. The gauge
+// moves at the LIST after the poll.
 pub fn contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test() -> Nil {
   let harness = harness("absent", [pod("1")])
   put(harness.table, "reading:10.0.0.1", "not_found")
@@ -650,9 +728,6 @@ pub fn contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test(
   quiet(harness)
   tick(harness:, at: 1300)
   lists(harness)
-  quiet(harness)
-  tick(harness:, at: 1330)
-  lists(harness)
   let #(reason, message, kind) = event_of(next(harness))
   assert reason == "ContractAbsent"
   assert kind == "Deployment"
@@ -661,24 +736,142 @@ pub fn contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test(
   quiet(harness)
   assert string.contains(
     metrics.collect(),
-    "knarr_pods_contract_absent{deployment=\"absent\"} 1\n",
+    "knarr_pods_contract_absent{deployment=\"absent\"} 0\n",
   )
-  tick(harness:, at: 1360)
+  tick(harness:, at: 1330)
   lists(harness)
   quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_pods_contract_absent{deployment=\"absent\"} 1\n",
+  )
   stop_root(set)
 
   let set = start(harness)
   lists(harness)
   quiet(harness)
-  tick(harness:, at: 1660)
-  lists(harness)
-  quiet(harness)
-  tick(harness:, at: 1690)
+  tick(harness:, at: 1630)
   lists(harness)
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "ContractAbsent"
   quiet(harness)
+  stop_root(set)
+}
+
+// observability Cadence OnEntry and reconcile Absent: a state entered by a
+// poll and left by the next, both between two LISTs, is still announced
+// once, at the poll that entered it; the LIST after sees it left and
+// announces nothing.
+pub fn a_state_entered_and_left_between_two_lists_is_announced_once_test() -> Nil {
+  let harness = harness("absent-gap", [pod("1")])
+  put(harness.table, "reading:10.0.0.1", "not_found")
+  let set = start(harness)
+
+  lists(harness)
+  quiet(harness)
+  tick(harness:, at: 1300)
+  lists(harness)
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "ContractAbsent"
+  quiet(harness)
+  // The next rung reads a valid status: the pod leaves absent and its
+  // cost is written.
+  put(harness.table, "reading:10.0.0.1", "500")
+  wake(harness:, at: 1330)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  tick(harness:, at: 1360)
+  lists(harness)
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_pods_contract_absent{deployment=\"absent-gap\"} 0\n",
+  )
+  stop_root(set)
+}
+
+// reconcile Cycle: the LIST timer is one chain, armed by the timer's own
+// message once per timed cycle; a tick sent from outside, as a test does,
+// runs a cycle and arms nothing, so it starts no second chain.
+pub fn an_external_tick_runs_a_cycle_and_starts_no_second_chain_test() -> Nil {
+  let harness = harness("chain", [])
+  let harness =
+    Harness(
+      ..harness,
+      config: reconciler.Config(..harness.config, interval_ms: 600),
+    )
+  let set = start(harness)
+
+  lists(harness)
+  tick(harness:, at: 1000)
+  lists(harness)
+  // The timer's cycle, 600 ms after the first; a chain the tick started
+  // would LIST again a few milliseconds after it.
+  lists(harness)
+  quiet(harness)
+  stop_root(set)
+}
+
+// reconcile NoPodIp and budget Leaving: a pod without a pod IP is a target
+// that counts and is not polled; the LIST that first shows its IP joins it
+// to the schedule, and it is polled at its phase, at once with draw 0.
+pub fn a_pod_that_gains_an_ip_joins_the_schedule_at_the_list_that_shows_it_test() -> Nil {
+  let harness = harness("no-ip", [pod("1"), PodFixture(..pod("2"), ip: None)])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert string.contains(metrics.collect(), "knarr_targets{kind=\"pods\"} 2\n")
+  assert list_of(harness.table, "polled") == ["10.0.0.1:8080/knarr/v1/status"]
+  set_pods(harness.table, [
+    PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+    pod("2"),
+  ])
+  tick(harness:, at: 1000)
+  lists(harness)
+  patch_of(next(harness), "2")
+  quiet(harness)
+  assert list_of(harness.table, "polled")
+    == ["10.0.0.1:8080/knarr/v1/status", "10.0.0.2:8080/knarr/v1/status"]
+  stop_root(set)
+}
+
+// reconcile Cycle and budget Leaving: a reading for a pod no LIST shows,
+// which the scheduler would have discarded, lands nowhere: it is neither
+// counted nor observed, and the process carries on.
+pub fn a_reading_for_a_pod_the_list_does_not_show_lands_nowhere_test() -> Nil {
+  let harness = harness("stray", [pod("1")])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  process.send(
+    process.named_subject(harness.config.names.reconciler),
+    reconciler.Polled(scheduler.Polled(
+      pod_name: "2",
+      deployment: "stray",
+      endpoint: poller.Endpoint(
+        pod_ip: "10.0.0.2",
+        port: 8080,
+        path: "/knarr/v1/status",
+      ),
+      reading: reconcile.Reading(
+        kind: reconcile.Valid,
+        cost: Some(500),
+        draining: False,
+      ),
+      at_ms: 1_000_000,
+    )),
+  )
+  tick(harness:, at: 1000)
+  lists(harness)
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_polls_total{deployment=\"stray\",reading=\"valid\"} 1\n",
+  )
   stop_root(set)
 }
 
@@ -1023,6 +1216,372 @@ pub fn a_recreated_deployment_of_the_same_name_keeps_its_series_test() -> Nil {
   stop_root(set)
 }
 
+const ste_key = "cluster-autoscaler.kubernetes.io/safe-to-evict"
+
+/// A pod whose safe-to-evict reads "false" while knarr's marker applied
+/// "true", and whose cost is unowned: a conflict on one owned annotation,
+/// and a write due on the other once a valid reading is in.
+fn safe_conflicting() -> String {
+  json.object([
+    #(ste_key, json.string("false")),
+    #(
+      marker_key,
+      json.string(
+        "{\"at\":\""
+        <> at(1000)
+        <> "\",\"safe-to-evict\":{\"applied\":\"true\",\"at\":\""
+        <> at(1000)
+        <> "\"}}",
+      ),
+    ),
+  ])
+  |> json.to_string
+}
+
+/// The same pod after the yield: the marker records the yield.
+fn safe_yielded() -> String {
+  json.object([
+    #(ste_key, json.string("false")),
+    #(
+      marker_key,
+      json.string(
+        "{\"at\":\""
+        <> at(1000)
+        <> "\",\"safe-to-evict\":{\"at\":\""
+        <> at(1000)
+        <> "\",\"yielded\":\"false\"}}",
+      ),
+    ),
+  ])
+  |> json.to_string
+}
+
+/// The pod a patch request names.
+fn patched_pod(request: Request(String)) -> String {
+  assert request.method == http.Patch
+  request.path |> string.split("/") |> list.last |> should.be_ok
+}
+
+// reconcile Sequence, budget PerPod and Pending: one patch attempt goes on
+// one turn. A conflict's yield takes the pod's turn, with its Event; the
+// write also due stays pending for a later turn, which the patcher grants
+// once the patch interval since the yield has passed, and it is then built
+// from the yield's response.
+pub fn a_yield_takes_the_turn_and_the_apply_follows_on_a_later_one_test() -> Nil {
+  let harness =
+    harness("yield-apply", [
+      PodFixture(..pod("1"), annotations: safe_conflicting()),
+    ])
+  put(
+    harness.table,
+    "patched:1",
+    pod_json(PodFixture(..pod("1"), annotations: safe_yielded())),
+  )
+  let set = start(harness)
+
+  lists(harness)
+  let yield = patch_of(next(harness), "1")
+  assert string.contains(
+    yield,
+    "{\"op\":\"test\",\"path\":\"/metadata/annotations/cluster-autoscaler.kubernetes.io~1safe-to-evict\",\"value\":\"false\"}",
+  )
+  assert string.contains(yield, "\\\"yielded\\\":\\\"false\\\"")
+  assert !string.contains(yield, "\"500\"")
+  let #(reason, _, _) = event_of(next(harness))
+  assert reason == "AnnotationYielded"
+  // The write is due, but the turn is spent on the yield.
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    patches(deployment: "yield-apply", purpose: "yield", result: "accepted")
+      <> "1\n",
+  )
+  patcher_wake(harness:, at: 1059)
+  quiet(harness)
+  patcher_wake(harness:, at: 1060)
+  let apply = patch_of(next(harness), "1")
+  assert string.contains(apply, "\"500\"")
+  assert string.contains(apply, "\\\"yielded\\\":\\\"false\\\"")
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    patches(deployment: "yield-apply", purpose: "apply", result: "accepted")
+      <> "1\n",
+  )
+  stop_root(set)
+}
+
+// budget BackOff, PauseScope and observability Budget: a patch refused
+// with 429 is counted once, as throttled on knarr_patches_total, and pauses
+// every pod for the greater of the ladder and Retry-After, shown on
+// knarr_paused and knarr_pause_seconds with scope patch; the next patch of
+// any pod goes only once the pause has ended, the throttled change among
+// them, since it stayed pending.
+pub fn a_patch_429_is_counted_once_as_throttled_and_pauses_every_pod_test() -> Nil {
+  let harness = harness("throttle", [pod("1"), pod("2")])
+  put(harness.table, "patch_status", "429")
+  put(harness.table, "patch_retry_after", "120")
+  let set = start(harness)
+
+  lists(harness)
+  let throttled = patched_pod(next(harness))
+  quiet(harness)
+  assert await_metric(
+    patches(deployment: "throttle", purpose: "apply", result: "throttled")
+      <> "1\n",
+    1000,
+  )
+  let exposition = metrics.collect()
+  assert !string.contains(
+    exposition,
+    patches(deployment: "throttle", purpose: "apply", result: "accepted"),
+  )
+  assert string.contains(exposition, "knarr_paused{scope=\"patch\"} 1\n")
+  assert string.contains(
+    exposition,
+    "knarr_pause_seconds{scope=\"patch\"} 120\n",
+  )
+  put(harness.table, "patch_status", "200")
+  patcher_wake(harness:, at: 1119)
+  quiet(harness)
+  patcher_wake(harness:, at: 1120)
+  let pods = [patched_pod(next(harness)), patched_pod(next(harness))]
+  assert list.sort(pods, string.compare) == ["1", "2"]
+  assert list.contains(pods, throttled)
+  assert await_metric(
+    patches(deployment: "throttle", purpose: "apply", result: "accepted")
+      <> "2\n",
+    1000,
+  )
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    patches(deployment: "throttle", purpose: "apply", result: "throttled")
+      <> "1\n",
+  )
+  assert string.contains(exposition, "knarr_paused{scope=\"patch\"} 0\n")
+  quiet(harness)
+  stop_root(set)
+}
+
+// budget PauseScope, ListCadence and observability Budget: a 429 on a LIST
+// skips the whole cycle, keeps the previous target set, is counted once as
+// throttled on knarr_lists_total, and pauses the LISTs for the greater of
+// the ladder and Retry-After, shown with scope list; a tick inside the
+// pause sends no LIST, while polling and patching go on; the first tick
+// after the pause LISTs and clears the gauges.
+pub fn a_list_429_skips_the_cycle_and_withholds_the_ticks_inside_the_pause_test() -> Nil {
+  let harness = harness("list-pause", [pod("1")])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  let throttled = "knarr_lists_total{resource=\"pods\",result=\"throttled\"}"
+  let before = counter(throttled)
+  put(harness.table, "list_status", "429")
+  put(harness.table, "list_retry_after", "120")
+  tick(harness:, at: 1300)
+  assert next(harness).path == "/api/v1/namespaces/default/pods"
+  quiet(harness)
+  assert await_metric("knarr_paused{scope=\"list\"} 1\n", 1000)
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    "knarr_pause_seconds{scope=\"list\"} 120\n",
+  )
+  assert counter(throttled) == before + 1
+  assert string.contains(exposition, "knarr_targets{kind=\"pods\"} 1\n")
+  assert string.contains(
+    exposition,
+    "knarr_last_discovery_timestamp_seconds 1000\n",
+  )
+  // Inside the pause the tick is withheld; a poll and its patch are not.
+  tick(harness:, at: 1350)
+  quiet(harness)
+  wake(harness:, at: 1350)
+  assert await_polls(harness:, count: 2, within: 1000)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  set_pods(harness.table, [
+    PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+  ])
+  put(harness.table, "list_status", "200")
+  tick(harness:, at: 1419)
+  quiet(harness)
+  tick(harness:, at: 1420)
+  lists(harness)
+  quiet(harness)
+  let exposition = metrics.collect()
+  assert string.contains(exposition, "knarr_paused{scope=\"list\"} 0\n")
+  assert string.contains(exposition, "knarr_pause_seconds{scope=\"list\"} 0\n")
+  assert string.contains(
+    exposition,
+    "knarr_last_discovery_timestamp_seconds 1420\n",
+  )
+  assert counter(throttled) == before + 1
+  stop_root(set)
+}
+
+// budget Pending: every turn is answered once, with the turn's own key. A
+// turn for a pod no LIST shows is answered nothing due, and so is a cleanup
+// turn, whose changes ticket 47 derives, so the patcher's one turn in
+// flight clears and the next due pod gets its turn.
+pub fn a_turn_for_an_unknown_pod_or_a_cleanup_is_answered_nothing_due_test() -> Nil {
+  let harness = harness("ghost", [pod("1")])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  to_patcher(
+    harness,
+    patcher.Due(
+      pod_name: "ghost",
+      purpose: budget.Apply,
+      deployment: "ghost",
+      interval_s: 0,
+      at_ms: 1_000_000,
+    ),
+  )
+  to_patcher(
+    harness,
+    patcher.Due(
+      pod_name: "1",
+      purpose: budget.Cleanup,
+      deployment: "ghost",
+      interval_s: 0,
+      at_ms: 1_000_000,
+    ),
+  )
+  set_pods(harness.table, [pod("1"), pod("2")])
+  tick(harness:, at: 1000)
+  lists(harness)
+  patch_of(next(harness), "2")
+  quiet(harness)
+  stop_root(set)
+}
+
+// observability SeriesLife: a Deployment that left the target set is
+// retired when the patcher says it is quiet, not at the LIST that dropped
+// it, so a late response is counted before its series go. A cleanup
+// pending for its pod, held by the patch interval, keeps it busy; the turn
+// that finds nothing due lets it go quiet.
+pub fn a_departed_deployment_is_retired_only_when_the_patcher_is_quiet_test() -> Nil {
+  let harness = harness("depart", [pod("1")])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  to_patcher(
+    harness,
+    patcher.Due(
+      pod_name: "1",
+      purpose: budget.Cleanup,
+      deployment: "depart",
+      interval_s: 60,
+      at_ms: 1_000_000,
+    ),
+  )
+  put(harness.table, "deployments", items([]))
+  tick(harness:, at: 1000)
+  lists(harness)
+  quiet(harness)
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    "knarr_polls_total{deployment=\"depart\",reading=\"valid\"} 1\n",
+  )
+  assert string.contains(
+    exposition,
+    patches(deployment: "depart", purpose: "apply", result: "accepted") <> "1\n",
+  )
+  assert string.contains(
+    exposition,
+    "knarr_pods{deployment=\"depart\",tier=\"0\"} 1\n",
+  )
+  patcher_wake(harness:, at: 1060)
+  assert await_retired("depart", 1000)
+  quiet(harness)
+  stop_root(set)
+}
+
+// observability SeriesLife and config Discovery: a Deployment that leaves
+// and rejoins the target set before the patcher is quiet is not retired,
+// by the patcher's word or by a stray quiet: its series carry on and its
+// counters are not restarted.
+pub fn a_deployment_that_rejoins_before_quiet_keeps_its_series_test() -> Nil {
+  let harness = harness("rejoin", [pod("1")])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  to_patcher(
+    harness,
+    patcher.Due(
+      pod_name: "1",
+      purpose: budget.Cleanup,
+      deployment: "rejoin",
+      interval_s: 60,
+      at_ms: 1_000_000,
+    ),
+  )
+  put(harness.table, "deployments", items([]))
+  tick(harness:, at: 1000)
+  lists(harness)
+  quiet(harness)
+  set_deployment(harness.table, "{}")
+  set_pods(harness.table, [
+    PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+  ])
+  tick(harness:, at: 1000)
+  lists(harness)
+  quiet(harness)
+  process.send(
+    process.named_subject(harness.config.names.reconciler),
+    reconciler.Quiet(deployment: "rejoin"),
+  )
+  patcher_wake(harness:, at: 1060)
+  quiet(harness)
+  let exposition = metrics.collect()
+  assert string.contains(
+    exposition,
+    "knarr_polls_total{deployment=\"rejoin\",reading=\"valid\"} 2\n",
+  )
+  assert string.contains(
+    exposition,
+    patches(deployment: "rejoin", purpose: "apply", result: "accepted") <> "1\n",
+  )
+  assert string.contains(
+    exposition,
+    "knarr_pods{deployment=\"rejoin\",tier=\"1\"} 1\n",
+  )
+  stop_root(set)
+}
+
+// budget Restart: after the set restarts every pod is patchable at once,
+// since the interval, the bucket and the pause are in memory only: the pod
+// patched at this clock before the crash is patched again at it.
+pub fn a_due_change_after_a_restart_gets_its_turn_at_once_test() -> Nil {
+  let harness = harness("restart-due", [pod("1")])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  let first = children(set)
+  let patcher_pid = list.drop(first, 2) |> list.first |> should.be_ok
+  process.kill(patcher_pid)
+  let second = await_new_children(set, first)
+  assert list.length(second) == 4
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  stop_root(set)
+}
+
 /// The per-Deployment series a process before a crash set and counted,
 /// which no cycle of the restarted set (no pods) sets again.
 fn stale_series() -> Nil {
@@ -1109,6 +1668,11 @@ pub fn the_list_timer_of_a_replaced_reconciler_does_not_tick_its_successor_test(
     )
   let set = start(harness)
 
+  lists(harness)
+  // The timer is armed after the first cycle; a tick's cycle running proves
+  // the message before it was handled whole, timer and all, so the kill
+  // cannot land before the timer exists.
+  tick(harness:, at: 1000)
   lists(harness)
   let first = children(set)
   let reconciler = list.last(first) |> should.be_ok
