@@ -168,6 +168,7 @@ fn held(gate: Subject(Held)) -> fn(Endpoint) -> poller.Reading {
 fn joiner(pod: String, deployment: String) -> scheduler.Joiner {
   Joiner(
     pod_name: pod,
+    pod_uid: "u-" <> pod,
     deployment:,
     interval_s: interval,
     endpoint: Endpoint(pod_ip: pod, port:, path:),
@@ -601,6 +602,41 @@ pub fn a_pod_that_leaves_and_rejoins_has_one_poll_running_and_the_old_worker_dea
   assert process.receive(harness.sink, 300) == Error(Nil)
   process.send(new.release, valid(2))
   assert next_polled(harness).reading.cost == Some(2)
+  stop_root(harness.root)
+}
+
+// Leaving: a pod listed under a new uid while its poll is out left and
+// joined in one LIST, with no LIST between that leaves it out: the old
+// worker is stopped and its answer never reaches the sink, the replacement
+// joins from a fresh phase, and its reading is delivered under its own uid.
+pub fn a_pod_relisted_under_a_new_uid_abandons_the_old_poll_and_joins_afresh_test() -> Nil {
+  let table = table_new()
+  put(table, "now", "1000")
+  put(table, "draws", "0,0")
+  let gate = process.new_subject()
+  let harness =
+    start(
+      table:,
+      gate:,
+      poll: held(gate),
+      concurrency: 1,
+      poll_timeout_s: 1,
+      now: fn() { scripted_now(table) },
+    )
+  listed(harness, [joiner("a", "replaced")])
+  let old = next_held(harness)
+  assert old.pod == "a"
+  listed(harness, [Joiner(..joiner("a", "replaced"), pod_uid: "u-a2")])
+  let new = next_held(harness)
+  assert new.pod == "a"
+  assert new.worker != old.worker
+  assert await(fn() { !process.is_alive(old.worker) }, 50)
+  process.send(old.release, valid(1))
+  assert process.receive(harness.sink, 300) == Error(Nil)
+  process.send(new.release, valid(2))
+  let polled = next_polled(harness)
+  assert polled.pod_uid == "u-a2"
+  assert polled.reading.cost == Some(2)
   stop_root(harness.root)
 }
 

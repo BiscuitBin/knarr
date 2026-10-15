@@ -171,16 +171,26 @@ contract PollSchedule {
         -- are the cycle's target set, the pod names config's targets
         -- returns (ticket 19), and not every pod the unselected pod LIST
         -- returns; no patch is made once deletionTimestamp is set, which is
-        -- reconcile's. on_list drops every schedule whose pod the
-        -- latest LIST no longer shows; a poll of that pod waiting in the
-        -- queue leaves the queue at once and is never sent, and one already
-        -- in flight is abandoned, its response discarded if it returns and
-        -- no reading of it counted or observed. on_list
-        -- also adds, for every listed pod that has none, the schedule
-        -- joining holds for it: the caller builds joining with phase, one
-        -- entry per listed pod with a pod IP (reconcile NoPodIp), each from
-        -- that pod's Deployment interval and its own draw, and on_list
-        -- ignores an entry whose pod already has a schedule. Joining and
+        -- reconcile's. A pod is the name and the uid the LIST shows. on_list
+        -- drops every schedule whose pod the latest LIST no longer shows; a
+        -- poll of that pod waiting in the queue leaves the queue at once and
+        -- is never sent, and one already in flight is abandoned, its
+        -- response discarded if it returns and no reading of it counted or
+        -- observed. on_list also adds, for every listed pod that has none,
+        -- the schedule joining holds for it: the caller builds joining with
+        -- phase, one entry per listed pod with a pod IP (reconcile NoPodIp),
+        -- each from that pod's Deployment interval and its own draw, and
+        -- on_list ignores an entry whose pod already has a schedule. A
+        -- joiner whose uid is not the one its name's schedule was built for
+        -- is a pod that left and joined in one LIST: the caller drops that
+        -- schedule before on_list, so its queued poll leaves the queue, its
+        -- poll in flight is abandoned and its response discarded as for a
+        -- pod that left, and it joins from a fresh phase. on_list itself
+        -- stays keyed by name. Every reading carries the uid of the pod its
+        -- poll was sent for, and reconcile lands it only on that pod
+        -- (reconcile Cycle); a pod listed under a new uid with no pod IP has
+        -- no joiner, so the schedule it replaced stands until a LIST shows
+        -- its IP, and that schedule's readings land nowhere. Joining and
         -- leaving are learned only from the LIST.
     @invariant Restart
         -- The schedule is in memory only. After a restart it is rebuilt

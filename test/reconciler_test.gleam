@@ -110,6 +110,7 @@ const installed =
 type PodFixture {
   PodFixture(
     name: String,
+    uid: String,
     ip: Option(String),
     annotations: String,
     terminating: Bool,
@@ -121,6 +122,7 @@ type PodFixture {
 fn pod(name: String) -> PodFixture {
   PodFixture(
     name:,
+    uid: "u-" <> name,
     ip: Some("10.0.0." <> name),
     annotations: "null",
     terminating: False,
@@ -160,8 +162,8 @@ fn pod_json(fixture: PodFixture) -> String {
   }
   "{\"metadata\":{\"name\":\""
   <> fixture.name
-  <> "\",\"uid\":\"u-"
-  <> fixture.name
+  <> "\",\"uid\":\""
+  <> fixture.uid
   <> "\","
   <> deletion
   <> "\"annotations\":"
@@ -977,6 +979,7 @@ pub fn a_reading_for_a_pod_the_list_does_not_show_lands_nowhere_test() -> Nil {
     process.named_subject(harness.config.names.reconciler),
     reconciler.Polled(scheduler.Polled(
       pod_name: "2",
+      pod_uid: "u-2",
       deployment: "stray",
       endpoint: poller.Endpoint(
         pod_ip: "10.0.0.2",
@@ -998,6 +1001,100 @@ pub fn a_reading_for_a_pod_the_list_does_not_show_lands_nowhere_test() -> Nil {
     metrics.collect(),
     "knarr_polls_total{deployment=\"stray\",reading=\"valid\"} 1\n",
   )
+  stop_root(set)
+}
+
+// reconcile Cycle and budget Leaving: a pod listed under a new uid is a
+// new pod, so a reading of the pod it replaced, sent for the old uid,
+// lands nowhere: it is neither counted nor handed to the patcher. The
+// replacement has no pod IP yet, so no poll of its own is made.
+pub fn a_reading_for_a_replaced_pod_lands_nowhere_test() -> Nil {
+  let harness = harness("replaced", [pod("1")])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  set_pods(harness.table, [PodFixture(..pod("1"), uid: "u-1b", ip: None)])
+  tick(harness:, at: 1000)
+  lists(harness)
+  process.send(
+    process.named_subject(harness.config.names.reconciler),
+    reconciler.Polled(scheduler.Polled(
+      pod_name: "1",
+      pod_uid: "u-1",
+      deployment: "replaced",
+      endpoint: poller.Endpoint(
+        pod_ip: "10.0.0.1",
+        port: 8080,
+        path: "/knarr/v1/status",
+      ),
+      reading: reconcile.Reading(
+        kind: reconcile.Valid,
+        cost: Some(500),
+        draining: False,
+      ),
+      at_ms: 1_000_000,
+    )),
+  )
+  tick(harness:, at: 1000)
+  lists(harness)
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_polls_total{deployment=\"replaced\",reading=\"valid\"} 1\n",
+  )
+  assert string.contains(
+    metrics.collect(),
+    "knarr_patches_pending{deployment=\"replaced\"} 0\n",
+  )
+  stop_root(set)
+}
+
+// reconcile Cycle and JustStarted: a pod relisted under a new uid begins
+// its memory afresh, so a write its predecessor's reading made due is not
+// built on it: the turn the patcher grants finds no reading and is
+// answered nothing due. The replacement is written from its own reading
+// once a LIST shows its IP and its first poll returns.
+pub fn a_replacement_pod_is_not_written_from_its_predecessors_reading_test() -> Nil {
+  let harness = harness("predecessor", [pod("1")])
+  let replacement = PodFixture(..pod("1"), uid: "u-1b")
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  set_pods(harness.table, [
+    PodFixture(..pod("1"), annotations: marked("500", at(1000))),
+  ])
+  tick(harness:, at: 1000)
+  lists(harness)
+  quiet(harness)
+  put(harness.table, "reading:10.0.0.1", "1000")
+  wake(harness:, at: 1030)
+  assert await_polls(harness:, count: 2, within: 1000)
+  // The write is due and waits out the pod's interval (budget PerPod).
+  assert await_metric(
+    "knarr_patches_pending{deployment=\"predecessor\"} 1\n",
+    1000,
+  )
+  quiet(harness)
+  set_pods(harness.table, [PodFixture(..replacement, ip: None)])
+  tick(harness:, at: 1030)
+  lists(harness)
+  quiet(harness)
+  patcher_wake(harness:, at: 1060)
+  quiet(harness)
+  assert await_metric(
+    "knarr_patches_pending{deployment=\"predecessor\"} 0\n",
+    1000,
+  )
+  put(harness.table, "patched:1", pod_json(replacement))
+  set_pods(harness.table, [replacement])
+  tick(harness:, at: 1060)
+  lists(harness)
+  assert string.contains(patch_of(next(harness), "1"), "\"1000\"")
+  quiet(harness)
   stop_root(set)
 }
 

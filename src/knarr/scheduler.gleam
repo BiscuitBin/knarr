@@ -28,22 +28,25 @@ import knarr/observability.{type Field, type Level}
 import knarr/poller.{type Endpoint}
 import knarr/reconcile.{type Reading}
 
-/// One target pod with a pod IP as the LIST showed it, with the poll
-/// interval of its Deployment.
+/// One target pod with a pod IP as the LIST showed it, by name and uid,
+/// with the poll interval of its Deployment.
 pub type Joiner {
   Joiner(
     pod_name: String,
+    pod_uid: String,
     deployment: String,
     interval_s: Int,
     endpoint: Endpoint,
   )
 }
 
-/// What the scheduler hands the reconciler for one returned poll: the
-/// reading as reconcile consumes it, and the clock at delivery.
+/// What the scheduler hands the reconciler for one returned poll: the pod
+/// the poll was sent for, by name and uid, the reading as reconcile
+/// consumes it, and the clock at delivery.
 pub type Polled {
   Polled(
     pod_name: String,
+    pod_uid: String,
     deployment: String,
     endpoint: Endpoint,
     reading: Reading,
@@ -125,15 +128,22 @@ type Entry {
   Entry(
     schedule: Schedule,
     served: Option(Int),
+    pod_uid: String,
     deployment: String,
     interval_s: Int,
     endpoint: Endpoint,
   )
 }
 
-/// One poll sent and not yet returned.
+/// One poll sent and not yet returned, with the uid of the pod it was sent
+/// for.
 type Flight {
-  Flight(worker: Pid, monitor: process.Monitor, deadline: process.Timer)
+  Flight(
+    worker: Pid,
+    monitor: process.Monitor,
+    deadline: process.Timer,
+    pod_uid: String,
+  )
 }
 
 type State {
@@ -215,20 +225,30 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
 /// ladder, its outstanding poll and its queue place, and takes the
 /// Deployment, interval and endpoint the LIST now shows, and
 /// `budget.on_list` drops every pod the LIST no longer shows, its queued
-/// poll with it. A dropped pod's flight is released and its worker
-/// stopped, so a poll of it never outlives it and a pod that rejoins has
-/// one poll running at most. A Deployment that no entry names any more,
-/// its pods gone or moved to another Deployment, loses its skipped-poll
-/// series (observability SeriesLife).
+/// poll with it. A joiner whose uid is not its entry's left and joined in
+/// this LIST: its entry is dropped before `budget.on_list`, so it joins
+/// from a fresh phase. A dropped or replaced pod's flight is released and
+/// its worker stopped, so a poll of it never outlives it and a pod that
+/// rejoins has one poll running at most. A Deployment that no entry names
+/// any more, its pods gone or moved to another Deployment, loses its
+/// skipped-poll series (observability SeriesLife).
 fn join(
   state state: State,
   listed listed: List(String),
   joining joining: List(Joiner),
 ) -> State {
   let now = state.config.now()
+  let replaced =
+    list.filter_map(joining, fn(one) {
+      case dict.get(state.schedules, one.pod_name) {
+        Ok(entry) if entry.pod_uid != one.pod_uid -> Ok(one.pod_name)
+        _ -> Error(Nil)
+      }
+    })
+  let prior = dict.drop(state.schedules, replaced)
   let fresh =
     joining
-    |> list.filter(fn(one) { !dict.has_key(state.schedules, one.pod_name) })
+    |> list.filter(fn(one) { !dict.has_key(prior, one.pod_name) })
     |> list.map(fn(one) {
       budget.phase(
         pod_name: one.pod_name,
@@ -239,7 +259,7 @@ fn join(
     })
   let survivors =
     budget.on_list(
-      schedules: dict.values(state.schedules)
+      schedules: dict.values(prior)
         |> list.map(fn(entry) { entry.schedule }),
       listed:,
       joining: fresh,
@@ -249,7 +269,7 @@ fn join(
   let schedules =
     list.fold(survivors, dict.new(), fn(acc, schedule) {
       let pod_name = schedule.pod_name
-      case dict.get(joiners, pod_name), dict.get(state.schedules, pod_name) {
+      case dict.get(joiners, pod_name), dict.get(prior, pod_name) {
         Ok(joiner), Ok(entry) ->
           dict.insert(
             acc,
@@ -269,6 +289,7 @@ fn join(
             Entry(
               schedule:,
               served: None,
+              pod_uid: joiner.pod_uid,
               deployment: joiner.deployment,
               interval_s: joiner.interval_s,
               endpoint: joiner.endpoint,
@@ -284,7 +305,10 @@ fn join(
     |> dict.to_list
     |> list.fold(state.flights, fn(flights, pair) {
       let #(pod_name, flight) = pair
-      use <- bool.guard(dict.has_key(schedules, pod_name), flights)
+      use <- bool.guard(
+        dict.has_key(schedules, pod_name) && !list.contains(replaced, pod_name),
+        flights,
+      )
       release(flight)
       stop(flight.worker)
       dict.delete(flights, pod_name)
@@ -308,8 +332,8 @@ fn deployments(schedules: Dict(String, Entry)) -> set.Set(String) {
 // ---------------------------------------------------------- The returns ---
 
 /// A worker's answer: delivered when it is the flight's worker, discarded
-/// when the pod left the schedule, or left and rejoined, while it was out
-/// (budget Leaving).
+/// when the pod left the schedule, or left and rejoined, under its uid or
+/// another, while it was out (budget Leaving).
 fn returned(
   state state: State,
   pod_name pod_name: String,
@@ -326,7 +350,7 @@ fn returned(
         _ -> int.to_float(elapsed_ms) /. 1000.0
       }
       State(..state, flights: dict.delete(state.flights, pod_name))
-      |> deliver(pod_name:, reading:, seconds:)
+      |> deliver(pod_name:, pod_uid: flight.pod_uid, reading:, seconds:)
     }
     _ -> state
   }
@@ -347,7 +371,7 @@ fn overdue(
       release(flight)
       stop(worker)
       State(..state, flights: dict.delete(state.flights, pod_name))
-      |> timed_out(pod_name)
+      |> timed_out(pod_name:, pod_uid: flight.pod_uid)
     }
     _ -> state
   }
@@ -364,16 +388,21 @@ fn crashed(state: State, pid: Pid) -> State {
     Ok(#(pod_name, flight)) -> {
       release(flight)
       State(..state, flights: dict.delete(state.flights, pod_name))
-      |> timed_out(pod_name)
+      |> timed_out(pod_name:, pod_uid: flight.pod_uid)
     }
     Error(Nil) -> state
   }
 }
 
-fn timed_out(state: State, pod_name: String) -> State {
+fn timed_out(
+  state state: State,
+  pod_name pod_name: String,
+  pod_uid pod_uid: String,
+) -> State {
   deliver(
     state:,
     pod_name:,
+    pod_uid:,
     reading: reconcile.Reading(
       kind: reconcile.TimedOut,
       cost: None,
@@ -400,11 +429,13 @@ fn stop(worker: Pid) -> Nil {
 }
 
 /// One reading delivered: observed on the duration histogram, handed to the
-/// sink, and the pod no longer outstanding, with every rung that passed
-/// while its poll was out skipped (budget Jitter, NoOverlap).
+/// sink under the uid of the pod its poll was sent for, the flight's, and
+/// the pod no longer outstanding, with every rung that passed while its
+/// poll was out skipped (budget Jitter, NoOverlap, Leaving).
 fn deliver(
   state state: State,
   pod_name pod_name: String,
+  pod_uid pod_uid: String,
   reading reading: Reading,
   seconds seconds: Float,
 ) -> State {
@@ -414,6 +445,7 @@ fn deliver(
       let now = state.config.now()
       state.config.polled(Polled(
         pod_name:,
+        pod_uid:,
         deployment: entry.deployment,
         endpoint: entry.endpoint,
         reading:,
@@ -519,7 +551,8 @@ fn send(state: State, entry: Entry) -> Option(State) {
           config.poll_timeout_s * 2000 + 1000,
           Deadline(pod_name:, worker: started.pid),
         )
-      let flight = Flight(worker: started.pid, monitor:, deadline:)
+      let flight =
+        Flight(worker: started.pid, monitor:, deadline:, pod_uid: entry.pod_uid)
       Some(
         State(..state, flights: dict.insert(state.flights, pod_name, flight)),
       )

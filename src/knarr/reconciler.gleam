@@ -702,16 +702,17 @@ fn discovered(
   // classified against it (reconcile Rejected422, Sequence; ownership
   // Rejected). A terminating pod leaves every state, its rejection runs
   // among them (observability Cadence OnEntry). A memory of a pod the LIST
-  // no longer shows is dropped with it.
+  // no longer shows is dropped with it, and one the LIST shows under
+  // another uid is begun afresh, as a restart begins it (reconcile Cycle).
   let #(memories, cycle) =
     list.fold(targets, #([], cycle), fn(acc, target) {
       let #(memories, cycle) = acc
       case list.find(pods, fn(pod) { pod.name == target.pod_name }) {
         Ok(pod) -> {
-          let memory =
-            dict.get(state.pods, pod.name)
-            |> option.from_result
-            |> option.unwrap(fresh(pod))
+          let memory = case dict.get(state.pods, pod.name) {
+            Ok(memory) if memory.pod.uid == pod.uid -> memory
+            _ -> fresh(pod)
+          }
           let runs = case pod.deletion_timestamp {
             Some(_) -> []
             None -> memory.runs
@@ -743,6 +744,7 @@ fn discovered(
         Some(pod_ip) ->
           Ok(scheduler.Joiner(
             pod_name: target.pod_name,
+            pod_uid: memory.pod.uid,
             deployment: target.deployment_name,
             interval_s: target.settings.poll_interval,
             endpoint: Endpoint(
@@ -842,7 +844,8 @@ fn fresh(pod: Pod) -> Memory {
 /// Deployment that opts out and back in announces no second Event; ticket
 /// 47's cleanup_rejected run rides on this. Only the runs are kept: the
 /// reading state of a pod that is not a target is not, and a pod that is
-/// terminating or no longer listed drops everything.
+/// terminating, no longer listed or listed under another uid drops
+/// everything (reconcile Cycle).
 fn retain_runs(
   previous previous: Dict(String, Memory),
   current current: Dict(String, Memory),
@@ -854,8 +857,9 @@ fn retain_runs(
       dict.has_key(memories, pod.name),
       dict.get(previous, pod.name)
     {
-      None, False, Ok(Memory(runs: [_, ..] as runs, ..)) ->
-        dict.insert(memories, pod.name, Memory(..fresh(pod), runs:))
+      None, False, Ok(Memory(runs: [_, ..] as runs, pod: before, ..))
+        if before.uid == pod.uid
+      -> dict.insert(memories, pod.name, Memory(..fresh(pod), runs:))
       _, _, _ -> memories
     }
   })
@@ -876,14 +880,15 @@ fn labelled(series: Series, deployments: List(String)) -> Bool {
 /// is told the apply is pending, with the pod's patch interval (budget
 /// Pending, PerPod); nothing is sent to the apiserver here. The change is
 /// re-derived on the turn, so a later reading that leaves nothing due costs
-/// nothing but a turn. A reading of a pod no LIST has shown since, or one
-/// before any cycle has run, has nowhere to land and is dropped.
+/// nothing but a turn. A reading of a pod no LIST has shown since, one for
+/// a uid the newest view does not carry, or one before any cycle has run,
+/// has nowhere to land and is dropped (reconcile Cycle, budget Leaving).
 fn polled(state: State, returned: scheduler.Polled) -> State {
   let pod_name = returned.pod_name
   let target =
     list.find(state.targets, fn(target) { target.pod_name == pod_name })
   case dict.get(state.pods, pod_name), target {
-    Ok(memory), Ok(target) -> {
+    Ok(memory), Ok(target) if memory.pod.uid == returned.pod_uid -> {
       let config = state.config
       let now = returned.at_ms
       let reading = returned.reading
