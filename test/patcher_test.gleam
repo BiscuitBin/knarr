@@ -807,7 +807,14 @@ pub fn a_pause_ends_on_the_timer_with_nothing_pending_test() -> Nil {
   assert await_metric(paused_line(1))
   process.send(
     harness.patcher,
-    Listed(targets: [], terminating: [], replaced: [], deployments: []),
+    Listed(
+      listed: [],
+      targets: [],
+      terminating: [],
+      replaced: [],
+      deployments: [],
+      cleaning: [],
+    ),
   )
   assert await_metric(pending_line("empty-pause", 0))
   assert await_metric_for(paused_line(0), 300)
@@ -816,8 +823,9 @@ pub fn a_pause_ends_on_the_timer_with_nothing_pending_test() -> Nil {
 }
 
 // Pending, Leaving: a LIST discards the apply of a pod it no longer shows or
-// shows terminating, its turn in flight included, and keeps the cleanup; an
-// attempt answered after the discard does not bring the entry back.
+// shows terminating, its turn in flight included, and keeps the cleanup of a
+// pod its cycle still makes due; an attempt answered after the discard does
+// not bring the entry back.
 pub fn a_list_discards_the_apply_of_a_gone_or_terminating_pod_and_keeps_its_cleanup_test() -> Nil {
   let harness = harness()
   due(
@@ -837,7 +845,7 @@ pub fn a_list_discards_the_apply_of_a_gone_or_terminating_pod_and_keeps_its_clea
   )
   due(
     harness:,
-    pod: "b",
+    pod: "d",
     purpose: budget.Cleanup,
     deployment: "list",
     at: start_ms,
@@ -852,14 +860,26 @@ pub fn a_list_discards_the_apply_of_a_gone_or_terminating_pod_and_keeps_its_clea
   assert await_metric(pending_line("list", 4))
   process.send(
     harness.patcher,
-    Listed(targets: ["a", "b"], terminating: ["b"], replaced: [], deployments: [
-      "list",
-    ]),
+    Listed(
+      listed: ["a", "b", "d"],
+      targets: ["a", "b"],
+      terminating: ["b"],
+      replaced: [],
+      deployments: ["list"],
+      cleaning: ["d"],
+    ),
   )
   assert await_metric(pending_line("list", 2))
   process.send(
     harness.patcher,
-    Listed(targets: ["b"], terminating: [], replaced: [], deployments: ["list"]),
+    Listed(
+      listed: ["b", "d"],
+      targets: ["b"],
+      terminating: [],
+      replaced: [],
+      deployments: ["list"],
+      cleaning: ["d"],
+    ),
   )
   assert await_metric(pending_line("list", 1))
   quiet(harness)
@@ -871,11 +891,11 @@ pub fn a_list_discards_the_apply_of_a_gone_or_terminating_pod_and_keeps_its_clea
     still_due: True,
     at: start_ms,
   )
-  assert next_turn(harness) == Turn(pod_name: "b", purpose: budget.Cleanup)
+  assert next_turn(harness) == Turn(pod_name: "d", purpose: budget.Cleanup)
   assert await_metric(pending_line("list", 1))
   attempted(
     harness:,
-    pod: "b",
+    pod: "d",
     purpose: budget.Cleanup,
     outcome: Accepted,
     still_due: False,
@@ -917,7 +937,14 @@ pub fn a_departed_deployment_is_quiet_once_nothing_of_its_pods_is_pending_or_in_
   no_quiet(harness)
   process.send(
     harness.patcher,
-    Listed(targets: ["x"], terminating: [], replaced: [], deployments: ["stays"]),
+    Listed(
+      listed: ["x"],
+      targets: ["x"],
+      terminating: [],
+      replaced: [],
+      deployments: ["stays"],
+      cleaning: [],
+    ),
   )
   no_quiet(harness)
   done(harness:, pod: "a", at: start_ms)
@@ -946,9 +973,14 @@ pub fn a_deployment_that_rejoins_before_quiet_keeps_its_pending_series_test() ->
   no_quiet(harness)
   process.send(
     harness.patcher,
-    Listed(targets: ["a"], terminating: [], replaced: [], deployments: [
-      "rejoin",
-    ]),
+    Listed(
+      listed: ["a"],
+      targets: ["a"],
+      terminating: [],
+      replaced: [],
+      deployments: ["rejoin"],
+      cleaning: [],
+    ),
   )
   done(harness:, pod: "a", at: start_ms)
   no_quiet(harness)
@@ -1057,13 +1089,25 @@ pub fn a_list_forgets_the_last_attempt_of_a_pod_it_no_longer_shows_test() -> Nil
   done(harness:, pod: "b", at: start_ms)
   send_settled(
     harness,
-    Listed(targets: ["b"], terminating: [], replaced: [], deployments: ["prune"]),
+    Listed(
+      listed: ["b"],
+      targets: ["b"],
+      terminating: [],
+      replaced: [],
+      deployments: ["prune"],
+      cleaning: [],
+    ),
   )
   send_settled(
     harness,
-    Listed(targets: ["a", "b"], terminating: [], replaced: [], deployments: [
-      "prune",
-    ]),
+    Listed(
+      listed: ["a", "b"],
+      targets: ["a", "b"],
+      terminating: [],
+      replaced: [],
+      deployments: ["prune"],
+      cleaning: [],
+    ),
   )
   due(
     harness:,
@@ -1111,9 +1155,14 @@ pub fn a_list_that_replaces_a_pod_forgets_its_apply_and_last_attempt_test() -> N
   assert await_metric(pending_line("replace", 1))
   send_settled(
     harness,
-    Listed(targets: ["a"], terminating: [], replaced: ["a"], deployments: [
-      "replace",
-    ]),
+    Listed(
+      listed: ["a"],
+      targets: ["a"],
+      terminating: [],
+      replaced: ["a"],
+      deployments: ["replace"],
+      cleaning: [],
+    ),
   )
   assert await_metric(pending_line("replace", 0))
   due(
@@ -1124,5 +1173,169 @@ pub fn a_list_that_replaces_a_pod_forgets_its_apply_and_last_attempt_test() -> N
     at: start_ms,
   )
   assert next_turn(harness) == Turn(pod_name: "a", purpose: budget.Apply)
+  stop_root(harness.root)
+}
+
+/// A cleanup's attempt rejected, its entry kept or not by `still_due`.
+fn cleanup_rejected(
+  harness harness: Harness,
+  pod pod: String,
+  still_due still_due: Bool,
+  at at: Int,
+) -> Nil {
+  send_settled(
+    harness,
+    Attempted(
+      pod_name: pod,
+      purpose: budget.Cleanup,
+      outcome: Rejected,
+      still_due:,
+      at_ms: at,
+    ),
+  )
+}
+
+/// A LIST that shows only `pods`, none of them a target, with `cleaning`
+/// the pods whose cleanup its cycle makes due.
+fn non_targets_listed(
+  pods pods: List(String),
+  replaced replaced: List(String),
+  cleaning cleaning: List(String),
+) -> patcher.Message {
+  Listed(
+    listed: pods,
+    targets: [],
+    terminating: [],
+    replaced:,
+    deployments: [],
+    cleaning:,
+  )
+}
+
+// PerPod, lifecycle Cleanup Retry: the interval is counted from a pod's last
+// attempt whatever its purpose or outcome, a pod that is not a target
+// included, so a LIST that shows the pod keeps its last attempt once its
+// entry is gone. With the LIST inside the interval, a cleanup due again is
+// held at interval - 1 seconds from the rejected attempt and granted at the
+// interval.
+pub fn a_list_keeps_the_last_attempt_of_a_listed_non_target_test() -> Nil {
+  let harness = harness()
+  due(
+    harness:,
+    pod: "n",
+    purpose: budget.Cleanup,
+    deployment: "opted-out",
+    at: start_ms,
+  )
+  assert next_turn(harness) == Turn(pod_name: "n", purpose: budget.Cleanup)
+  cleanup_rejected(harness:, pod: "n", still_due: False, at: start_ms)
+  put(harness.table, "now_ms", int.to_string(start_ms + 30_000))
+  send_settled(
+    harness,
+    non_targets_listed(pods: ["n"], replaced: [], cleaning: ["n"]),
+  )
+  due(
+    harness:,
+    pod: "n",
+    purpose: budget.Cleanup,
+    deployment: "opted-out",
+    at: start_ms + 30_000,
+  )
+  quiet(harness)
+  wake(harness:, at: start_ms + { interval - 1 } * 1000)
+  quiet(harness)
+  wake(harness:, at: start_ms + interval * 1000)
+  assert next_turn(harness) == Turn(pod_name: "n", purpose: budget.Cleanup)
+  stop_root(harness.root)
+}
+
+// Pending, lifecycle Cleanup Retry: a cleanup entry is kept while
+// lifecycle's due names its pod; a LIST that still shows the pod but whose
+// cycle no longer makes its cleanup due discards the entry, and nothing is
+// granted for it once the interval is over.
+pub fn a_list_discards_a_cleanup_its_cycle_no_longer_makes_due_test() -> Nil {
+  let harness = harness()
+  due(
+    harness:,
+    pod: "n",
+    purpose: budget.Cleanup,
+    deployment: "undue",
+    at: start_ms,
+  )
+  assert next_turn(harness) == Turn(pod_name: "n", purpose: budget.Cleanup)
+  cleanup_rejected(harness:, pod: "n", still_due: True, at: start_ms)
+  assert await_metric(pending_line("undue", 1))
+  send_settled(
+    harness,
+    non_targets_listed(pods: ["n"], replaced: [], cleaning: ["n"]),
+  )
+  assert await_metric(pending_line("undue", 1))
+  send_settled(
+    harness,
+    non_targets_listed(pods: ["n"], replaced: [], cleaning: []),
+  )
+  assert await_metric(pending_line("undue", 0))
+  wake(harness:, at: start_ms + interval * 1000)
+  quiet(harness)
+  stop_root(harness.root)
+}
+
+// lifecycle Cleanup Done, observability SeriesLife: a cleanup in turn for a
+// pod that has since left the pod LIST holds its departed Deployment until
+// it is answered. The LIST discards its entry, so an answer that finds it
+// still due brings nothing back, and the Deployment is then quiet.
+pub fn a_cleanup_in_turn_for_a_pod_that_left_the_list_holds_quiet_until_answered_test() -> Nil {
+  let harness = harness()
+  due(
+    harness:,
+    pod: "g",
+    purpose: budget.Cleanup,
+    deployment: "leaving",
+    at: start_ms,
+  )
+  assert next_turn(harness) == Turn(pod_name: "g", purpose: budget.Cleanup)
+  process.send(
+    harness.patcher,
+    non_targets_listed(pods: [], replaced: [], cleaning: []),
+  )
+  process.send(harness.patcher, Departed("leaving"))
+  no_quiet(harness)
+  cleanup_rejected(harness:, pod: "g", still_due: True, at: start_ms)
+  assert next_quiet(harness) == "leaving"
+  quiet(harness)
+  stop_root(harness.root)
+}
+
+// PerPod, Pending: a pod listed under another uid is not the pod whose
+// cleanup was due, so its predecessor's cleanup entry and last attempt are
+// forgotten even when the replacement's cycle makes a cleanup due: the
+// replacement's own cleanup is granted at once, inside the interval the
+// predecessor's attempt started.
+pub fn a_list_that_replaces_a_pod_forgets_its_cleanup_and_last_attempt_test() -> Nil {
+  let harness = harness()
+  due(
+    harness:,
+    pod: "n",
+    purpose: budget.Cleanup,
+    deployment: "recleanup",
+    at: start_ms,
+  )
+  assert next_turn(harness) == Turn(pod_name: "n", purpose: budget.Cleanup)
+  cleanup_rejected(harness:, pod: "n", still_due: True, at: start_ms)
+  quiet(harness)
+  assert await_metric(pending_line("recleanup", 1))
+  send_settled(
+    harness,
+    non_targets_listed(pods: ["n"], replaced: ["n"], cleaning: ["n"]),
+  )
+  assert await_metric(pending_line("recleanup", 0))
+  due(
+    harness:,
+    pod: "n",
+    purpose: budget.Cleanup,
+    deployment: "recleanup",
+    at: start_ms,
+  )
+  assert next_turn(harness) == Turn(pod_name: "n", purpose: budget.Cleanup)
   stop_root(harness.root)
 }

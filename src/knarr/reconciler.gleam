@@ -20,8 +20,8 @@
 //// classifies a 422 (ownership Rejected), and latches readiness.
 ////
 //// Every decision is a pure function of `reconcile`, `config`, `ownership`,
-//// `cost_mapping`, `budget` and `observability`; the effects are the
-//// injected `send`, `poll`, `now`, `random` and `mark_ready`, and
+//// `lifecycle`, `cost_mapping`, `budget` and `observability`; the effects
+//// are the injected `send`, `poll`, `now`, `random` and `mark_ready`, and
 //// `reconciler_ffi` for the files and the token's hash. The reconciler runs
 //// last in a set of four under one supervisor, with the poll-worker
 //// factory, the scheduler and the patcher, so a crash of any restarts them
@@ -46,13 +46,13 @@ import knarr/config.{type Installed, type Target}
 import knarr/cost_mapping.{Mapped}
 import knarr/k8s_client.{type Deployment, type Pod, type ReplicaSet}
 import knarr/k8s_http.{type SendError, Tls}
+import knarr/lifecycle
 import knarr/metrics
 import knarr/observability.{
   type Entry, type Field, type Level, type Series, Entry, Series,
 }
 import knarr/ownership.{
-  type Marker, type Operation, type Owned, type Standing, AppliedRecord,
-  Conflict, Write,
+  type Marker, type Operation, type Owned, type Standing, Conflict, Write,
 }
 import knarr/patcher
 import knarr/poller.{type Endpoint, Endpoint}
@@ -761,7 +761,10 @@ fn discovered(
   // The patcher learns the same: the apply of a pod not listed, or listed
   // terminating, is discarded (budget Pending, Leaving), the apply and the
   // last attempt of a pod listed under another uid are forgotten (budget
-  // PerPod, Pending), and a listed Deployment is not departing.
+  // PerPod, Pending), the last attempt of every pod the LIST shows is kept,
+  // and a listed Deployment is not departing. This cycle derives no
+  // lifecycle due yet, so every listed pod counts as cleaning and a pending
+  // cleanup is kept while its pod is listed.
   let replaced =
     list.filter_map(memories, fn(item) {
       let #(target, memory) = item
@@ -772,9 +775,11 @@ fn discovered(
     })
   let deployment_names =
     list.map(targets, fn(target) { target.deployment_name }) |> list.unique
+  let pod_names = list.map(pods, fn(pod) { pod.name })
   notify(
     config.names.patcher,
     patcher.Listed(
+      listed: pod_names,
       targets: listed,
       terminating: list.filter_map(memories, fn(item) {
         case { item.1 }.pod.deletion_timestamp {
@@ -784,6 +789,7 @@ fn discovered(
       }),
       replaced:,
       deployments: deployment_names,
+      cleaning: pod_names,
     ),
   )
   let memories =
@@ -1243,36 +1249,26 @@ type Views {
 }
 
 fn view(target target: Target, pod pod: Pod, marker marker: Marker) -> Views {
-  let cost_record = ownership.record(marker, ownership.pod_deletion_cost)
   let applied =
     reconcile.parse_applied(ownership.applied_value(
       marker:,
       owned: ownership.pod_deletion_cost,
     ))
-  let cost_standing = case cost_record, applied.usable {
-    Some(AppliedRecord(..)), False -> Conflict
-    _, _ ->
-      ownership.standing(
-        marker:,
-        annotations: pod.annotations,
-        owned: ownership.pod_deletion_cost,
-      )
-  }
+  let cost_standing =
+    lifecycle.effective_standing(
+      marker:,
+      annotations: pod.annotations,
+      owned: ownership.pod_deletion_cost,
+    )
   let safe_record = ownership.record(marker, ownership.safe_to_evict)
   let safe_value =
     ownership.applied_value(marker:, owned: ownership.safe_to_evict)
-  let safe_standing = case
-    safe_record,
-    reconcile.safe_to_evict_usable(safe_value)
-  {
-    Some(AppliedRecord(..)), False -> Conflict
-    _, _ ->
-      ownership.standing(
-        marker:,
-        annotations: pod.annotations,
-        owned: ownership.safe_to_evict,
-      )
-  }
+  let safe_standing =
+    lifecycle.effective_standing(
+      marker:,
+      annotations: pod.annotations,
+      owned: ownership.safe_to_evict,
+    )
   Views(
     cost: OwnedView(
       owned: ownership.pod_deletion_cost,

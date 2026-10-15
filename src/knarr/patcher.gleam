@@ -77,18 +77,24 @@ pub type Message {
     interval_s: Int,
     at_ms: Int,
   )
-  /// From the reconciler after every successful discovery cycle: the
-  /// target pods, which of them are terminating, which are listed under
-  /// another uid than the cycle before, and the Deployments in the target
-  /// set. The apply of a pod not listed, terminating or replaced is
-  /// discarded, and a replaced pod's last attempt forgotten; every cleanup
-  /// is kept; a listed Deployment is no longer departing, so one that
-  /// rejoins before it is quiet is never quiet.
+  /// From the reconciler after every successful discovery cycle: every pod
+  /// the unselected pod LIST shows, the target pods among them, which of
+  /// the targets are terminating, which pods are listed under another uid
+  /// than the cycle before, the Deployments in the target set, and the
+  /// pods whose cleanup the cycle makes due. The apply of a target not
+  /// listed, terminating or replaced is discarded; a cleanup is kept only
+  /// while its pod is cleaning and not replaced; the last attempt of every
+  /// listed pod not replaced is kept and every other forgotten. A turn
+  /// already out is answered as any other is. A listed Deployment is no
+  /// longer departing, so one that rejoins before it is quiet is never
+  /// quiet.
   Listed(
+    listed: List(String),
     targets: List(String),
     terminating: List(String),
     replaced: List(String),
     deployments: List(String),
+    cleaning: List(String),
   )
   /// From the reconciler: a Deployment left the target set. Answered on
   /// `quiet` once nothing of its pods is pending or in turn.
@@ -130,8 +136,9 @@ type State {
     /// By pod name and purpose. The entry in turn stays here until the
     /// reconciler answers, or a LIST discards it.
     pending: Dict(#(String, Purpose), Entry),
-    /// By pod name, across purposes, for the pods the last LIST showed or
-    /// that still have an entry; a LIST forgets the rest.
+    /// By pod name, across purposes, for the pods the last LIST showed and
+    /// did not show replaced, and any pod whose turn was answered since; a
+    /// LIST forgets the rest.
     last_attempt: Dict(String, Int),
     /// The turn granted and not yet answered, carrying its Deployment so a
     /// departure waits for it even after a LIST discarded its entry.
@@ -178,8 +185,23 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
   case message {
     Due(pod_name:, purpose:, deployment:, interval_s:, at_ms:) ->
       due(state:, pod_name:, purpose:, deployment:, interval_s:, at_ms:)
-    Listed(targets:, terminating:, replaced:, deployments:) ->
-      listed(state:, targets:, terminating:, replaced:, deployments:)
+    Listed(
+      listed: pods,
+      targets:,
+      terminating:,
+      replaced:,
+      deployments:,
+      cleaning:,
+    ) ->
+      listed(
+        state:,
+        listed: pods,
+        targets:,
+        terminating:,
+        replaced:,
+        deployments:,
+        cleaning:,
+      )
     Departed(deployment) -> departed(state, deployment)
     Wake -> state
     Attempted(pod_name:, purpose:, outcome:, still_due:, at_ms:) ->
@@ -223,45 +245,50 @@ fn due(
   State(..state, pending: dict.insert(state.pending, key, entry), in_turn:)
 }
 
-/// The apply of a pod the LIST no longer shows, or shows terminating, is
-/// discarded, its turn in flight included; a cleanup is kept (budget
-/// Pending, Leaving). The last attempt of a pod the LIST no longer shows
-/// and that has no entry left is forgotten with it, so a pod that returns
-/// under the same name is new to the patcher (PerPod: the interval is held
-/// from a pod's last attempt, and this is not that pod). A pod the LIST
-/// shows under another uid is that case within one LIST: its apply is
-/// discarded with its due_since and its last attempt forgotten whatever
-/// entry is left, while a turn already out is answered as any other is
-/// (PerPod, Pending). A Deployment the LIST shows in the target set is no
-/// longer departing (observability SeriesLife).
+/// The apply of a target the LIST no longer shows, or shows terminating,
+/// is discarded, its turn in flight included (budget Pending, Leaving). A
+/// cleanup is kept only while the cycle makes it due, which lifecycle's due
+/// does only for a live, non-terminating pod the pod LIST shows (budget
+/// Pending; lifecycle Cleanup Scope, Retry). A cleanup in turn is left to
+/// its answer: its copy in `in_turn` keeps its Deployment from quiet until
+/// then (lifecycle Cleanup Done), and an answer still due does not bring
+/// back an entry the LIST discarded. The last attempt of every pod the LIST
+/// shows, target or not, is kept, so a rejected cleanup of a pod that is
+/// not a target is not retried inside the interval once its entry is gone
+/// (PerPod: the interval is held from a pod's last attempt whatever its
+/// purpose); the last attempt of a pod the LIST no longer shows is
+/// forgotten, so a pod that returns under the same name is new to the
+/// patcher. A pod the LIST shows under another uid is that case within one
+/// LIST: its apply and cleanup are discarded with their due_since and its
+/// last attempt forgotten, while a turn already out is answered as any
+/// other is (PerPod, Pending). A Deployment the LIST shows in the target set
+/// is no longer departing (observability SeriesLife).
 fn listed(
   state state: State,
+  listed listed: List(String),
   targets targets: List(String),
   terminating terminating: List(String),
   replaced replaced: List(String),
   deployments deployments: List(String),
+  cleaning cleaning: List(String),
 ) -> State {
+  let listed = set.from_list(listed)
   let targets = set.from_list(targets)
   let terminating = set.from_list(terminating)
   let replaced = set.from_list(replaced)
+  let cleaning = set.from_list(cleaning)
   let pending =
     dict.filter(state.pending, fn(key, _) {
-      case key.1 {
-        budget.Cleanup -> True
+      !set.contains(replaced, key.0)
+      && case key.1 {
+        budget.Cleanup -> set.contains(cleaning, key.0)
         budget.Apply ->
-          set.contains(targets, key.0)
-          && !set.contains(terminating, key.0)
-          && !set.contains(replaced, key.0)
+          set.contains(targets, key.0) && !set.contains(terminating, key.0)
       }
     })
   let last_attempt =
     dict.filter(state.last_attempt, fn(pod_name, _) {
-      !set.contains(replaced, pod_name)
-      && {
-        set.contains(targets, pod_name)
-        || set.contains(terminating, pod_name)
-        || list.any(dict.keys(pending), fn(key) { key.0 == pod_name })
-      }
+      set.contains(listed, pod_name) && !set.contains(replaced, pod_name)
     })
   let departing =
     list.filter(state.departing, fn(departed) {

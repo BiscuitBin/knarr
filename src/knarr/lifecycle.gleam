@@ -13,8 +13,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import knarr/k8s_client.{type Owner, type ReplicaSet}
 import knarr/ownership.{
-  type Marker, type Owned, AppliedRecord, Conflict, Foreign, OwnedByKnarr,
-  Unowned, Yielded,
+  type Marker, type Owned, type Standing, AppliedRecord, Conflict, Foreign,
+  OwnedByKnarr, Unowned, Yielded,
 }
 import knarr/reconcile
 
@@ -101,25 +101,37 @@ pub fn done(
 
 /// The held entries of a View (Scope): one per owned annotation the marker
 /// holds a record for, pod-deletion-cost then safe-to-evict, each standing
-/// as ownership's Adoption has it on the view given, except that an applied
-/// record that does not parse as its annotation's value stands conflict
-/// (reconcile Conflict), as the reconciler's view has it. For ticket 47's
-/// View builder.
+/// as `effective_standing` has it on the view given. For ticket 47's View
+/// builder.
 pub fn held(
   marker marker: Marker,
   annotations annotations: Option(Dict(String, String)),
 ) -> List(Held) {
   list.filter_map(ownership.owned_annotations, fn(owned) {
-    use record <- result.try(option.to_result(
-      ownership.record(marker:, owned:),
-      Nil,
-    ))
-    use standing <- result.map(case record, usable(marker:, owned:) {
-      AppliedRecord(..), False -> Ok(HeldConflict)
-      _, _ -> held_standing(marker:, annotations:, owned:)
-    })
+    use <- bool.guard(
+      option.is_none(ownership.record(marker:, owned:)),
+      Error(Nil),
+    )
+    use standing <- result.map(
+      held_standing(effective_standing(marker:, annotations:, owned:)),
+    )
     Held(name: owned.name, standing:)
   })
+}
+
+/// Where an owned annotation stands on a view: ownership's Adoption, except
+/// that an applied record that does not parse as its annotation's value
+/// stands conflict (reconcile Conflict). The one rule the reconciler's view
+/// and `held` share.
+pub fn effective_standing(
+  marker marker: Marker,
+  annotations annotations: Option(Dict(String, String)),
+  owned owned: Owned,
+) -> Standing {
+  case ownership.record(marker:, owned:), usable(marker:, owned:) {
+    Some(AppliedRecord(..)), False -> Conflict
+    _, _ -> ownership.standing(marker:, annotations:, owned:)
+  }
 }
 
 /// Whether the applied record of `owned` parses as its annotation's value:
@@ -133,15 +145,11 @@ fn usable(marker marker: Marker, owned owned: Owned) -> Bool {
   }
 }
 
-/// Ownership's standing as a held standing. Unowned and foreign are the
+/// An effective standing as a held standing. Unowned and foreign are the
 /// standings of an annotation with no record, and such an annotation is
 /// never held, so they make no entry.
-fn held_standing(
-  marker marker: Marker,
-  annotations annotations: Option(Dict(String, String)),
-  owned owned: Owned,
-) -> Result(HeldStanding, Nil) {
-  case ownership.standing(marker:, annotations:, owned:) {
+fn held_standing(standing: Standing) -> Result(HeldStanding, Nil) {
+  case standing {
     OwnedByKnarr -> Ok(HeldOwned)
     Conflict -> Ok(HeldConflict)
     Yielded -> Ok(HeldYielded)
