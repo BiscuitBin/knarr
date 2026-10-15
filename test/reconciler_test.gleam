@@ -370,8 +370,21 @@ fn lists(harness: Harness) -> Nil {
     ]
 }
 
-fn quiet(harness: Harness) -> Nil {
-  assert process.receive(harness.requests, 200) == Error(Nil)
+@external(erlang, "reconciler_test_ffi", "cycle_finished")
+fn cycle_finished(actor: Pid) -> Nil
+
+fn quiet(harness: Harness, actor: Subject(reconciler.Message)) -> Nil {
+  // The synchronous cycle sends every request before answering the system
+  // query. Signals from that actor arrive in order, including the reply.
+  assert no_more_requests(harness, actor)
+}
+
+fn no_more_requests(
+  harness: Harness,
+  actor: Subject(reconciler.Message),
+) -> Bool {
+  cycle_finished(pid(actor))
+  process.receive(harness.requests, 0) == Error(Nil)
 }
 
 fn tick(
@@ -440,7 +453,7 @@ pub fn a_cycle_polls_every_target_with_an_ip_and_patches_a_busy_pod_test() -> Ni
     <> "\\\",\\\"pod-deletion-cost\\\":{\\\"applied\\\":\\\"500\\\",\\\"at\\\":\\\""
     <> at(1000)
     <> "\\\"}}\"}}]"
-  quiet(harness)
+  quiet(harness, actor)
   assert list.sort(list_of(harness.table, "polled"), string.compare)
     == ["10.0.0.1:8080/knarr/v1/status", "10.0.0.3:8080/knarr/v1/status"]
   stop_actor(pid(actor))
@@ -471,7 +484,7 @@ pub fn a_hanging_poll_is_timed_out_for_its_pod_alone_test() -> Nil {
   assert result.map(body_of("1"), string.contains(_, "\"1000\"")) == Ok(True)
   assert result.map(body_of("3"), string.contains(_, "\"2000\"")) == Ok(True)
   assert body_of("2") == Error(Nil)
-  quiet(harness)
+  quiet(harness, actor)
   stop_actor(pid(actor))
 }
 
@@ -485,10 +498,10 @@ pub fn nothing_is_due_between_crossings_test() -> Nil {
   let actor = start(harness)
 
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   stop_actor(pid(actor))
 }
 
@@ -505,7 +518,7 @@ pub fn a_422_is_left_to_the_next_list_test() -> Nil {
 
   lists(harness)
   let first = patch_of(next(harness), "1")
-  quiet(harness)
+  quiet(harness, actor)
   put(harness.table, "patch_status", "200")
   tick(harness:, actor:, at: 1300)
   lists(harness)
@@ -517,7 +530,7 @@ pub fn a_422_is_left_to_the_next_list_test() -> Nil {
   assert string.contains(first, "\"500\"")
   assert string.contains(second, "\"500\"")
   assert string.contains(second, at(1300))
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(
     metrics.collect(),
     "knarr_patch_rejections_total{deployment=\"422\",purpose=\"apply\"} 1\n",
@@ -536,11 +549,11 @@ pub fn a_422_whose_view_changed_is_no_rejection_test() -> Nil {
 
   lists(harness)
   patch_of(next(harness), "1")
-  quiet(harness)
+  quiet(harness, actor)
   set_pods(harness.table, [PodFixture(..pod("1"), annotations: foreign())])
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   assert !string.contains(
     metrics.collect(),
     "knarr_patch_rejections_total{deployment=\"422-moved\"",
@@ -559,10 +572,10 @@ pub fn the_neutral_removal_follows_three_failures_test() -> Nil {
   let actor = start(harness)
 
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1000)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1300)
   lists(harness)
   let document = patch_of(next(harness), "1")
@@ -571,7 +584,7 @@ pub fn the_neutral_removal_follows_three_failures_test() -> Nil {
     "{\"op\":\"remove\",\"path\":\"/metadata/annotations/controller.kubernetes.io~1pod-deletion-cost\"}",
   )
   assert string.contains(document, "\\\"applied\\\":null")
-  quiet(harness)
+  quiet(harness, actor)
   stop_actor(pid(actor))
 }
 
@@ -590,18 +603,18 @@ pub fn a_restart_keeps_a_found_value_until_the_window_elapses_again_test() -> Ni
   let actor = start(harness)
 
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   stop_actor(pid(actor))
 
   let actor = start(harness)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 2300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 2600)
   lists(harness)
   let document = patch_of(next(harness), "1")
@@ -610,7 +623,7 @@ pub fn a_restart_keeps_a_found_value_until_the_window_elapses_again_test() -> Ni
     "{\"op\":\"remove\",\"path\":\"/metadata/annotations/controller.kubernetes.io~1pod-deletion-cost\"}",
   )
   assert string.contains(document, "\\\"applied\\\":null")
-  quiet(harness)
+  quiet(harness, actor)
   stop_actor(pid(actor))
 }
 
@@ -628,7 +641,7 @@ pub fn contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test(
   let actor = start(harness)
 
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1300)
   lists(harness)
   let #(reason, message, kind) = event_of(next(harness))
@@ -636,10 +649,10 @@ pub fn contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test(
   assert kind == "Deployment"
   assert message
     == "pod 1: no knarr status contract at port 9000 path /status; last reading not_found"
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1330)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(
     metrics.collect(),
     "knarr_pods_contract_absent{deployment=\"absent\"} 1\n",
@@ -648,12 +661,12 @@ pub fn contract_absent_raises_one_event_on_entry_and_again_after_a_restart_test(
 
   let actor = start(harness)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1630)
   lists(harness)
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "ContractAbsent"
-  quiet(harness)
+  quiet(harness, actor)
   stop_actor(pid(actor))
 }
 
@@ -668,7 +681,7 @@ pub fn readiness_latches_after_the_first_complete_cycle_test() -> Nil {
   let actor = start(harness)
 
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   assert process.receive(harness.ready, 200) == Error(Nil)
   put(harness.table, "deployments", deployments)
   tick(harness:, actor:, at: 1000)
@@ -686,7 +699,7 @@ pub fn an_unreadable_token_skips_the_cycle_test() -> Nil {
   capture_logs(harness.table)
   let actor = start(harness)
 
-  quiet(harness)
+  quiet(harness, actor)
   write_file(harness.config.token_file, "second-token")
   tick(harness:, actor:, at: 1000)
   let first = next(harness)
@@ -725,10 +738,10 @@ pub fn invalid_and_unknown_keys_are_reported_at_their_cadence_test() -> Nil {
   assert kind == "Deployment"
   assert message
     == "knarr.io/status-port: \"abc\" is invalid, not an integer; the default stands"
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1000)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   set_deployment(
     harness.table,
     "{\"knarr.io/status-port\":\"xyz\",\"knarr.io/colour\":\"blue\"}",
@@ -737,7 +750,7 @@ pub fn invalid_and_unknown_keys_are_reported_at_their_cadence_test() -> Nil {
   lists(harness)
   let #(_, message, _) = event_of(next(harness))
   assert string.contains(message, "\"xyz\"")
-  quiet(harness)
+  quiet(harness, actor)
   release_logs()
   let unknown =
     list_of(harness.table, "logs")
@@ -759,7 +772,7 @@ pub fn an_opt_out_names_no_pods_and_retires_the_series_test() -> Nil {
 
   lists(harness)
   patch_of(next(harness), "1")
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(
     metrics.collect(),
     "knarr_polls_total{deployment=\"leaving\",reading=\"valid\"} 1\n",
@@ -767,7 +780,7 @@ pub fn an_opt_out_names_no_pods_and_retires_the_series_test() -> Nil {
   put(harness.table, "deployments", items([]))
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   release_logs()
   assert !list.any(list_of(harness.table, "logs"), fn(line) {
     string.contains(line, "\"msg\":\"pods leaving\"")
@@ -796,7 +809,7 @@ pub fn gauges_are_rebuilt_each_cycle_test() -> Nil {
   let actor = start(harness)
 
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   let exposition = metrics.collect()
   assert string.contains(exposition, "knarr_targets{kind=\"deployments\"} 1\n")
   assert string.contains(exposition, "knarr_targets{kind=\"pods\"} 3\n")
@@ -828,7 +841,7 @@ pub fn gauges_are_rebuilt_each_cycle_test() -> Nil {
   ])
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   let exposition = metrics.collect()
   assert string.contains(
     exposition,
@@ -908,7 +921,7 @@ pub fn a_conflict_is_yielded_and_its_event_raised_after_the_patch_test() -> Nil 
   assert kind == "Pod"
   assert message
     == "controller.kubernetes.io/pod-deletion-cost: knarr applied 300 and found 999; another writer owns it now and knarr will not write it again on this pod"
-  quiet(harness)
+  quiet(harness, actor)
   let exposition = metrics.collect()
   assert string.contains(
     exposition,
@@ -942,7 +955,7 @@ pub fn a_yield_refused_with_422_is_classified_by_the_next_list_and_yielded_again
   lists(harness)
   let yield = patch_of(next(harness), "1")
   assert string.contains(yield, "\\\"yielded\\\":\\\"999\\\"")
-  quiet(harness)
+  quiet(harness, actor)
   put(harness.table, "patch_status", "200")
   put(
     harness.table,
@@ -960,7 +973,7 @@ pub fn a_yield_refused_with_422_is_classified_by_the_next_list_and_yielded_again
   assert string.contains(yield, "\\\"yielded\\\":\\\"999\\\"")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "AnnotationYielded"
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(
     metrics.collect(),
     "knarr_patch_rejections_total{deployment=\"refused-yield\",purpose=\"yield\"} 1\n",
@@ -988,7 +1001,7 @@ pub fn a_403_on_a_yield_raises_patch_rejected_for_the_yield_test() -> Nil {
   assert kind == "Pod"
   assert message
     == "knarr.io/applied: the apiserver rejected knarr's patch with 403; the previous annotations stay and knarr tries again no sooner than the patch interval"
-  quiet(harness)
+  quiet(harness, actor)
   let exposition = metrics.collect()
   assert string.contains(
     exposition,
@@ -1022,7 +1035,7 @@ pub fn an_accepted_yield_without_a_view_is_reported_and_ends_the_turn_test() -> 
   assert kind == "Pod"
   assert message
     == "controller.kubernetes.io/pod-deletion-cost: knarr applied 300 and found 999; another writer owns it now and knarr will not write it again on this pod"
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(
     metrics.collect(),
     "knarr_yields_total{deployment=\"yield-unseen\",annotation=\"pod-deletion-cost\"} 1\n",
@@ -1030,7 +1043,7 @@ pub fn an_accepted_yield_without_a_view_is_reported_and_ends_the_turn_test() -> 
   set_pods(harness.table, [PodFixture(..pod("1"), annotations: yielded())])
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   stop_actor(pid(actor))
 }
 
@@ -1053,7 +1066,7 @@ pub fn a_403_raises_one_patch_rejected_event_per_run_test() -> Nil {
   assert kind == "Pod"
   assert message
     == "controller.kubernetes.io/pod-deletion-cost, knarr.io/applied: the apiserver rejected knarr's patch with 403; the previous annotations stay and knarr tries again no sooner than the patch interval"
-  quiet(harness)
+  quiet(harness, actor)
   let counter = fn(value) {
     "knarr_patch_rejections_total{deployment=\"rejected\",purpose=\"apply\"} "
     <> value
@@ -1071,21 +1084,21 @@ pub fn a_403_raises_one_patch_rejected_event_per_run_test() -> Nil {
   tick(harness:, actor:, at: 1300)
   lists(harness)
   patch_of(next(harness), "1")
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(metrics.collect(), counter("2"))
   assert list.length(lines(harness, "patch rejected")) == 1
   put(harness.table, "patch_status", "200")
   tick(harness:, actor:, at: 1330)
   lists(harness)
   patch_of(next(harness), "1")
-  quiet(harness)
+  quiet(harness, actor)
   put(harness.table, "patch_status", "403")
   tick(harness:, actor:, at: 1360)
   lists(harness)
   patch_of(next(harness), "1")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "PatchRejected"
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(metrics.collect(), counter("3"))
   assert list.length(lines(harness, "patch rejected")) == 2
   release_logs()
@@ -1105,11 +1118,11 @@ pub fn a_restart_raises_patch_rejected_once_more_test() -> Nil {
   patch_of(next(harness), "1")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "PatchRejected"
-  quiet(harness)
+  quiet(harness, actor)
   tick(harness:, actor:, at: 1300)
   lists(harness)
   patch_of(next(harness), "1")
-  quiet(harness)
+  quiet(harness, actor)
   stop_actor(pid(actor))
 
   let actor = start(harness)
@@ -1117,7 +1130,7 @@ pub fn a_restart_raises_patch_rejected_once_more_test() -> Nil {
   patch_of(next(harness), "1")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "PatchRejected"
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(
     metrics.collect(),
     "knarr_patch_rejections_total{deployment=\"rejected-restart\",purpose=\"apply\"} 1\n",
@@ -1138,20 +1151,20 @@ pub fn an_accepted_patch_without_a_view_ends_the_run_test() -> Nil {
   patch_of(next(harness), "1")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "PatchRejected"
-  quiet(harness)
+  quiet(harness, actor)
   put(harness.table, "patch_status", "200")
   put(harness.table, "patched:1", "not json")
   tick(harness:, actor:, at: 1300)
   lists(harness)
   patch_of(next(harness), "1")
-  quiet(harness)
+  quiet(harness, actor)
   put(harness.table, "patch_status", "403")
   tick(harness:, actor:, at: 1330)
   lists(harness)
   patch_of(next(harness), "1")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "PatchRejected"
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(
     metrics.collect(),
     "knarr_patch_rejections_total{deployment=\"rejected-unseen\",purpose=\"apply\"} 2\n",
@@ -1175,18 +1188,18 @@ pub fn a_run_survives_the_deployment_opting_out_and_back_in_test() -> Nil {
   patch_of(next(harness), "1")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "PatchRejected"
-  quiet(harness)
+  quiet(harness, actor)
   let deployments = get(harness.table, "deployments") |> should.be_ok
   put(harness.table, "deployments", items([]))
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   assert !string.contains(metrics.collect(), "deployment=\"rejected-opt-out\"")
   put(harness.table, "deployments", deployments)
   tick(harness:, actor:, at: 1330)
   lists(harness)
   patch_of(next(harness), "1")
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(
     metrics.collect(),
     "knarr_patch_rejections_total{deployment=\"rejected-opt-out\",purpose=\"apply\"} 1\n",
@@ -1206,7 +1219,7 @@ pub fn a_foreign_annotation_is_logged_on_entry_and_again_after_a_restart_test() 
   let actor = start(harness)
 
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   let foreign = lines(harness, "foreign annotation")
   assert list.length(foreign) == 1
   assert list.all(foreign, fn(line) {
@@ -1221,13 +1234,13 @@ pub fn a_foreign_annotation_is_logged_on_entry_and_again_after_a_restart_test() 
   )
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   assert list.length(lines(harness, "foreign annotation")) == 1
   stop_actor(pid(actor))
 
   let actor = start(harness)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   assert list.length(lines(harness, "foreign annotation")) == 2
   release_logs()
   stop_actor(pid(actor))
@@ -1252,7 +1265,7 @@ pub fn a_terminating_pod_leaves_every_state_test() -> Nil {
   patch_of(next(harness), "2")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "PatchRejected"
-  quiet(harness)
+  quiet(harness, actor)
   assert lines(harness, "foreign annotation") == []
   let exposition = metrics.collect()
   assert string.contains(exposition, "knarr_targets{kind=\"pods\"} 2\n")
@@ -1266,7 +1279,7 @@ pub fn a_terminating_pod_leaves_every_state_test() -> Nil {
   ])
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   set_pods(harness.table, [
     PodFixture(..pod("1"), annotations: foreign(), terminating: True),
     pod("2"),
@@ -1276,7 +1289,7 @@ pub fn a_terminating_pod_leaves_every_state_test() -> Nil {
   patch_of(next(harness), "2")
   let #(reason, _, _) = event_of(next(harness))
   assert reason == "PatchRejected"
-  quiet(harness)
+  quiet(harness, actor)
   assert lines(harness, "foreign annotation") == []
   release_logs()
   stop_actor(pid(actor))
@@ -1293,13 +1306,13 @@ pub fn a_recreated_deployment_of_the_same_name_keeps_its_series_test() -> Nil {
   let actor = start(harness)
 
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   let series = "knarr_pods{deployment=\"recreate\",tier=\"1\"} 1\n"
   assert string.contains(metrics.collect(), series)
   recreate_deployment(harness.table, "dep-2")
   tick(harness:, actor:, at: 1300)
   lists(harness)
-  quiet(harness)
+  quiet(harness, actor)
   assert string.contains(metrics.collect(), series)
   stop_actor(pid(actor))
 }
@@ -1374,4 +1387,14 @@ pub fn positional_config_matches_the_record_test() -> Nil {
   assert config.installed == installed
   assert config.interval_ms == 60_000
   assert config.version == "0.1.0"
+}
+
+// A completion barrier must not consume or conceal an unexpected patch.
+pub fn the_cycle_barrier_preserves_unexpected_requests_test() -> Nil {
+  let harness = harness("barrier", [pod("1")])
+  let actor = start(harness)
+  lists(harness)
+  assert !no_more_requests(harness, actor)
+  quiet(harness, actor)
+  stop_actor(pid(actor))
 }

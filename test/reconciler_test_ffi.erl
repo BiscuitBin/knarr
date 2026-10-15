@@ -1,5 +1,5 @@
 -module(reconciler_test_ffi).
--export([children/1, await_new_child/2, stop_actor/1, stop_root/1, write_file/2, delete_file/1,
+-export([cycle_finished/1, cycle_barrier_timeout_test/0, children/1, await_new_child/2, stop_actor/1, stop_root/1, write_file/2, delete_file/1,
   table_new/0, table_put/3, table_get/2, table_append/3, table_list/2,
   capture_logs/1, release_logs/0, log/2]).
 
@@ -87,3 +87,24 @@ log(Event, #{config := Table}) ->
   Line = observability_ffi:format(Event, #{}),
   table_append(Table, <<"logs">>, iolist_to_binary(Line)),
   ok.
+
+%% sys:get_state is answered only after the current synchronous cycle. The
+%% reply and all requests sent by that actor reach the test in signal order.
+cycle_finished(Pid) -> cycle_finished(Pid, 5000).
+
+cycle_finished(Pid, Timeout) ->
+  _ = sys:get_state(Pid, Timeout),
+  nil.
+
+%% The failure path remains bounded even if a cycle never returns.
+cycle_barrier_timeout_test() ->
+  Pid = spawn(fun() -> receive after infinity -> ok end end),
+  try
+    try cycle_finished(Pid, 10) of
+      _ -> error(barrier_did_not_time_out)
+    catch
+      exit:{timeout, _} -> ok
+    end
+  after
+    exit(Pid, kill)
+  end.

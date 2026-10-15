@@ -31,24 +31,41 @@ the [local cluster guide](../how-to/local-cluster.md).
 
 ## Checker tests
 
-`just test-checkers` runs the script tests and process integration tests. It is
-part of the same `just check` gate locally and in CI. Most Python checker cases
-call the entrypoint in process with isolated arguments, working directories and
-captured diagnostics. CLI smoke tests retain the executable boundary, while
-Markdown rendering, Git inventory, shell scripts and process lifecycle tests
-still exercise their real adapters.
+`just test-checkers` runs the small policy suite in `just check`: dependency
+pins, hook configuration, workflow permissions, shared manifest versions, and
+test selection. It requires no Gleam build and has a five-second runtime budget.
+The actual documentation, agent, specification, build, and lint checks still
+run on every gate invocation.
 
-Coverage command cases use a small Gleam probe with the repository's dependency
-pins. A session fixture builds it once; each case gets an independent copy of
-the build artifacts. Cold compilation has its own case, and one integration
-case runs coverage against the real controller, including application startup.
-Cache and manifest rejection cases need only metadata fixtures. This keeps
-coverage-tool testing from repeatedly running the growing controller suite.
+`just test-checkers-all` runs every script regression and process integration
+test. Use `just test-checkers-selected coverage docs` to run particular groups;
+the explicit ownership and input map is in
+[`checker_suite.py`](../../scripts/checks/checker_suite.py). Every test module
+must have exactly one owner. New modules without ownership fail the gate.
 
-Use `PYTEST_ADDOPTS="--durations=25" just test-checkers` to report the slowest
-cases, including fixture setup and teardown. Compare initialized runs on the
-same machine and measure `just check` separately; tool installation and cluster
-jobs have their own costs. All these tests remain in the default gate.
+CI compares the PR base and head (or the push before and after commits), including
+both sides of renames and deleted files. It runs affected process tests in the
+gate job and affected tooling regressions in a separate required job. Shared
+build/toolchain inputs select all groups. Missing history or unclassified
+executable/configuration inputs also select all groups. Documentation-only edits
+skip regression jobs. Each non-required cluster job runs only for its relevant
+inputs. The required `check` status accepts a skipped regression job only when
+the selector explicitly excluded it.
+
+Most checker tests call entrypoints in process; CLI smoke tests preserve the
+executable boundary. Coverage tests use isolated copies of a small compiled
+probe, with separate cold-build and real-controller startup cases. They run
+when coverage/build tooling or its application-entrypoint dependencies change.
+
+The reconciler tests query OTP state to wait for a synchronous cycle to finish
+before asserting that no additional request exists. This replaces repeated
+fixed waits without shortening genuine deadline tests.
+
+Use `PYTEST_ADDOPTS="--durations=25" just test-checkers-all` to identify slow
+regressions. Measure `just check` separately with warm and fresh build artifacts.
+The CI target is roughly 40–45 seconds including setup on a fresh runner with
+normal dependency-cache hits. Cache misses and selected extended regressions
+are reported separately; local timing alone does not establish the CI target.
 
 ## The toolkit
 
