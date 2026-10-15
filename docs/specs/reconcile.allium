@@ -464,7 +464,7 @@ contract Loop {
         -- cycle rebuilds the per-Deployment gauges when it completes,
         -- knarr_annotations counting a pod that is not a target under its
         -- View's deployment. A name not in the target set that carries
-        -- series or a View is retired under observability's SeriesLife once
+        -- series is retired under observability's SeriesLife once
         -- lifecycle's done holds for it: at each complete cycle the
         -- reconciler finds every such name done over this cycle's Views and
         -- marks it departing, the patcher reports it quiet once nothing of

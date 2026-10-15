@@ -2,16 +2,19 @@ name: Reconcile proof
 
 # Ticket 31's reconciler proof on kind, the successor of ticket 14's S1
 # proof: the native TLS evidence, the reconciler driving a fake worker's
-# cost across the first threshold and back, and the wrong-CA negative case.
+# cost across the first threshold and back, ticket 47's opt-out cleanup and
+# series retirement on the cluster 31's script leaves, and the wrong-CA
+# negative case.
 # It is the committed evidence's source on native linux/amd64, where the
 # ARM host cannot build the image. Non-required, like ci.yml's smoke job,
 # and never in ci.yml's check job. The transcripts under
-# .scratch/bootstrap/evidence/31/ are committed, so this workflow runs on a
-# push to main that changes the paths it proves, on workflow_dispatch, whose
-# log is where a fresh transcript is cut from, and on a pull request only
-# while it carries the cluster-s1 label: adding the label runs it, and each
-# push to a labelled pull request runs it again. Adding any other label does
-# not, and an unlabelled pull request never waits on a cluster.
+# .scratch/bootstrap/evidence/31/ and 47/ are committed, so this workflow
+# runs on a push to main that changes the paths it proves, on
+# workflow_dispatch, whose log is where a fresh transcript is cut from, and
+# on a pull request only while it carries the cluster-s1 label: adding the
+# label runs it, and each push to a labelled pull request runs it again.
+# Adding any other label does not, and an unlabelled pull request never
+# waits on a cluster.
 on:
   workflow_dispatch:
   pull_request:
@@ -24,6 +27,7 @@ on:
       - .scratch/bootstrap/evidence/14/tls/**
       - .scratch/bootstrap/evidence/14/wrong-ca.sh
       - .scratch/bootstrap/evidence/31/**
+      - .scratch/bootstrap/evidence/47/**
       - Dockerfile
       - .dockerignore
       - Justfile
@@ -61,6 +65,7 @@ jobs:
           cluster: "true"
       - run: sh .scratch/bootstrap/evidence/14/tls/run.sh "$PWD" "$RUNNER_TEMP/tls"
       - run: sh .scratch/bootstrap/evidence/31/reconcile-kind.sh "$PWD" "$RUNNER_TEMP/reconcile-kind"
+      - run: sh .scratch/bootstrap/evidence/47/cleanup-kind.sh "$PWD" "$RUNNER_TEMP/cleanup-kind"
       - run: sh .scratch/bootstrap/evidence/14/wrong-ca.sh "$PWD" "$RUNNER_TEMP/wrong-ca"
       - if: failure()
         run: just cluster-diagnostics
