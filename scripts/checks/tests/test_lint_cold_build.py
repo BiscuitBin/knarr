@@ -42,6 +42,7 @@ def test_lint_builds_application_from_cold_dependencies(tmp_path: Path) -> None:
 
 def test_build_failure_stops_before_linter_runs(tmp_path: Path) -> None:
     root = project(tmp_path)
+    shutil.copytree(REPOSITORY / "build/dev", root / "build/dev")
     (root / "src/broken.gleam").write_text("pub fn broken() { missing_function() }\n")
     result = lint(root)
     assert result.returncode != 0

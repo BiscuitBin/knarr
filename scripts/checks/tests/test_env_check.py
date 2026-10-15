@@ -10,15 +10,12 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 import env_check
-from conftest import CHECKS, REPOSITORY
-
-CHECK = CHECKS / "env_check.py"
+from conftest import REPOSITORY, run_checker
 
 # The shape pixi 0.81 writes: list items at their key's own indent, and the
 # default environment between two others. YAML indents by 2, so the
@@ -100,11 +97,9 @@ def _tree(directory: Path) -> dict[str, bytes]:
     }
 
 
-def check(directory: Path) -> subprocess.CompletedProcess[str]:
+def check(directory: Path, *, cli: bool = False) -> subprocess.CompletedProcess[str]:
     before = _tree(directory)
-    result = subprocess.run(
-        [sys.executable, str(CHECK), str(directory)], check=False, capture_output=True, text=True
-    )
+    result = run_checker("env_check", directory, str(directory), cli=cli)
     assert _tree(directory) == before, "the check must never write"
     return result
 
@@ -260,3 +255,12 @@ def test_a_stamp_that_is_not_text_is_an_unreadable_pin(project: Path) -> None:
     result = check(project)
     assert result.returncode == 1, result.stderr
     assert "orphan: tools.txt pins nothing, .tools/bin holds an unreadable pin" in result.stdout
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_cli_contract(project: Path, broken: bool) -> None:
+    if broken:
+        (project / ".tools/bin/fake").unlink()
+    result = check(project, cli=True)
+    assert result.returncode == int(broken), result.stdout + result.stderr
+    assert "fake" in result.stdout if broken else "match the pins" in result.stdout

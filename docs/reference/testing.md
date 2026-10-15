@@ -29,6 +29,27 @@ starts isolated Erlang subprocesses to verify startup failure, exhausted
 supervision and normal shutdown exit codes; its recipe builds first. Image and cluster checks are separate recipes in
 the [local cluster guide](../how-to/local-cluster.md).
 
+## Checker tests
+
+`just test-checkers` runs the script tests and process integration tests. It is
+part of the same `just check` gate locally and in CI. Most Python checker cases
+call the entrypoint in process with isolated arguments, working directories and
+captured diagnostics. CLI smoke tests retain the executable boundary, while
+Markdown rendering, Git inventory, shell scripts and process lifecycle tests
+still exercise their real adapters.
+
+Coverage command cases use a small Gleam probe with the repository's dependency
+pins. A session fixture builds it once; each case gets an independent copy of
+the build artifacts. Cold compilation has its own case, and one integration
+case runs coverage against the real controller, including application startup.
+Cache and manifest rejection cases need only metadata fixtures. This keeps
+coverage-tool testing from repeatedly running the growing controller suite.
+
+Use `PYTEST_ADDOPTS="--durations=25" just test-checkers` to report the slowest
+cases, including fixture setup and teardown. Compare initialized runs on the
+same machine and measure `just check` separately; tool installation and cluster
+jobs have their own costs. All these tests remain in the default gate.
+
 ## The toolkit
 
 Every package is a dev dependency. `gleam.toml` gives the range, and `manifest.toml` pins the version and checksum.
