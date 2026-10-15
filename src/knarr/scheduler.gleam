@@ -42,7 +42,7 @@ pub type Joiner {
 
 /// What the scheduler hands the reconciler for one returned poll: the pod
 /// the poll was sent for, by name and uid, the reading as reconcile
-/// consumes it, and the clock at delivery.
+/// consumes it, the poll's duration in seconds, and the clock at delivery.
 pub type Polled {
   Polled(
     pod_name: String,
@@ -50,6 +50,7 @@ pub type Polled {
     deployment: String,
     endpoint: Endpoint,
     reading: Reading,
+    seconds: Float,
     at_ms: Int,
   )
 }
@@ -428,10 +429,11 @@ fn stop(worker: Pid) -> Nil {
   process.send_abnormal_exit(worker, atom.create("shutdown"))
 }
 
-/// One reading delivered: observed on the duration histogram, handed to the
-/// sink under the uid of the pod its poll was sent for, the flight's, and
-/// the pod no longer outstanding, with every rung that passed while its
-/// poll was out skipped (budget Jitter, NoOverlap, Leaving).
+/// One reading delivered: handed to the sink under the uid of the pod its
+/// poll was sent for, the flight's, with its duration, which the reconciler
+/// observes once the reading lands (reconcile Cycle), and the pod no longer
+/// outstanding, with every rung that passed while its poll was out skipped
+/// (budget Jitter, NoOverlap, Leaving).
 fn deliver(
   state state: State,
   pod_name pod_name: String,
@@ -441,7 +443,6 @@ fn deliver(
 ) -> State {
   case dict.get(state.schedules, pod_name) {
     Ok(entry) -> {
-      metrics.observe(observability.poll_duration_seconds, seconds)
       let now = state.config.now()
       state.config.polled(Polled(
         pod_name:,
@@ -449,6 +450,7 @@ fn deliver(
         deployment: entry.deployment,
         endpoint: entry.endpoint,
         reading:,
+        seconds:,
         at_ms: now,
       ))
       let entry =

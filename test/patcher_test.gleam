@@ -807,7 +807,7 @@ pub fn a_pause_ends_on_the_timer_with_nothing_pending_test() -> Nil {
   assert await_metric(paused_line(1))
   process.send(
     harness.patcher,
-    Listed(targets: [], terminating: [], deployments: []),
+    Listed(targets: [], terminating: [], replaced: [], deployments: []),
   )
   assert await_metric(pending_line("empty-pause", 0))
   assert await_metric_for(paused_line(0), 300)
@@ -852,12 +852,14 @@ pub fn a_list_discards_the_apply_of_a_gone_or_terminating_pod_and_keeps_its_clea
   assert await_metric(pending_line("list", 4))
   process.send(
     harness.patcher,
-    Listed(targets: ["a", "b"], terminating: ["b"], deployments: ["list"]),
+    Listed(targets: ["a", "b"], terminating: ["b"], replaced: [], deployments: [
+      "list",
+    ]),
   )
   assert await_metric(pending_line("list", 2))
   process.send(
     harness.patcher,
-    Listed(targets: ["b"], terminating: [], deployments: ["list"]),
+    Listed(targets: ["b"], terminating: [], replaced: [], deployments: ["list"]),
   )
   assert await_metric(pending_line("list", 1))
   quiet(harness)
@@ -915,7 +917,7 @@ pub fn a_departed_deployment_is_quiet_once_nothing_of_its_pods_is_pending_or_in_
   no_quiet(harness)
   process.send(
     harness.patcher,
-    Listed(targets: ["x"], terminating: [], deployments: ["stays"]),
+    Listed(targets: ["x"], terminating: [], replaced: [], deployments: ["stays"]),
   )
   no_quiet(harness)
   done(harness:, pod: "a", at: start_ms)
@@ -944,7 +946,9 @@ pub fn a_deployment_that_rejoins_before_quiet_keeps_its_pending_series_test() ->
   no_quiet(harness)
   process.send(
     harness.patcher,
-    Listed(targets: ["a"], terminating: [], deployments: ["rejoin"]),
+    Listed(targets: ["a"], terminating: [], replaced: [], deployments: [
+      "rejoin",
+    ]),
   )
   done(harness:, pod: "a", at: start_ms)
   no_quiet(harness)
@@ -1053,11 +1057,13 @@ pub fn a_list_forgets_the_last_attempt_of_a_pod_it_no_longer_shows_test() -> Nil
   done(harness:, pod: "b", at: start_ms)
   send_settled(
     harness,
-    Listed(targets: ["b"], terminating: [], deployments: ["prune"]),
+    Listed(targets: ["b"], terminating: [], replaced: [], deployments: ["prune"]),
   )
   send_settled(
     harness,
-    Listed(targets: ["a", "b"], terminating: [], deployments: ["prune"]),
+    Listed(targets: ["a", "b"], terminating: [], replaced: [], deployments: [
+      "prune",
+    ]),
   )
   due(
     harness:,
@@ -1072,6 +1078,49 @@ pub fn a_list_forgets_the_last_attempt_of_a_pod_it_no_longer_shows_test() -> Nil
     pod: "a",
     purpose: budget.Apply,
     deployment: "prune",
+    at: start_ms,
+  )
+  assert next_turn(harness) == Turn(pod_name: "a", purpose: budget.Apply)
+  stop_root(harness.root)
+}
+
+// PerPod, Pending, Leaving: a pod listed under another uid is not the pod
+// the patcher attempted, so its predecessor's held apply is discarded with
+// its due_since, and its last attempt is forgotten: the replacement's own
+// first change is granted at once, inside the interval the predecessor's
+// attempt started.
+pub fn a_list_that_replaces_a_pod_forgets_its_apply_and_last_attempt_test() -> Nil {
+  let harness = harness()
+  due(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    deployment: "replace",
+    at: start_ms,
+  )
+  assert next_turn(harness).pod_name == "a"
+  done(harness:, pod: "a", at: start_ms)
+  due(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    deployment: "replace",
+    at: start_ms,
+  )
+  quiet(harness)
+  assert await_metric(pending_line("replace", 1))
+  send_settled(
+    harness,
+    Listed(targets: ["a"], terminating: [], replaced: ["a"], deployments: [
+      "replace",
+    ]),
+  )
+  assert await_metric(pending_line("replace", 0))
+  due(
+    harness:,
+    pod: "a",
+    purpose: budget.Apply,
+    deployment: "replace",
     at: start_ms,
   )
   assert next_turn(harness) == Turn(pod_name: "a", purpose: budget.Apply)

@@ -236,7 +236,13 @@ contract WriteBudget {
         -- and sits on top of it, and the Event and metric a rejection
         -- raises are ownership's and observability's. last_attempt is null
         -- for a pod knarr has not patched since it started, and allow is
-        -- then not held by the interval.
+        -- then not held by the interval. A pod is the name and uid Leaving
+        -- names: a LIST that shows the name under another uid shows a pod
+        -- knarr has not patched, so its predecessor's last attempt is
+        -- forgotten and does not hold it. An attempt whose turn was out at
+        -- that LIST and is answered after it is held as the replacement's,
+        -- since the patch it made may have landed on the replacement
+        -- (ownership Precondition).
     @invariant Bucket
         -- One token bucket per install bounds every patch: refill adds
         -- config.patch_rate_per_second tokens per whole second elapsed since
@@ -263,7 +269,10 @@ contract WriteBudget {
         -- Deployment. A
         -- pod's apply entry is discarded when a LIST first shows its
         -- deletionTimestamp set or no longer shows the pod, where the pods
-        -- the LIST shows are the target set (Leaving); its cleanup entry is
+        -- the LIST shows are the target set (Leaving) and a name shown
+        -- under another uid is a pod no longer shown, so a replacement's
+        -- apply is due from its own first reading and not from its
+        -- predecessor's due_since; its cleanup entry is
         -- kept while lifecycle's due names the pod, which it does only for
         -- a live pod the pod LIST returns that is not terminating, so an
         -- opt-out keeps the cleanup and drops the apply (lifecycle Cleanup

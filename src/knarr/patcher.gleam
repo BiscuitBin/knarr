@@ -78,13 +78,16 @@ pub type Message {
     at_ms: Int,
   )
   /// From the reconciler after every successful discovery cycle: the
-  /// target pods, which of them are terminating, and the Deployments in
-  /// the target set. The apply of a pod not listed or terminating is
-  /// discarded; every cleanup is kept; a listed Deployment is no longer
-  /// departing, so one that rejoins before it is quiet is never quiet.
+  /// target pods, which of them are terminating, which are listed under
+  /// another uid than the cycle before, and the Deployments in the target
+  /// set. The apply of a pod not listed, terminating or replaced is
+  /// discarded, and a replaced pod's last attempt forgotten; every cleanup
+  /// is kept; a listed Deployment is no longer departing, so one that
+  /// rejoins before it is quiet is never quiet.
   Listed(
     targets: List(String),
     terminating: List(String),
+    replaced: List(String),
     deployments: List(String),
   )
   /// From the reconciler: a Deployment left the target set. Answered on
@@ -175,8 +178,8 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
   case message {
     Due(pod_name:, purpose:, deployment:, interval_s:, at_ms:) ->
       due(state:, pod_name:, purpose:, deployment:, interval_s:, at_ms:)
-    Listed(targets:, terminating:, deployments:) ->
-      listed(state:, targets:, terminating:, deployments:)
+    Listed(targets:, terminating:, replaced:, deployments:) ->
+      listed(state:, targets:, terminating:, replaced:, deployments:)
     Departed(deployment) -> departed(state, deployment)
     Wake -> state
     Attempted(pod_name:, purpose:, outcome:, still_due:, at_ms:) ->
@@ -225,30 +228,40 @@ fn due(
 /// Pending, Leaving). The last attempt of a pod the LIST no longer shows
 /// and that has no entry left is forgotten with it, so a pod that returns
 /// under the same name is new to the patcher (PerPod: the interval is held
-/// from a pod's last attempt, and this is not that pod). A Deployment the
-/// LIST shows in the target set is no longer departing (observability
-/// SeriesLife).
+/// from a pod's last attempt, and this is not that pod). A pod the LIST
+/// shows under another uid is that case within one LIST: its apply is
+/// discarded with its due_since and its last attempt forgotten whatever
+/// entry is left, while a turn already out is answered as any other is
+/// (PerPod, Pending). A Deployment the LIST shows in the target set is no
+/// longer departing (observability SeriesLife).
 fn listed(
   state state: State,
   targets targets: List(String),
   terminating terminating: List(String),
+  replaced replaced: List(String),
   deployments deployments: List(String),
 ) -> State {
   let targets = set.from_list(targets)
   let terminating = set.from_list(terminating)
+  let replaced = set.from_list(replaced)
   let pending =
     dict.filter(state.pending, fn(key, _) {
       case key.1 {
         budget.Cleanup -> True
         budget.Apply ->
-          set.contains(targets, key.0) && !set.contains(terminating, key.0)
+          set.contains(targets, key.0)
+          && !set.contains(terminating, key.0)
+          && !set.contains(replaced, key.0)
       }
     })
   let last_attempt =
     dict.filter(state.last_attempt, fn(pod_name, _) {
-      set.contains(targets, pod_name)
-      || set.contains(terminating, pod_name)
-      || list.any(dict.keys(pending), fn(key) { key.0 == pod_name })
+      !set.contains(replaced, pod_name)
+      && {
+        set.contains(targets, pod_name)
+        || set.contains(terminating, pod_name)
+        || list.any(dict.keys(pending), fn(key) { key.0 == pod_name })
+      }
     })
   let departing =
     list.filter(state.departing, fn(departed) {

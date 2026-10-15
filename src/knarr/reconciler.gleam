@@ -759,8 +759,17 @@ fn discovered(
   let listed = list.map(targets, fn(target) { target.pod_name })
   notify(config.names.scheduler, scheduler.Listed(listed:, joining:))
   // The patcher learns the same: the apply of a pod not listed, or listed
-  // terminating, is discarded (budget Pending, Leaving), and a listed
-  // Deployment is not departing.
+  // terminating, is discarded (budget Pending, Leaving), the apply and the
+  // last attempt of a pod listed under another uid are forgotten (budget
+  // PerPod, Pending), and a listed Deployment is not departing.
+  let replaced =
+    list.filter_map(memories, fn(item) {
+      let #(target, memory) = item
+      case dict.get(state.pods, target.pod_name) {
+        Ok(before) if before.pod.uid != memory.pod.uid -> Ok(target.pod_name)
+        _ -> Error(Nil)
+      }
+    })
   let deployment_names =
     list.map(targets, fn(target) { target.deployment_name }) |> list.unique
   notify(
@@ -773,6 +782,7 @@ fn discovered(
           None -> Error(Nil)
         }
       }),
+      replaced:,
       deployments: deployment_names,
     ),
   )
@@ -880,15 +890,18 @@ fn labelled(series: Series, deployments: List(String)) -> Bool {
 /// is told the apply is pending, with the pod's patch interval (budget
 /// Pending, PerPod); nothing is sent to the apiserver here. The change is
 /// re-derived on the turn, so a later reading that leaves nothing due costs
-/// nothing but a turn. A reading of a pod no LIST has shown since, one for
-/// a uid the newest view does not carry, or one before any cycle has run,
-/// has nowhere to land and is dropped (reconcile Cycle, budget Leaving).
+/// nothing but a turn. A reading that lands is observed on the poll
+/// duration histogram as it is counted; a reading of a pod no LIST has
+/// shown since, one for a uid the newest view does not carry, or one before
+/// any cycle has run, has nowhere to land and is dropped, neither counted
+/// nor observed (reconcile Cycle, budget Leaving; observability Polls).
 fn polled(state: State, returned: scheduler.Polled) -> State {
   let pod_name = returned.pod_name
   let target =
     list.find(state.targets, fn(target) { target.pod_name == pod_name })
   case dict.get(state.pods, pod_name), target {
     Ok(memory), Ok(target) if memory.pod.uid == returned.pod_uid -> {
+      metrics.observe(observability.poll_duration_seconds, returned.seconds)
       let config = state.config
       let now = returned.at_ms
       let reading = returned.reading

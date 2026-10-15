@@ -991,6 +991,7 @@ pub fn a_reading_for_a_pod_the_list_does_not_show_lands_nowhere_test() -> Nil {
         cost: Some(500),
         draining: False,
       ),
+      seconds: 0.0,
       at_ms: 1_000_000,
     )),
   )
@@ -1034,6 +1035,7 @@ pub fn a_reading_for_a_replaced_pod_lands_nowhere_test() -> Nil {
         cost: Some(500),
         draining: False,
       ),
+      seconds: 0.0,
       at_ms: 1_000_000,
     )),
   )
@@ -1094,6 +1096,60 @@ pub fn a_replacement_pod_is_not_written_from_its_predecessors_reading_test() -> 
   tick(harness:, at: 1060)
   lists(harness)
   assert string.contains(patch_of(next(harness), "1"), "\"1000\"")
+  quiet(harness)
+  stop_root(set)
+}
+
+// reconcile Cycle, budget Leaving and observability Polls: a pod listed
+// under a new uid with no pod IP leaves its predecessor's schedule
+// standing, and that schedule's reading lands nowhere: it is neither
+// counted on knarr_polls_total nor observed on knarr_poll_duration_seconds,
+// while the predecessor's own reading was observed as it landed.
+pub fn a_standing_schedules_reading_for_a_replaced_pod_is_not_observed_test() -> Nil {
+  let observed = "knarr_poll_duration_seconds_count"
+  let before = counter(observed)
+  let harness = harness("unobserved", [pod("1")])
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  assert counter(observed) == before + 1
+  set_pods(harness.table, [PodFixture(..pod("1"), uid: "u-1b", ip: None)])
+  tick(harness:, at: 1000)
+  lists(harness)
+  quiet(harness)
+  wake(harness:, at: 1030)
+  assert await_polls(harness:, count: 2, within: 1000)
+  quiet(harness)
+  assert string.contains(
+    metrics.collect(),
+    "knarr_polls_total{deployment=\"unobserved\",reading=\"valid\"} 1\n",
+  )
+  assert counter(observed) == before + 1
+  stop_root(set)
+}
+
+// budget PerPod and Pending: a pod listed under a new uid has not been
+// patched, so the attempt on its predecessor does not hold it: the
+// replacement's own first reading finds a write due and it is patched at
+// once, inside the interval the predecessor's patch started.
+pub fn a_replacement_pod_is_not_held_by_its_predecessors_patch_test() -> Nil {
+  let harness = harness("unheld", [pod("1")])
+  let replacement = PodFixture(..pod("1"), uid: "u-1b")
+  let set = start(harness)
+
+  lists(harness)
+  patch_of(next(harness), "1")
+  quiet(harness)
+  put(harness.table, "patched:1", pod_json(replacement))
+  set_pods(harness.table, [replacement])
+  tick(harness:, at: 1010)
+  lists(harness)
+  let patched =
+    process.receive(harness.requests, 1000)
+    |> result.map(fn(request) { #(request.method, request.path) })
+  assert patched == Ok(#(http.Patch, "/api/v1/namespaces/default/pods/1"))
   quiet(harness)
   stop_root(set)
 }

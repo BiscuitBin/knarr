@@ -527,25 +527,26 @@ pub fn a_worker_past_its_deadline_is_killed_and_timed_out_test() -> Nil {
   stop_root(harness.root)
 }
 
-// observability Polls: every delivered reading is observed on
-// knarr_poll_duration_seconds, a timed_out one at the timeout.
-pub fn poll_duration_is_observed_and_a_timed_out_poll_at_the_timeout_test() -> Nil {
+// observability Polls: every delivered reading carries the poll's
+// duration, a timed_out one the timeout, for the reconciler to observe on
+// knarr_poll_duration_seconds once the reading lands (reconcile Cycle); the
+// scheduler observes nothing itself.
+pub fn a_delivered_reading_carries_its_duration_and_a_timed_out_one_the_timeout_test() -> Nil {
   let count = sample("knarr_poll_duration_seconds_count")
-  let sum = sample("knarr_poll_duration_seconds_sum")
   let harness = harness("0")
   listed(harness, [joiner("a", "duration")])
   let held = next_held(harness)
   process.send(held.release, valid(1))
-  assert next_polled(harness).reading.kind == reconcile.Valid
+  let polled = next_polled(harness)
+  assert polled.reading.kind == reconcile.Valid
+  assert polled.seconds == 0.0
   wake(harness:, at: 1030)
   let held = next_held(harness)
   process.send(held.release, poller.Failed(poller.TimedOut))
-  assert next_polled(harness).reading == timed_out()
-  assert await(
-    fn() { sample("knarr_poll_duration_seconds_count") == count +. 2.0 },
-    50,
-  )
-  assert sample("knarr_poll_duration_seconds_sum") == sum +. 1.0
+  let polled = next_polled(harness)
+  assert polled.reading == timed_out()
+  assert polled.seconds == 1.0
+  assert sample("knarr_poll_duration_seconds_count") == count
   stop_root(harness.root)
 }
 
