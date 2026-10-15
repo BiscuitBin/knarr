@@ -2,7 +2,7 @@
 # Tests for the release guards in lib.sh, offline, in the command-line style of
 # ticket 15's lib_test.sh. Moved from ticket 28's evidence without the tests of
 # the helpers only that evidence used; test_release_lib.py runs this file in
-# `just test-checkers`. The canned inputs are copied from real output:
+# `just test-checkers-selected release`. The canned inputs are copied from real output:
 # buildx's --metadata-file, `curl -sI` against registry:2 and ghcr.io, and
 # `docker buildx imagetools inspect`.
 #   version_of_tag, tags_for, toml_version, tag_matches_version,

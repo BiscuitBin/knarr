@@ -24,9 +24,10 @@ crashes a supervised listener to prove recovery without resetting metrics,
 once on an OS-assigned port and once on a fixed port that it must rebind.
 These tests need no cluster or external network. Test and
 lint recipes select a loopback address and ephemeral application port so concurrent worktrees do
-not contend for port 8080 or expose metrics on the LAN. The checker suite also
-starts isolated Erlang subprocesses to verify startup failure, exhausted
-supervision and normal shutdown exit codes; its recipe builds first. Image and cluster checks are separate recipes in
+not contend for port 8080 or expose metrics on the LAN. The checker process
+groups start isolated Erlang subprocesses to verify startup failure, exhausted
+supervision and normal shutdown exit codes; selecting these groups builds their
+applications first. Image and cluster checks are separate recipes in
 the [local cluster guide](../how-to/local-cluster.md).
 
 ## Checker tests

@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TESTS = ROOT / "scripts/checks/tests"
 # Each module belongs to exactly one group. Inputs name implementation dependencies,
 # not documents/configuration the actual gate already validates on every run.
 GROUPS = {
@@ -53,6 +52,10 @@ GROUPS = {
         "image prune_runtime container_entrypoint",
         (
             "Dockerfile",
+            "fixtures/fake_worker/Dockerfile",
+            "deploy/base/resources.json",
+            "fixtures/fake_worker/deploy/**",
+            ".scratch/bootstrap/evidence/01/tls/**",
             ".dockerignore",
             "scripts/checks/image.py",
             "scripts/prune_runtime.py",
@@ -70,11 +73,16 @@ GROUPS = {
     ),
     "cluster": (
         "cluster_commands cluster_name fake_worker_cluster",
-        ("scripts/checks/cluster.py", "scripts/cluster-name.sh"),
+        (
+            "scripts/checks/cluster.py",
+            "scripts/cluster-name.sh",
+            "deploy/**",
+            "fixtures/fake_worker/deploy/**",
+        ),
     ),
     "release": (
         "release_lib release_pin",
-        ("scripts/release/**", ".github/workflows/release.yml"),
+        ("scripts/release/**", "deploy/release/**", ".github/workflows/release.yml"),
     ),
     "audit": (
         "hex_audit runtime_scan ripsecrets_redacted",
@@ -136,6 +144,7 @@ PASSIVE = (
 )
 CLUSTERS = {
     "kind": (
+        ".scratch/bootstrap/evidence/01/tls/**",
         "src/**",
         "Dockerfile",
         ".dockerignore",
@@ -172,7 +181,12 @@ def modules(groups: set[str]) -> list[str]:
 
 def validate() -> None:
     expected = modules(set(GROUPS))
-    actual = {str(p.relative_to(ROOT)) for p in TESTS.glob("test_*.py")}
+    # Match pytest's recursive scripts/ collection and both default file patterns.
+    actual = {
+        str(p.relative_to(ROOT))
+        for pattern in ("test_*.py", "*_test.py")
+        for p in (ROOT / "scripts").rglob(pattern)
+    }
     if len(expected) != len(set(expected)) or set(expected) != actual:
         raise ValueError(f"test ownership mismatch: {sorted(set(expected) ^ actual)}")
 

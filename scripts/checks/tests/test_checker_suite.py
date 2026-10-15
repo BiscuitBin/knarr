@@ -17,7 +17,7 @@ def test_every_module_has_exactly_one_owner():
         (["scripts/checks/tests/test_validate_docs.py"], ["docs"], [], []),
         (["src/knarr/config.gleam"], [], ["controller-process"], ["kind"]),
         (["fixtures/fake_worker/src/server.gleam"], [], ["worker-process"], ["worker"]),
-        (["deploy/base/deployment.yaml"], ["deployment"], [], ["kind", "kwok"]),
+        (["deploy/base/deployment.yaml"], ["cluster", "deployment"], [], ["kind", "kwok"]),
     ],
 )
 def test_selection(paths, regressions, runtime, clusters):
@@ -68,13 +68,44 @@ def test_pull_requests_compare_from_the_merge_base(monkeypatch):
     assert suite.changed_paths("base", "head", True) == ["docs/README.md"]
 
 
-def test_unowned_test_module_fails(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "unowned",
+    [
+        "scripts/checks/tests/test_unowned.py",
+        "scripts/checks/tests/nested/test_unowned.py",
+        "scripts/release/test_unowned.py",
+        "scripts/release/unowned_test.py",
+    ],
+)
+def test_unowned_test_module_fails(tmp_path, monkeypatch, unowned):
     monkeypatch.setattr(suite, "ROOT", tmp_path)
     tests = tmp_path / "scripts/checks/tests"
     tests.mkdir(parents=True)
-    monkeypatch.setattr(suite, "TESTS", tests)
     for path in suite.modules(set(suite.GROUPS)):
         (tmp_path / path).touch()
-    (tests / "test_unowned.py").touch()
+    extra = tmp_path / unowned
+    extra.parent.mkdir(parents=True, exist_ok=True)
+    extra.touch()
     with pytest.raises(ValueError, match="ownership mismatch"):
         suite.validate()
+
+
+@pytest.mark.parametrize(
+    ("path", "required"),
+    [
+        ("fixtures/fake_worker/Dockerfile", "packaging"),
+        ("deploy/base/resources.json", "packaging"),
+        ("fixtures/fake_worker/deploy/resources.json", "packaging"),
+        (".scratch/bootstrap/evidence/01/tls/tls_check.escript", "packaging"),
+        ("deploy/release/README.md", "release"),
+        ("deploy/base/resources.json", "cluster"),
+        ("deploy/wrong-ca/kustomization.yaml", "cluster"),
+        ("fixtures/fake_worker/deploy/resources.json", "cluster"),
+    ],
+)
+def test_changes_select_regressions_that_read_the_changed_file(path, required):
+    assert required in suite.select([path])["regressions"]
+
+
+def test_tls_runtime_probe_changes_select_the_image_smoke():
+    assert suite.select([".scratch/bootstrap/evidence/01/tls/run.sh"])["kind"]
