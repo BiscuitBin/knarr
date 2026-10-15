@@ -15,8 +15,9 @@
 //// attempt's outcome or with nothing due, exactly once. A 429 on a LIST
 //// pauses the cycles (budget PauseScope); a Deployment that left the target
 //// set is retired once the patcher says it is quiet (observability
-//// SeriesLife). It raises the Events and lines observability names and
-//// latches readiness.
+//// SeriesLife). It raises the Events and lines observability names, the
+//// rejections among them, from a turn's result or from the LIST that
+//// classifies a 422 (ownership Rejected), and latches readiness.
 ////
 //// Every decision is a pure function of `reconcile`, `config`, `ownership`,
 //// `cost_mapping`, `budget` and `observability`; the effects are the
@@ -169,19 +170,31 @@ pub type Message {
   Quiet(deployment: String)
 }
 
-/// What this process keeps for one target pod across cycles: its reading
+/// What this process keeps for one pod across cycles: its reading
 /// state, the operations of a patch a 422 refused until the next LIST
 /// classifies them, during which nothing is due on the pod (reconcile
 /// Rejected422), its newest view, the LIST's or a patch response (reconcile
-/// Sequence), and its latest reading with the clock it came at, none before
-/// its first poll returns (JustStarted).
+/// Sequence), whether that view is stale, an accepted patch having returned
+/// no view, so nothing is due on the pod until the next LIST supplies one
+/// (reconcile Sequence), its latest reading with the clock it came at, none
+/// before its first poll returns (JustStarted), and its active rejection
+/// runs, at most one per reason, from a rejection to the pod's next
+/// accepted patch (observability Events Rejected, Cadence OnEntry).
 type Memory {
   Memory(
     state: PodState,
-    kept: Option(List(Operation)),
+    kept: Option(Kept),
     pod: Pod,
+    stale: Bool,
     latest: Option(#(Reading, Int)),
+    runs: List(Entry),
   )
+}
+
+/// The operations of a patch a 422 refused and the purpose it was sent
+/// for, so the LIST that classifies them as a rejection reports it.
+type Kept {
+  Kept(operations: List(Operation), purpose: observability.Purpose)
 }
 
 type State {
@@ -431,7 +444,7 @@ type Cycle {
 }
 
 /// How the apiserver answered a patch: its status, `None` for a transport
-/// or decode failure, and the Retry-After of a refusal in whole seconds.
+/// failure, and the Retry-After of a refusal in whole seconds.
 type Attempt {
   Attempt(status: Option(Int), retry_after: Option(Int))
 }
@@ -685,28 +698,38 @@ fn discovered(
   let #(invalid, cycle) =
     overrides(previous: state.invalid, deployments:, cycle:)
   // Every target's memory, kept from the last cycle or begun here, with the
-  // LIST's view as its newest and a 422's operations classified against it
-  // (reconcile Rejected422, Sequence). A memory of a pod the LIST no longer
-  // shows is dropped with it.
-  let memories =
-    list.filter_map(targets, fn(target) {
+  // LIST's view as its newest, no longer stale, and a 422's operations
+  // classified against it (reconcile Rejected422, Sequence; ownership
+  // Rejected). A terminating pod leaves every state, its rejection runs
+  // among them (observability Cadence OnEntry). A memory of a pod the LIST
+  // no longer shows is dropped with it.
+  let #(memories, cycle) =
+    list.fold(targets, #([], cycle), fn(acc, target) {
+      let #(memories, cycle) = acc
       case list.find(pods, fn(pod) { pod.name == target.pod_name }) {
         Ok(pod) -> {
           let memory =
             dict.get(state.pods, pod.name)
             |> option.from_result
-            |> option.unwrap(Memory(
-              state: reconcile.initial(),
-              kept: None,
+            |> option.unwrap(fresh(pod))
+          let runs = case pod.deletion_timestamp {
+            Some(_) -> []
+            None -> memory.runs
+          }
+          let #(memory, cycle) =
+            classify_kept(
+              cycle:,
+              deployment: target.deployment_name,
               pod:,
-              latest: None,
-            ))
-          Ok(#(target, classify_kept(Memory(..memory, pod:), pod)))
+              memory: Memory(..memory, pod:, stale: False, runs:),
+            )
+          #([#(target, memory), ..memories], cycle)
         }
         // Every target is one of the listed pods, so this arm is unreachable.
-        Error(Nil) -> Error(Nil)
+        Error(Nil) -> #(memories, cycle)
       }
     })
+  let memories = list.reverse(memories)
   let current = gauges(targets:, pods: memories)
   let #(seen, cycle) = announce(seen: state.seen, pods: memories, cycle:)
   // The schedule learns joining and leaving from the LIST alone: every
@@ -755,6 +778,10 @@ fn discovered(
     list.fold(memories, dict.new(), fn(acc, item) {
       dict.insert(acc, { item.0 }.pod_name, item.1)
     })
+  // The gauges, the announcements and both actors above read the targets'
+  // memories alone, so the runs retained here for pods outside the target
+  // set affect nothing else.
+  let memories = retain_runs(previous: state.pods, current: memories, pods:)
   // A Deployment has left when no current target carries its name: the
   // series are labelled by name, so one recreated under the same name
   // between two LISTs keeps them (observability SeriesLife). One that left
@@ -793,6 +820,45 @@ fn discovered(
     gauges:,
     counters: cycle.counters,
   )
+}
+
+/// The memory a pod begins with: no reading, no kept 422, no run, and the
+/// view the LIST gave.
+fn fresh(pod: Pod) -> Memory {
+  Memory(
+    state: reconcile.initial(),
+    kept: None,
+    pod:,
+    stale: False,
+    latest: None,
+    runs: [],
+  )
+}
+
+/// The memories of this cycle plus the rejection runs of every pod the
+/// unselected pod LIST still shows live but that is not a target: a run
+/// lasts while the pod is listed and not terminating, whether or not its
+/// Deployment is a target this cycle (observability Cadence OnEntry), so a
+/// Deployment that opts out and back in announces no second Event; ticket
+/// 47's cleanup_rejected run rides on this. Only the runs are kept: the
+/// reading state of a pod that is not a target is not, and a pod that is
+/// terminating or no longer listed drops everything.
+fn retain_runs(
+  previous previous: Dict(String, Memory),
+  current current: Dict(String, Memory),
+  pods pods: List(Pod),
+) -> Dict(String, Memory) {
+  list.fold(pods, current, fn(memories, pod) {
+    case
+      pod.deletion_timestamp,
+      dict.has_key(memories, pod.name),
+      dict.get(previous, pod.name)
+    {
+      None, False, Ok(Memory(runs: [_, ..] as runs, ..)) ->
+        dict.insert(memories, pod.name, Memory(..fresh(pod), runs:))
+      _, _, _ -> memories
+    }
+  })
 }
 
 /// Whether a series is labelled with one of the Deployments given.
@@ -842,14 +908,12 @@ fn polled(state: State, returned: scheduler.Polled) -> State {
         )
       let pod = memory.pod
       let at = rfc3339(now / 1000)
-      // Nothing is due on a terminating pod, nor on one whose 422 is kept
-      // for the next LIST (reconcile Rejected422: no retry before it).
-      let due = case pod.deletion_timestamp, memory.kept {
-        Some(_), _ | _, Some(_) -> False
-        None, None ->
+      let due =
+        !held(memory)
+        && {
           conflicts(target:, pod:) != []
           || due_operations(target:, pod:, memory:, reading:, at:) != []
-      }
+        }
       case due {
         True ->
           notify(
@@ -1002,21 +1066,143 @@ fn polled_line(
   ])
 }
 
+/// Whether nothing is due on the pod until the next LIST, whatever its
+/// reading: it is terminating (reconcile Terminating), it holds a 422's
+/// operations, which are not retried before that LIST (Rejected422), or an
+/// accepted patch left its view stale (Sequence).
+fn held(memory: Memory) -> Bool {
+  option.is_some(memory.pod.deletion_timestamp)
+  || option.is_some(memory.kept)
+  || memory.stale
+}
+
 /// A 422's operations are classified against the next LIST's view and then
-/// forgotten (reconcile Rejected422). Acting on a rejection is ticket 32's.
-fn classify_kept(memory: Memory, pod: Pod) -> Memory {
+/// forgotten (reconcile Rejected422): when every test would have passed,
+/// the 422 was a rejection with status 422 (ownership Rejected).
+fn classify_kept(
+  cycle cycle: Cycle,
+  deployment deployment: String,
+  pod pod: Pod,
+  memory memory: Memory,
+) -> #(Memory, Cycle) {
   case memory.kept {
-    None -> memory
-    Some(operations) -> {
-      let _rejected =
+    None -> #(memory, cycle)
+    Some(Kept(operations:, purpose:)) -> {
+      let memory = Memory(..memory, kept: None)
+      case
         ownership.rejected(
           operations:,
           annotations: pod.annotations,
           deletion_timestamp: pod.deletion_timestamp,
         )
-      Memory(..memory, kept: None)
+      {
+        True ->
+          rejection(
+            cycle:,
+            deployment:,
+            pod:,
+            memory:,
+            operations:,
+            purpose:,
+            status: 422,
+          )
+        False -> #(memory, cycle)
+      }
     }
   }
+}
+
+/// One known rejection of a patch (ownership Rejected): counted on
+/// knarr_patch_rejections_total (observability Catalogue Patches) and, on
+/// the first of a run for its reason, raised as PatchRejected or
+/// CleanupRejected on the Pod with its warning line (Events Rejected,
+/// CleanupRejected, AlsoLogged); a second rejection in the run counts and
+/// raises nothing. The run ends with the pod's next accepted patch, which
+/// `accepted` records. The function is purpose-agnostic: ticket 47 calls
+/// it with `observability.Cleanup`, and `left` is then `ownership.left`
+/// over the cleanup's operations against `pod`'s annotations. `deployment`
+/// is the label observability Labels names: the Deployment's name for a
+/// target, `lifecycle.deployment_of` for a pod that is not one.
+fn rejection(
+  cycle cycle: Cycle,
+  deployment deployment: String,
+  pod pod: Pod,
+  memory memory: Memory,
+  operations operations: List(Operation),
+  purpose purpose: observability.Purpose,
+  status status: Int,
+) -> #(Memory, Cycle) {
+  let cycle =
+    count(cycle:, name: observability.patch_rejections_total, labels: [
+      deployment,
+      observability.purpose_label(purpose),
+    ])
+  let #(state, msg) = case purpose {
+    observability.Apply | observability.Yield -> #(
+      observability.Rejected,
+      "patch rejected",
+    )
+    observability.Cleanup -> #(
+      observability.CleanupRejected,
+      "cleanup rejected",
+    )
+  }
+  let entry = Entry(pod_name: pod.name, annotation: None, state:)
+  case observability.entered(seen: memory.runs, current: [entry]) {
+    [] -> #(memory, cycle)
+    _ -> {
+      let left = case purpose {
+        observability.Apply | observability.Yield -> []
+        observability.Cleanup ->
+          ownership.left(operations:, annotations: pod.annotations)
+      }
+      let event =
+        observability.RejectedEvent(
+          pod_name: pod.name,
+          pod_uid: pod.uid,
+          purpose:,
+          status:,
+          keys: ownership.keys(operations),
+          left:,
+        )
+      let fields = [
+        observability.string_field(name: "deployment", value: deployment),
+        observability.string_field(name: "pod", value: pod.name),
+        observability.string_field(
+          name: "purpose",
+          value: observability.purpose_label(purpose),
+        ),
+        observability.int_field(name: "status", value: status),
+        observability.strings_field(name: "keys", values: event.keys),
+      ]
+      let fields = case purpose {
+        observability.Cleanup ->
+          list.append(fields, [
+            observability.strings_field(
+              name: "left",
+              values: list.map(left, fn(pair) { pair.0 <> "=" <> pair.1 }),
+            ),
+          ])
+        observability.Apply | observability.Yield -> fields
+      }
+      let cycle =
+        raise(
+          cycle:,
+          involved: k8s_client.PodObject(name: pod.name, uid: pod.uid),
+          reason: observability.reason(event),
+          message: observability.rejected_message(event),
+          msg:,
+          fields:,
+        )
+      #(Memory(..memory, runs: [entry, ..memory.runs]), cycle)
+    }
+  }
+}
+
+/// An accepted patch of any purpose ends the pod's rejection runs
+/// (observability Events Rejected).
+fn accepted(memory: Memory) -> Memory {
+  Memory(..memory, runs: [])
 }
 
 // ---------------------------------------------------------- One pod's turn ---
@@ -1185,10 +1371,9 @@ fn nothing_due(state: State, granted: patcher.Turn) -> State {
   state
 }
 
-/// One attempt on the pod's turn, or none when the pod is terminating, has
-/// no reading yet, or holds the operations a 422 refused, which are not
-/// retried before the next LIST (reconcile Terminating, JustStarted,
-/// Rejected422): the pod, the memory and the cycle after it, and whether
+/// One attempt on the pod's turn, or none when the pod has no reading yet
+/// or nothing is due on it until the next LIST (reconcile JustStarted,
+/// `held`): the pod, the memory and the cycle after it, and whether
 /// anything is still due.
 fn attempt(
   cycle cycle: Cycle,
@@ -1196,8 +1381,7 @@ fn attempt(
   memory memory: Memory,
 ) -> Option(#(Pod, Memory, Cycle, Bool)) {
   let pod = memory.pod
-  use <- bool.guard(option.is_some(pod.deletion_timestamp), None)
-  use <- bool.guard(option.is_some(memory.kept), None)
+  use <- bool.guard(held(memory), None)
   case conflicts(target:, pod:), memory.latest {
     [conflict, ..], _ ->
       Some(yield_turn(cycle:, target:, pod:, memory:, conflict:))
@@ -1233,8 +1417,8 @@ fn answer(
 
 /// The yield of one conflict on the turn; the apply stays due when another
 /// conflict or a write remains on the view the yield left, unless the yield
-/// was refused with a 422, which leaves nothing due before the next LIST
-/// (reconcile Rejected422).
+/// was refused with a 422 or accepted with no view, which leave nothing due
+/// before the next LIST (reconcile Rejected422, Sequence).
 fn yield_turn(
   cycle cycle: Cycle,
   target target: Target,
@@ -1246,11 +1430,11 @@ fn yield_turn(
   let #(pod, memory, cycle) = case
     yields(cycle:, target:, pod:, marker:, conflicts: [conflict], memory:)
   {
-    Ok(#(pod, cycle)) -> #(pod, memory, cycle)
+    Ok(#(pod, memory, cycle)) -> #(pod, memory, cycle)
     Error(#(memory, cycle)) -> #(pod, memory, cycle)
   }
   let still_due =
-    option.is_none(memory.kept)
+    !held(memory)
     && {
       conflicts(target:, pod:) != []
       || case memory.latest {
@@ -1265,7 +1449,8 @@ fn yield_turn(
 /// The due writes on the turn; the apply stays due unless they were
 /// accepted or refused with a 422, which is not retried before the next
 /// LIST rebuilds the write (reconcile Rejected422): a 429 waits out the
-/// pause, any other refusal is tried again after the pod's interval.
+/// pause, any other refusal, a 400 or 403 rejection among them, is tried
+/// again after the pod's interval.
 fn write_turn(
   cycle cycle: Cycle,
   target target: Target,
@@ -1274,9 +1459,9 @@ fn write_turn(
   reading reading: Reading,
 ) -> #(Pod, Memory, Cycle, Bool) {
   let #(pod, memory, cycle) = write(cycle:, target:, pod:, memory:, reading:)
-  let still_due = case memory.kept, cycle.attempt {
-    None, Some(attempt) -> outcome(attempt) != patcher.Accepted
-    Some(_), _ | None, None -> False
+  let still_due = case held(memory), cycle.attempt {
+    False, Some(attempt) -> outcome(attempt) != patcher.Accepted
+    True, _ | False, None -> False
   }
   #(pod, memory, cycle, still_due)
 }
@@ -1315,9 +1500,11 @@ fn quiet(state: State, deployment: String) -> State {
 }
 
 /// One yield per conflicting annotation, each from the view the one before
-/// left: the pod every yield was accepted on, or, when a yield was refused,
-/// which ends the pod's turn, the memory, holding a 422's operations for the
-/// next LIST (reconcile Rejected422).
+/// left: the pod every yield was accepted on with the memory, or, when a
+/// yield was refused or accepted with no view, which ends the pod's turn,
+/// the memory, holding a 422's operations for the next LIST (reconcile
+/// Rejected422), the rejection's run (ownership Rejected) or the stale view
+/// (Sequence).
 fn yields(
   cycle cycle: Cycle,
   target target: Target,
@@ -1325,9 +1512,9 @@ fn yields(
   marker marker: Marker,
   conflicts conflicts: List(OwnedView),
   memory memory: Memory,
-) -> Result(#(Pod, Cycle), #(Memory, Cycle)) {
+) -> Result(#(Pod, Memory, Cycle), #(Memory, Cycle)) {
   case conflicts {
-    [] -> Ok(#(pod, cycle))
+    [] -> Ok(#(pod, memory, cycle))
     [conflict, ..rest] -> {
       let operations =
         ownership.yield(
@@ -1345,59 +1532,93 @@ fn yields(
           owned: conflict.owned,
         )
       let #(cycle, result) =
-        send_patch(cycle:, target:, pod:, operations:, purpose: "yield")
+        send_patch(
+          cycle:,
+          target:,
+          pod:,
+          operations:,
+          purpose: observability.Yield,
+        )
       case result {
-        Ok(pod) -> {
-          let cycle =
-            count(cycle:, name: observability.yields_total, labels: [
-              target.deployment_name,
-              conflict.owned.name,
-            ])
-          let cycle =
-            raise(
-              cycle:,
-              involved: k8s_client.PodObject(name: pod.name, uid: pod.uid),
-              reason: observability.annotation_yielded,
-              message: ownership.message(event),
-              msg: "annotation yielded",
-              fields: [
-                observability.string_field(
-                  name: "deployment",
-                  value: target.deployment_name,
-                ),
-                observability.string_field(name: "pod", value: pod.name),
-                observability.string_field(
-                  name: "annotation",
-                  value: conflict.owned.name,
-                ),
-                observability.string_field(
-                  name: "applied",
-                  value: absent(event.applied),
-                ),
-                observability.string_field(
-                  name: "found",
-                  value: absent(event.found),
-                ),
-              ],
-            )
+        Ok(patched) -> {
+          let cycle = yielded(cycle:, target:, pod:, conflict:, event:)
           yields(
             cycle:,
             target:,
-            pod:,
-            marker: ownership.read(pod.annotations),
+            pod: patched,
+            marker: ownership.read(patched.annotations),
             conflicts: rest,
-            memory:,
+            memory: accepted(memory),
           )
         }
-        // A refused yield raises nothing: the conflict is seen again from
-        // the next LIST (ownership Event), which also classifies a 422's
-        // operations.
+        // A refused yield raises no AnnotationYielded: the conflict is seen
+        // again from the next LIST (ownership Event), which also classifies
+        // a 422's operations; a 400 or 403 is a rejection at once.
         Error(PreconditionFailed) ->
-          Error(#(Memory(..memory, kept: Some(operations)), cycle))
+          Error(#(
+            Memory(
+              ..memory,
+              kept: Some(Kept(operations:, purpose: observability.Yield)),
+            ),
+            cycle,
+          ))
+        Error(Rejected(status)) ->
+          Error(rejection(
+            cycle:,
+            deployment: target.deployment_name,
+            pod:,
+            memory:,
+            operations:,
+            purpose: observability.Yield,
+            status:,
+          ))
+        // Accepted without a view: the yield is reported as any accepted
+        // one, from the pre-yield view, the runs end, and nothing more is
+        // due on the pod until the next LIST supplies the view the next
+        // yield and the apply need (reconcile Sequence).
+        Error(AcceptedUnseen) ->
+          Error(#(
+            Memory(..accepted(memory), stale: True),
+            yielded(cycle:, target:, pod:, conflict:, event:),
+          ))
         Error(OtherFailure) -> Error(#(memory, cycle))
       }
     }
   }
+}
+
+/// The report of one accepted yield: counted on knarr_yields_total
+/// (observability Catalogue Standing) and raised as AnnotationYielded on the
+/// Pod from the pre-yield view (ownership Event).
+fn yielded(
+  cycle cycle: Cycle,
+  target target: Target,
+  pod pod: Pod,
+  conflict conflict: OwnedView,
+  event event: ownership.ConflictEvent,
+) -> Cycle {
+  let cycle =
+    count(cycle:, name: observability.yields_total, labels: [
+      target.deployment_name,
+      conflict.owned.name,
+    ])
+  raise(
+    cycle:,
+    involved: k8s_client.PodObject(name: pod.name, uid: pod.uid),
+    reason: observability.annotation_yielded,
+    message: ownership.message(event),
+    msg: "annotation yielded",
+    fields: [
+      observability.string_field(
+        name: "deployment",
+        value: target.deployment_name,
+      ),
+      observability.string_field(name: "pod", value: pod.name),
+      observability.string_field(name: "annotation", value: conflict.owned.name),
+      observability.string_field(name: "applied", value: absent(event.applied)),
+      observability.string_field(name: "found", value: absent(event.found)),
+    ],
+  )
 }
 
 /// The due writes may_write allows, in one patch (reconcile Desired, Due;
@@ -1413,12 +1634,41 @@ fn write(
     [] -> #(pod, memory, cycle)
     operations -> {
       let #(cycle, result) =
-        send_patch(cycle:, target:, pod:, operations:, purpose: "apply")
+        send_patch(
+          cycle:,
+          target:,
+          pod:,
+          operations:,
+          purpose: observability.Apply,
+        )
       case result {
-        Ok(pod) -> #(pod, memory, cycle)
+        Ok(pod) -> #(pod, accepted(memory), cycle)
         Error(PreconditionFailed) -> #(
           pod,
-          Memory(..memory, kept: Some(operations)),
+          Memory(
+            ..memory,
+            kept: Some(Kept(operations:, purpose: observability.Apply)),
+          ),
+          cycle,
+        )
+        Error(Rejected(status)) -> {
+          let #(memory, cycle) =
+            rejection(
+              cycle:,
+              deployment: target.deployment_name,
+              pod:,
+              memory:,
+              operations:,
+              purpose: observability.Apply,
+              status:,
+            )
+          #(pod, memory, cycle)
+        }
+        // Accepted without a view: the runs end, and nothing more is due on
+        // the pod until the next LIST supplies the pod (reconcile Sequence).
+        Error(AcceptedUnseen) -> #(
+          pod,
+          Memory(..accepted(memory), stale: True),
           cycle,
         )
         Error(OtherFailure) -> #(pod, memory, cycle)
@@ -1427,33 +1677,41 @@ fn write(
   }
 }
 
-/// Why a patch returned no pod: the 422 a failed precondition returns, or
-/// anything else, which the next LIST sorts out (ownership Precondition).
+/// Why a patch returned no pod: the 422 a failed precondition returns, the
+/// 400 or 403 that is a rejection at once (ownership Rejected), a 2xx
+/// whose body gives no usable view, which is still an accepted patch
+/// (k8s_client Verbs; observability Events Rejected), or anything else,
+/// which the next LIST sorts out (ownership Precondition).
 type PatchFailure {
   PreconditionFailed
+  Rejected(status: Int)
+  AcceptedUnseen
   OtherFailure
 }
 
 /// Sends one patch, logs it, counts it on knarr_patches_total by its
 /// result (observability Patches) and records the attempt on the cycle, so
 /// a turn can answer with its outcome: a 429 is counted once, as throttled,
-/// and is `OtherFailure` to the callers, which read it off the attempt.
+/// and is `OtherFailure` to the callers, which read it off the attempt. An
+/// undecodable body answers a 2xx, since the client decodes one only after
+/// its success-status guard, so it is counted and answered as accepted.
 fn send_patch(
   cycle cycle: Cycle,
   target target: Target,
   pod pod: Pod,
   operations operations: List(Operation),
-  purpose purpose: String,
+  purpose purpose: observability.Purpose,
 ) -> #(Cycle, Result(Pod, PatchFailure)) {
   let config = cycle.config
   let keys = ownership.keys(operations)
+  let label = observability.purpose_label(purpose)
   let fields = [
     observability.string_field(
       name: "deployment",
       value: target.deployment_name,
     ),
     observability.string_field(name: "pod", value: pod.name),
-    observability.string_field(name: "purpose", value: purpose),
+    observability.string_field(name: "purpose", value: label),
     observability.strings_field(name: "keys", values: keys),
   ]
   let result =
@@ -1480,27 +1738,31 @@ fn send_patch(
       log(observability.Debug, "patch", list.append(fields, describe(error)))
       case error {
         k8s_client.Refused(failure) ->
-          case k8s_client.precondition_failed(failure) {
-            True -> Error(PreconditionFailed)
-            False -> Error(OtherFailure)
+          case
+            k8s_client.precondition_failed(failure),
+            observability.patch_result(Some(failure.status))
+          {
+            True, _ -> Error(PreconditionFailed)
+            False, "rejected" -> Error(Rejected(failure.status))
+            False, _ -> Error(OtherFailure)
           }
-        k8s_client.SendFailed(_) | k8s_client.UndecodableBody(_) ->
-          Error(OtherFailure)
+        k8s_client.UndecodableBody(_) -> Error(AcceptedUnseen)
+        k8s_client.SendFailed(_) -> Error(OtherFailure)
       }
     }
   }
   let #(status, retry_after) = case result {
-    Ok(_) -> #(Some(200), None)
+    Ok(_) | Error(k8s_client.UndecodableBody(_)) -> #(Some(200), None)
     Error(k8s_client.Refused(failure)) -> #(
       Some(failure.status),
       failure.retry_after,
     )
-    Error(error) -> #(status_of(error), None)
+    Error(k8s_client.SendFailed(_)) -> #(None, None)
   }
   let cycle =
     count(cycle:, name: observability.patches_total, labels: [
       target.deployment_name,
-      purpose,
+      label,
       observability.patch_result(status),
     ])
   #(Cycle(..cycle, attempt: Some(Attempt(status:, retry_after:))), outcome)
@@ -1575,10 +1837,13 @@ fn announce(
 }
 
 /// The announced states one pod is in, from its newest view and latest
-/// reading: contract_absent from reconcile's state and not_ready_with_cost
-/// from the view (observability OnEntry). A terminating pod is in no state,
-/// and a pod with no reading yet is in none either: absent takes readings,
-/// and NotReady with cost a known one.
+/// reading: contract_absent from reconcile's state, not_ready_with_cost and
+/// foreign from the view (observability OnEntry; ownership Adoption). A
+/// terminating pod is in no state, and a pod with no reading yet is in none
+/// either: absent takes readings, NotReady with cost a known one, and a
+/// foreign annotation is announced with the pod's first reading, as the
+/// other two are. The rejection runs are not here: they are held per pod
+/// and announced by `rejection` as they start.
 fn entries(target target: Target, memory memory: Memory) -> List(Entry) {
   let pod = memory.pod
   case pod.deletion_timestamp, memory.latest {
@@ -1604,10 +1869,26 @@ fn entries(target target: Target, memory memory: Memory) -> List(Entry) {
         ]
         False -> []
       }
-      list.append(absent, not_ready)
+      list.flatten([absent, not_ready, foreign_entries(pod:, views:)])
     }
     _, _ -> []
   }
+}
+
+/// One foreign entry per considered owned annotation standing foreign on
+/// the pod (ownership Adoption; observability Cadence OnEntry).
+fn foreign_entries(pod pod: Pod, views views: Views) -> List(Entry) {
+  list.filter_map([views.cost, views.safe], fn(owned) {
+    case owned.considered && owned.standing == ownership.Foreign {
+      True ->
+        Ok(Entry(
+          pod_name: pod.name,
+          annotation: Some(owned.owned.name),
+          state: observability.ForeignAnnotation,
+        ))
+      False -> Error(Nil)
+    }
+  })
 }
 
 /// A pod is NotReady with cost while its Ready condition is false, a
@@ -1627,7 +1908,7 @@ fn not_ready_with_cost(
 }
 
 /// The Event and line of one entry (observability Events ContractAbsent,
-/// Logs StateLines).
+/// Logs StateLines, Lines).
 fn announce_one(
   cycle cycle: Cycle,
   entry entry: Entry,
@@ -1673,7 +1954,7 @@ fn announce_one(
     // An absent entry has a reading, since the state takes readings to
     // enter, so this arm is unreachable.
     observability.ContractAbsent, None -> cycle
-    _, _ -> {
+    observability.NotReadyWithCost, _ -> {
       let views = view(target:, pod:, marker: ownership.read(pod.annotations))
       log(observability.Warning, "not ready with cost", [
         observability.string_field(
@@ -1688,6 +1969,46 @@ fn announce_one(
       ])
       cycle
     }
+    observability.ForeignAnnotation, _ -> {
+      foreign_line(target:, pod:, annotation: entry.annotation)
+      cycle
+    }
+    // `entries` never puts a rejection run in `current`: `rejection`
+    // announces it when it starts.
+    observability.Rejected, _ | observability.CleanupRejected, _ -> cycle
+  }
+}
+
+/// The "foreign annotation" line: the owned annotation's name, its key and
+/// the value found on the pod (observability Logs Lines); no Event
+/// (ownership Adoption).
+fn foreign_line(
+  target target: Target,
+  pod pod: Pod,
+  annotation annotation: Option(String),
+) -> Nil {
+  let owned =
+    list.find(ownership.owned_annotations, fn(o) { Some(o.name) == annotation })
+  case owned {
+    Ok(owned) -> {
+      let value =
+        pod.annotations
+        |> option.then(fn(map) {
+          dict.get(map, owned.key) |> option.from_result
+        })
+      log(observability.Warning, "foreign annotation", [
+        observability.string_field(
+          name: "deployment",
+          value: target.deployment_name,
+        ),
+        observability.string_field(name: "pod", value: pod.name),
+        observability.string_field(name: "annotation", value: owned.name),
+        observability.string_field(name: "key", value: owned.key),
+        observability.string_field(name: "value", value: absent(value)),
+      ])
+    }
+    // Every foreign entry names one of the two owned annotations.
+    Error(Nil) -> Nil
   }
 }
 

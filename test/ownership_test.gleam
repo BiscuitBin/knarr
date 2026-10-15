@@ -10,9 +10,9 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import knarr/ownership.{
-  type Operation, Add, AppliedRecord, Conflict, ConflictEvent, Entry, Foreign,
-  Marker, Operation, OwnedByKnarr, Remove, Test, Unowned, Write, Yielded,
-  YieldedRecord,
+  type Marker, type Operation, Add, AppliedRecord, Conflict, ConflictEvent,
+  Entry, Foreign, Marker, Operation, OwnedByKnarr, Remove, Test, Unowned, Write,
+  Yielded, YieldedRecord,
 }
 import qcheck
 
@@ -65,6 +65,60 @@ const applied_300_raw =
 
 const applied_300_quoted =
   "\"{\\\"at\\\":\\\"2026-10-13T09:00:00Z\\\",\\\"pod-deletion-cost\\\":{\\\"applied\\\":\\\"300\\\",\\\"at\\\":\\\"2026-10-13T09:00:00Z\\\"}}\""
+
+// `both_raw` as the JSON string the marker test carries.
+const both_quoted =
+  "\"{\\\"at\\\":\\\"2026-10-13T10:00:00Z\\\",\\\"pod-deletion-cost\\\":{\\\"applied\\\":\\\"300\\\",\\\"at\\\":\\\"2026-10-13T09:00:00Z\\\"},\\\"safe-to-evict\\\":{\\\"at\\\":\\\"2026-10-13T08:00:00Z\\\",\\\"yielded\\\":\\\"false\\\"}}\""
+
+// The time of a cleanup built after `at`.
+const later = "2026-10-13T11:00:00Z"
+
+// The canonical marker holding both entries applied: pod-deletion-cost 300
+// at `earlier`, safe-to-evict "false" at `earliest`, last write `at`.
+const both_applied_raw =
+  "{\"at\":\"2026-10-13T10:00:00Z\",\"pod-deletion-cost\":{\"applied\":\"300\",\"at\":\"2026-10-13T09:00:00Z\"},\"safe-to-evict\":{\"applied\":\"false\",\"at\":\"2026-10-13T08:00:00Z\"}}"
+
+const both_applied_quoted =
+  "\"{\\\"at\\\":\\\"2026-10-13T10:00:00Z\\\",\\\"pod-deletion-cost\\\":{\\\"applied\\\":\\\"300\\\",\\\"at\\\":\\\"2026-10-13T09:00:00Z\\\"},\\\"safe-to-evict\\\":{\\\"applied\\\":\\\"false\\\",\\\"at\\\":\\\"2026-10-13T08:00:00Z\\\"}}\""
+
+const both_applied_marker =
+  Marker(
+    Some(both_applied_raw),
+    Some(at),
+    [
+      Entry(pdc, AppliedRecord(Some("300"), earlier)),
+      Entry(ste, AppliedRecord(Some("false"), earliest)),
+    ],
+  )
+
+// The canonical marker holding a null pod-deletion-cost record at `earlier`
+// beside the yielded safe-to-evict at `earliest`, last write `at`.
+const null_beside_yielded_raw =
+  "{\"at\":\"2026-10-13T10:00:00Z\",\"pod-deletion-cost\":{\"applied\":null,\"at\":\"2026-10-13T09:00:00Z\"},\"safe-to-evict\":{\"at\":\"2026-10-13T08:00:00Z\",\"yielded\":\"false\"}}"
+
+const null_beside_yielded_quoted =
+  "\"{\\\"at\\\":\\\"2026-10-13T10:00:00Z\\\",\\\"pod-deletion-cost\\\":{\\\"applied\\\":null,\\\"at\\\":\\\"2026-10-13T09:00:00Z\\\"},\\\"safe-to-evict\\\":{\\\"at\\\":\\\"2026-10-13T08:00:00Z\\\",\\\"yielded\\\":\\\"false\\\"}}\""
+
+const null_beside_yielded_marker =
+  Marker(
+    Some(null_beside_yielded_raw),
+    Some(at),
+    [
+      Entry(pdc, AppliedRecord(None, earlier)),
+      Entry(ste, YieldedRecord(Some("false"), earliest)),
+    ],
+  )
+
+// The marker add a cleanup at `later` makes when only the yielded
+// safe-to-evict entry remains.
+const yielded_alone_at_later_add =
+  Operation(
+    Add,
+    marker_path,
+    Some(
+      "\"{\\\"at\\\":\\\"2026-10-13T11:00:00Z\\\",\\\"safe-to-evict\\\":{\\\"at\\\":\\\"2026-10-13T08:00:00Z\\\",\\\"yielded\\\":\\\"false\\\"}}\"",
+    ),
+  )
 
 const applied_300_marker =
   Marker(
@@ -838,7 +892,6 @@ pub fn yield_with_the_annotation_absent_records_null_test() -> Nil {
 // it was.
 pub fn yield_keeps_the_other_entry_test() -> Nil {
   let marker = Marker(Some(both_raw), Some(at), both_entries)
-  let later = "2026-10-13T11:00:00Z"
 
   assert ownership.yield(
       marker:,
@@ -890,6 +943,457 @@ pub fn yield_on_a_pod_without_a_map_adds_the_map_test() -> Nil {
         ),
       ),
     ]
+}
+
+// -------------------------------------------------------------- Released ---
+
+// Ownership.Released: one released annotation with a value: the
+// deletionTimestamp test, the marker test, the value test, the remove, and
+// the marker add without the entry and with at set, the other entry kept.
+pub fn cleanup_releases_one_annotation_with_a_value_test() -> Nil {
+  assert ownership.cleanup(
+      marker: Marker(Some(both_raw), Some(at), both_entries),
+      annotations: annotations([
+        #(marker_key, both_raw),
+        #(pdc_key, "300"),
+        #(ste_key, "false"),
+      ]),
+      owned: [pdc],
+      at: later,
+    )
+    == [
+      deletion_test,
+      Operation(Test, marker_path, Some(both_quoted)),
+      Operation(Test, pdc_path, Some("\"300\"")),
+      Operation(Remove, pdc_path, None),
+      yielded_alone_at_later_add,
+    ]
+}
+
+// Ownership.Released: a null applied record whose annotation is absent is
+// not dropped: the tests, a test of null on the key, no remove, and the
+// marker rewritten alone.
+pub fn cleanup_of_a_null_record_with_the_annotation_absent_rewrites_the_marker_alone_test() -> Nil {
+  assert ownership.cleanup(
+      marker: null_beside_yielded_marker,
+      annotations: annotations([
+        #(marker_key, null_beside_yielded_raw),
+        #(ste_key, "false"),
+      ]),
+      owned: [pdc],
+      at: later,
+    )
+    == [
+      deletion_test,
+      Operation(Test, marker_path, Some(null_beside_yielded_quoted)),
+      Operation(Test, pdc_path, Some("null")),
+      yielded_alone_at_later_add,
+    ]
+}
+
+// Ownership.Released: when no entry remains the marker is removed instead
+// of rewritten, so the pod carries nothing of knarr's.
+pub fn cleanup_of_the_last_entry_removes_the_marker_test() -> Nil {
+  assert ownership.cleanup(
+      marker: applied_300_marker,
+      annotations: annotations([
+        #(marker_key, applied_300_raw),
+        #(pdc_key, "300"),
+      ]),
+      owned: [pdc],
+      at:,
+    )
+    == [
+      deletion_test,
+      Operation(Test, marker_path, Some(applied_300_quoted)),
+      Operation(Test, pdc_path, Some("\"300\"")),
+      Operation(Remove, pdc_path, None),
+      Operation(Remove, marker_path, None),
+    ]
+}
+
+// Ownership.Released: a yielded entry named in owned is not released; only
+// the owned one is, and the rendered marker still carries the yielded entry.
+pub fn cleanup_keeps_a_yielded_entry_test() -> Nil {
+  assert ownership.cleanup(
+      marker: Marker(Some(both_raw), Some(at), both_entries),
+      annotations: annotations([
+        #(marker_key, both_raw),
+        #(pdc_key, "300"),
+        #(ste_key, "false"),
+      ]),
+      owned: [pdc, ste],
+      at: later,
+    )
+    == [
+      deletion_test,
+      Operation(Test, marker_path, Some(both_quoted)),
+      Operation(Test, pdc_path, Some("\"300\"")),
+      Operation(Remove, pdc_path, None),
+      yielded_alone_at_later_add,
+    ]
+}
+
+// Ownership.Released: an annotation not standing owned is dropped: a
+// conflict (the value differs), a foreign one (present with no record), a
+// yielded one and an unowned one, so none of these releases anything.
+pub fn cleanup_drops_an_annotation_not_standing_owned_test() -> Nil {
+  assert ownership.cleanup(
+      marker: applied_300_marker,
+      annotations: annotations([
+        #(marker_key, applied_300_raw),
+        #(pdc_key, "999"),
+      ]),
+      owned: [pdc],
+      at:,
+    )
+    == []
+  assert ownership.cleanup(
+      marker: absent_marker,
+      annotations: annotations([#(pdc_key, "300")]),
+      owned: [pdc],
+      at:,
+    )
+    == []
+  assert ownership.cleanup(
+      marker: Marker(Some(both_raw), Some(at), both_entries),
+      annotations: annotations([#(marker_key, both_raw), #(ste_key, "false")]),
+      owned: [ste],
+      at:,
+    )
+    == []
+  assert ownership.cleanup(
+      marker: absent_marker,
+      annotations: annotations([#("app", "worker")]),
+      owned: [pdc, ste],
+      at:,
+    )
+    == []
+}
+
+// Ownership.Released: a call left with none returns no operations, and so
+// does a pod without an annotations map, since nothing stands owned without
+// a map holding the marker.
+pub fn cleanup_left_with_none_returns_no_operations_test() -> Nil {
+  assert ownership.cleanup(
+      marker: applied_300_marker,
+      annotations: annotations([
+        #(marker_key, applied_300_raw),
+        #(pdc_key, "300"),
+      ]),
+      owned: [],
+      at:,
+    )
+    == []
+  assert ownership.cleanup(
+      marker: applied_300_marker,
+      annotations: None,
+      owned: [pdc, ste],
+      at:,
+    )
+    == []
+  assert ownership.cleanup(
+      marker: absent_marker,
+      annotations: None,
+      owned: [],
+      at:,
+    )
+    == []
+  // A null applied record compares equal to an absent annotation, but a
+  // marker holding a record sits in a map: with no map nothing is released.
+  assert ownership.cleanup(
+      marker: Marker(Some("unused"), Some(at), [
+        Entry(pdc, AppliedRecord(None, earlier)),
+      ]),
+      annotations: None,
+      owned: [pdc],
+      at:,
+    )
+    == []
+}
+
+// Ownership.Released: both annotations released at once: two tests, two
+// removes and one marker operation, the remove of the marker.
+pub fn cleanup_releases_both_annotations_at_once_test() -> Nil {
+  assert ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: annotations([
+        #(marker_key, both_applied_raw),
+        #(pdc_key, "300"),
+        #(ste_key, "false"),
+      ]),
+      owned: [pdc, ste],
+      at: later,
+    )
+    == [
+      deletion_test,
+      Operation(Test, marker_path, Some(both_applied_quoted)),
+      Operation(Test, pdc_path, Some("\"300\"")),
+      Operation(Test, ste_path, Some("\"false\"")),
+      Operation(Remove, pdc_path, None),
+      Operation(Remove, ste_path, None),
+      Operation(Remove, marker_path, None),
+    ]
+}
+
+// Ownership.Released: an annotation named twice in owned is released once,
+// so the operations are exactly those of a single request; a second remove
+// of the same path would fail the patch.
+pub fn cleanup_releases_a_duplicate_request_once_test() -> Nil {
+  let view =
+    annotations([
+      #(marker_key, both_applied_raw),
+      #(pdc_key, "300"),
+      #(ste_key, "false"),
+    ])
+
+  assert ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [pdc, pdc],
+      at: later,
+    )
+    == ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [pdc],
+      at: later,
+    )
+  assert ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [ste, pdc, ste],
+      at: later,
+    )
+    == ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [ste, pdc],
+      at: later,
+    )
+}
+
+// Ownership.Released: the operations are in this order: the deletionTimestamp
+// test, the marker test, every value test in the order of owned, every
+// remove, then the marker; a null record has a test and no remove.
+pub fn cleanup_orders_its_operations_test() -> Nil {
+  let operations =
+    ownership.cleanup(
+      marker: Marker(Some("unused"), Some(at), [
+        Entry(pdc, AppliedRecord(None, earlier)),
+        Entry(ste, AppliedRecord(Some("false"), earliest)),
+      ]),
+      annotations: annotations([#(marker_key, "unused"), #(ste_key, "false")]),
+      owned: [ste, pdc],
+      at: later,
+    )
+
+  assert ops(operations)
+    == [
+      #(Test, deletion_path),
+      #(Test, marker_path),
+      #(Test, ste_path),
+      #(Test, pdc_path),
+      #(Remove, ste_path),
+      #(Remove, marker_path),
+    ]
+}
+
+// Ownership.WriteMode: a write whose standing may_write forbids, conflict,
+// yielded or foreign, is dropped while the other write is kept; with every
+// write dropped there is no patch.
+pub fn patch_drops_a_write_may_write_forbids_test() -> Nil {
+  assert ops(ownership.patch(
+      marker: applied_300_marker,
+      annotations: annotations([
+        #(marker_key, applied_300_raw),
+        #(pdc_key, "999"),
+      ]),
+      writes: [Write(pdc, Some("5")), Write(ste, Some("false"))],
+      at:,
+    ))
+    == [
+      #(Test, deletion_path),
+      #(Test, marker_path),
+      #(Test, ste_path),
+      #(Add, ste_path),
+      #(Add, marker_path),
+    ]
+  assert ops(ownership.patch(
+      marker: Marker(Some(both_raw), Some(at), both_entries),
+      annotations: annotations([
+        #(marker_key, both_raw),
+        #(pdc_key, "300"),
+        #(ste_key, "false"),
+      ]),
+      writes: [Write(ste, Some("true")), Write(pdc, Some("5"))],
+      at:,
+    ))
+    == [
+      #(Test, deletion_path),
+      #(Test, marker_path),
+      #(Test, pdc_path),
+      #(Add, pdc_path),
+      #(Add, marker_path),
+    ]
+  assert ops(ownership.patch(
+      marker: absent_marker,
+      annotations: annotations([#(pdc_key, "300")]),
+      writes: [Write(pdc, Some("5")), Write(ste, Some("false"))],
+      at:,
+    ))
+    == [
+      #(Test, deletion_path),
+      #(Test, marker_path),
+      #(Test, ste_path),
+      #(Add, ste_path),
+      #(Add, marker_path),
+    ]
+  assert ownership.patch(
+      marker: applied_300_marker,
+      annotations: annotations([
+        #(marker_key, applied_300_raw),
+        #(pdc_key, "999"),
+        #(ste_key, "true"),
+      ]),
+      writes: [Write(pdc, Some("5")), Write(ste, None)],
+      at:,
+    )
+    == []
+}
+
+// observability Events CleanupRejected: left names the owned annotation a
+// rejected cleanup would have removed, with the value found in the view the
+// patch was built from.
+pub fn left_names_the_annotation_a_cleanup_removes_test() -> Nil {
+  let view =
+    annotations([
+      #(marker_key, both_raw),
+      #(pdc_key, "300"),
+      #(ste_key, "false"),
+    ])
+  let operations =
+    ownership.cleanup(
+      marker: Marker(Some(both_raw), Some(at), both_entries),
+      annotations: view,
+      owned: [pdc],
+      at: later,
+    )
+
+  assert ownership.left(operations:, annotations: view) == [#(pdc_key, "300")]
+}
+
+// observability Events CleanupRejected: every removed annotation, in the
+// order the patch names them.
+pub fn left_names_every_removed_annotation_in_order_test() -> Nil {
+  let view =
+    annotations([
+      #(marker_key, both_applied_raw),
+      #(pdc_key, "300"),
+      #(ste_key, "false"),
+    ])
+  let operations =
+    ownership.cleanup(
+      marker: both_applied_marker,
+      annotations: view,
+      owned: [ste, pdc],
+      at: later,
+    )
+
+  assert ownership.left(operations:, annotations: view)
+    == [#(ste_key, "false"), #(pdc_key, "300")]
+}
+
+// observability Events CleanupRejected: a cleanup that released records
+// alone and would have removed only the marker leaves the marker annotation
+// with its raw string.
+pub fn left_of_a_marker_only_removal_is_the_marker_test() -> Nil {
+  let raw =
+    "{\"at\":\"2026-10-13T09:00:00Z\",\"pod-deletion-cost\":{\"applied\":null,\"at\":\"2026-10-13T09:00:00Z\"}}"
+  let view = annotations([#(marker_key, raw), #("app", "worker")])
+  let operations =
+    ownership.cleanup(
+      marker: Marker(Some(raw), Some(earlier), [
+        Entry(pdc, AppliedRecord(None, earlier)),
+      ]),
+      annotations: view,
+      owned: [pdc],
+      at:,
+    )
+
+  assert ops(operations)
+    == [
+      #(Test, deletion_path),
+      #(Test, marker_path),
+      #(Test, pdc_path),
+      #(Remove, marker_path),
+    ]
+  assert ownership.left(operations:, annotations: view) == [#(marker_key, raw)]
+}
+
+// observability Events CleanupRejected: a cleanup that released records
+// alone and would have rewritten the marker, keeping other records, leaves
+// nothing.
+pub fn left_of_a_marker_rewrite_is_empty_test() -> Nil {
+  let view =
+    annotations([#(marker_key, null_beside_yielded_raw), #(ste_key, "false")])
+  let operations =
+    ownership.cleanup(
+      marker: null_beside_yielded_marker,
+      annotations: view,
+      owned: [pdc],
+      at: later,
+    )
+
+  assert ownership.left(operations:, annotations: view) == []
+}
+
+// observability Events CleanupRejected: a write patch, which removes
+// nothing, leaves nothing; so does an empty patch.
+pub fn left_of_a_write_patch_is_empty_test() -> Nil {
+  let view = annotations([#(marker_key, applied_300_raw), #(pdc_key, "300")])
+  let operations =
+    ownership.patch(
+      marker: applied_300_marker,
+      annotations: view,
+      writes: [Write(pdc, Some("500")), Write(ste, Some("false"))],
+      at:,
+    )
+
+  assert ownership.left(operations:, annotations: view) == []
+  assert ownership.left(operations: [], annotations: view) == []
+  assert ownership.left(operations: [], annotations: None) == []
+}
+
+// observability Events CleanupRejected: the marker fallback is decided from
+// the removal paths alone: operations that remove an owned key and the
+// marker, against a map lacking that key, leave nothing, never the marker;
+// and a marker-only removal against a map without the marker leaves
+// nothing.
+pub fn left_falls_back_to_the_marker_only_when_no_owned_key_is_removed_test() -> Nil {
+  let operations = [
+    deletion_test,
+    Operation(Test, marker_path, Some(applied_300_quoted)),
+    Operation(Test, pdc_path, Some("\"300\"")),
+    Operation(Remove, pdc_path, None),
+    Operation(Remove, marker_path, None),
+  ]
+
+  assert ownership.left(
+      operations:,
+      annotations: annotations([#(marker_key, applied_300_raw)]),
+    )
+    == []
+  assert ownership.left(
+      operations: [Operation(Remove, marker_path, None)],
+      annotations: annotations([#("app", "worker")]),
+    )
+    == []
+  assert ownership.left(
+      operations: [Operation(Remove, marker_path, None)],
+      annotations: None,
+    )
+    == []
 }
 
 // -------------------------------------------------------------- Document ---
@@ -1233,7 +1737,7 @@ pub fn message_renders_absent_on_either_side_test() -> Nil {
 pub fn every_function_is_pure_under_repeated_application_test() -> Nil {
   let view = annotations([#(marker_key, applied_300_raw), #(pdc_key, "999")])
   let marker = Marker(Some(both_raw), Some(at), both_entries)
-  let writes = [Write(pdc, Some("5"))]
+  let writes = [Write(ste, Some("false"))]
   let patch =
     ownership.patch(marker: applied_300_marker, annotations: view, writes:, at:)
   let yield =
@@ -1242,6 +1746,27 @@ pub fn every_function_is_pure_under_repeated_application_test() -> Nil {
       annotations: view,
       owned: pdc,
       at:,
+    )
+  let released_view =
+    annotations([
+      #(marker_key, both_raw),
+      #(pdc_key, "300"),
+      #(ste_key, "false"),
+    ])
+  let cleanup =
+    ownership.cleanup(
+      marker:,
+      annotations: released_view,
+      owned: [pdc, ste],
+      at:,
+    )
+  let event =
+    ownership.event(
+      pod_name: "p",
+      pod_uid: "u",
+      marker: applied_300_marker,
+      annotations: view,
+      owned: pdc,
     )
 
   assert ownership.read(view) == ownership.read(view)
@@ -1295,6 +1820,19 @@ pub fn every_function_is_pure_under_repeated_application_test() -> Nil {
       annotations: view,
       owned: pdc,
     )
+  assert cleanup
+    == ownership.cleanup(
+      marker:,
+      annotations: released_view,
+      owned: [pdc, ste],
+      at:,
+    )
+  assert ownership.may_write(Conflict) == ownership.may_write(Conflict)
+  assert ownership.message(event) == ownership.message(event)
+  assert ownership.record(marker:, owned: pdc)
+    == ownership.record(marker:, owned: pdc)
+  assert ownership.left(operations: cleanup, annotations: released_view)
+    == ownership.left(operations: cleanup, annotations: released_view)
 }
 
 fn pad(number: Int, width: Int) -> String {
@@ -1352,6 +1890,159 @@ pub fn read_of_a_rendered_marker_reads_back_its_entries_test() -> Nil {
 
   assert ownership.read(annotations([#(marker_key, rendered), #("app", "w")]))
     == Marker(Some(rendered), Some(last), entries)
+}
+
+// One of the two owned annotations.
+fn owned_generator() -> qcheck.Generator(ownership.Owned) {
+  qcheck.from_generators(qcheck.constant(pdc), [qcheck.constant(ste)])
+}
+
+// An applied or a yielded record, a string or null, at any time.
+fn record_generator() -> qcheck.Generator(ownership.Record) {
+  qcheck.map3(
+    qcheck.bool(),
+    qcheck.option_from(qcheck.string()),
+    time_generator(),
+    fn(applied, value, record_at) {
+      case applied {
+        True -> AppliedRecord(value, record_at)
+        False -> YieldedRecord(value, record_at)
+      }
+    },
+  )
+}
+
+// The pairs whose second member is present.
+fn present(pairs: List(#(a, Option(b)))) -> List(#(a, b)) {
+  list.filter_map(pairs, fn(pair) {
+    case pair.1 {
+      Some(value) -> Ok(#(pair.0, value))
+      None -> Error(Nil)
+    }
+  })
+}
+
+// A marker as read: any subset of the two entries, an at or none, and a
+// raw string that is absent, its own rendering, or any other string, as a
+// hand edit leaves it.
+fn marker_generator() -> qcheck.Generator(Marker) {
+  qcheck.map5(
+    qcheck.option_from(record_generator()),
+    qcheck.option_from(record_generator()),
+    qcheck.option_from(time_generator()),
+    qcheck.bounded_int(from: 0, to: 2),
+    qcheck.string(),
+    fn(pdc_record, ste_record, marker_at, raw_kind, edit) {
+      let entries =
+        present([#(pdc, pdc_record), #(ste, ste_record)])
+        |> list.map(fn(pair) { Entry(pair.0, pair.1) })
+      let marker = Marker(None, marker_at, entries)
+      let raw = case raw_kind {
+        0 -> None
+        1 -> Some(ownership.render(marker))
+        _ -> Some(edit)
+      }
+      Marker(..marker, raw:)
+    },
+  )
+}
+
+// A marker with the view it is read against: no map, or a map that holds
+// or lacks the marker annotation (the marker's raw string, or any other) and
+// each owned key, beside an annotation of another writer.
+fn view_generator() -> qcheck.Generator(#(Marker, Option(Dict(String, String)))) {
+  use marker <- qcheck.bind(marker_generator())
+  let marker_member =
+    qcheck.from_generators(qcheck.constant(None), [
+      qcheck.constant(marker.raw),
+      qcheck.option_from(qcheck.string()),
+    ])
+  qcheck.map4(
+    qcheck.bool(),
+    marker_member,
+    qcheck.option_from(qcheck.string()),
+    qcheck.option_from(qcheck.string()),
+    fn(has_map, marker_value, pdc_value, ste_value) {
+      let members =
+        present([
+          #(marker_key, marker_value),
+          #(pdc_key, pdc_value),
+          #(ste_key, ste_value),
+          #("app", Some("w")),
+        ])
+      case has_map {
+        False -> #(marker, None)
+        True -> #(marker, annotations(members))
+      }
+    },
+  )
+}
+
+// Objects (ownership) and WriteMode: no operation names a path outside the
+// annotations: every operation of patch, yield and cleanup, over any marker,
+// view, writes and owned list, has the path /metadata/annotations, a path
+// under it, or is the test that /metadata/deletionTimestamp is null.
+pub fn no_operation_names_a_path_outside_the_annotations_test() -> Nil {
+  let config = qcheck.default_config() |> qcheck.with_seed(qcheck.seed(32))
+  let writes =
+    qcheck.list_from(qcheck.map2(
+      owned_generator(),
+      qcheck.option_from(qcheck.string()),
+      Write,
+    ))
+  use #(#(marker, view), writes, owned, write_at) <- qcheck.run(
+    config,
+    qcheck.tuple4(
+      view_generator(),
+      writes,
+      qcheck.list_from(owned_generator()),
+      time_generator(),
+    ),
+  )
+  let operations =
+    list.flatten([
+      ownership.patch(marker:, annotations: view, writes:, at: write_at),
+      ownership.yield(marker:, annotations: view, owned: pdc, at: write_at),
+      ownership.yield(marker:, annotations: view, owned: ste, at: write_at),
+      ownership.cleanup(marker:, annotations: view, owned:, at: write_at),
+    ])
+
+  assert list.all(operations, fn(operation) {
+    operation == deletion_test
+    || operation.path == annotations_path
+    || string.starts_with(operation.path, "/metadata/annotations/")
+  })
+}
+
+// lifecycle Restart Informational and Ownership.Adoption: the marker's at
+// and each record's at decide nothing: moving every one of them to another
+// time, the rendering with it, changes no standing for either owned
+// annotation under any view.
+pub fn standing_ignores_every_at_test() -> Nil {
+  let config = qcheck.default_config() |> qcheck.with_seed(qcheck.seed(23))
+  use #(#(marker, view), other) <- qcheck.run(
+    config,
+    qcheck.tuple2(view_generator(), time_generator()),
+  )
+  let entries =
+    list.map(marker.entries, fn(entry) {
+      let record = case entry.record {
+        AppliedRecord(value:, ..) -> AppliedRecord(value, other)
+        YieldedRecord(value:, ..) -> YieldedRecord(value, other)
+      }
+      Entry(entry.owned, record)
+    })
+  let moved = Marker(None, option.map(marker.at, fn(_) { other }), entries)
+  let raw = case marker.raw == Some(ownership.render(marker)) {
+    True -> Some(ownership.render(moved))
+    False -> marker.raw
+  }
+  let moved = Marker(..moved, raw:)
+
+  assert ownership.standing(marker: moved, annotations: view, owned: pdc)
+    == ownership.standing(marker:, annotations: view, owned: pdc)
+  assert ownership.standing(marker: moved, annotations: view, owned: ste)
+    == ownership.standing(marker:, annotations: view, owned: ste)
 }
 
 // ----------------------------------------------------------- Obligations ---
@@ -1488,9 +2179,12 @@ pub fn conflict_event_has_five_fields_test() -> Nil {
 // contract-signature.Ownership.yield: (marker, annotations?, owned, at) ->
 // List<Operation>. Covered by
 // yield_with_a_found_value_rewrites_only_the_marker_test.
+// contract-signature.Ownership.cleanup: (marker, annotations?, owned, at) ->
+// List<Operation>. Covered by cleanup_releases_one_annotation_with_a_value_test
+// and cleanup_of_the_last_entry_removes_the_marker_test.
 // contract-signature.Ownership.document: (operations) -> String. Covered by
-// document_encodes_the_operations_test. keys and applied_value are helpers
-// of the module, not contract signatures.
+// document_encodes_the_operations_test. keys, applied_value and left are
+// helpers of the module, not contract signatures.
 // contract-signature.Ownership.rejected: (operations, annotations?,
 // deletion_timestamp?) -> Boolean. Covered by
 // rejected_is_true_when_every_test_passes_test.

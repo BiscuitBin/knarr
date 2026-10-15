@@ -334,7 +334,11 @@ contract Loop {
         -- later turn from that view, re-derived then (Pending); a yield
         -- that leaves nothing due drops the entry, one refused keeps it. An
         -- accepted patch response replaces the pod's view until the next
-        -- LIST replaces it in turn. The
+        -- LIST replaces it in turn. An accepted patch whose response body
+        -- does not decode (k8s_client Verbs) gives no view: it is still
+        -- accepted, so a yield is reported from the pre-yield view, and
+        -- nothing more is due on the pod until the next LIST supplies its
+        -- view. The
         -- marker a yield is reported from, and the Event, are ownership's
         -- Event: the create is attempted only after the yield patch is
         -- accepted.

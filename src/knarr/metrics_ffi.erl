@@ -20,6 +20,7 @@ metrics() ->
     {counter, knarr_startups_total, [], "Application startups in this VM."},
     {counter, knarr_polls_total, [deployment, reading], "Readings produced by polls, by kind."},
     {counter, knarr_yields_total, [deployment, annotation], "Yield patches accepted."},
+    {counter, knarr_patch_rejections_total, [deployment, purpose], "Rejections of knarr's patches, when known."},
     {counter, knarr_events_total, [reason, result], "Event create attempts, by reason and result."},
     {gauge, knarr_pods, [deployment, tier], "Pods by the tier of the applied pod-deletion-cost value."},
     {gauge, knarr_annotations, [deployment, annotation, standing], "Owned annotations by standing."},
