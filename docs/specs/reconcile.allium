@@ -19,7 +19,9 @@
 -- Owner: ticket 21 settled every §9.6 question here with the maintainer on
 -- 2026-10-13. Ticket 31 built it with the decided loop (Loop) in a thin
 -- driver; ticket 46 replaced the driver's poll fan-out and direct patch with
--- budget's schedule and bucket on 2026-10-14 (Cycle, Sequence, Pending).
+-- budget's schedule and bucket on 2026-10-14 (Cycle, Sequence, Pending);
+-- ticket 47 added the cleanup the cycle hands the patcher, its turn and the
+-- retirement of a departed name on 2026-10-15 (Cycle).
 -- Amended by ticket 23 on 2026-10-13: Neutral and Restart name lifecycle's
 -- answer, no expiry and the record a neutral removal leaves falling to
 -- cleanup.
@@ -403,42 +405,85 @@ contract Loop {
         -- returns and is observed then, the states it enters announced
         -- then (Absent, observability Cadence OnEntry), and no poll runs in
         -- the cycle itself. A pod's memory, its state, its latest reading, a
-        -- kept 422 and its rejection runs, belongs to its name and uid: a
-        -- LIST that shows the name under another uid begins the memory
-        -- afresh, as a restart forgets a kept 422 (Rejected422, ownership
-        -- Rejected), so nothing is written on the new pod from its
-        -- predecessor's reading and it has no reading until its own first
-        -- poll returns (JustStarted). A reading whose uid is not that of the
-        -- pod's newest view lands nowhere, neither counted nor observed, as
-        -- a reading of a pod the LIST no longer shows does (budget Leaving).
+        -- kept 422 and its rejection runs, is kept for every pod the
+        -- unselected pod LIST shows: a target keeps all four, and a pod that
+        -- is not a target only its rejection runs and a kept 422 of any
+        -- purpose, an apply's made while it was a target among them. It
+        -- belongs to its name and uid: a LIST that shows the name under
+        -- another uid begins the memory afresh, as a restart forgets a kept
+        -- 422 (Rejected422, ownership Rejected), so nothing is written on
+        -- the new pod from its predecessor's reading and it has no reading
+        -- until its own first poll returns (JustStarted). A reading whose
+        -- uid is not that of the pod's newest view lands nowhere, neither
+        -- counted nor observed, as a reading of a pod the LIST no longer
+        -- shows does (budget Leaving).
         -- The patch carries no uid test; its preconditions are ownership's
         -- (Precondition). A reading that finds a write or a yield due on
         -- a pod that is not terminating hands the patcher a budget Pending
         -- entry for the pod with purpose apply, and does so again at every
-        -- later reading that finds one; the patcher serves the entries
-        -- oldest-due first under WriteBudget, one turn out at a time. On
-        -- the pod's turn the change is re-derived from the newest view and
-        -- the latest reading (Pending) and one patch attempt is made
-        -- through k8s_client's patch_pod, whatever its outcome (Sequence;
-        -- budget PerPod); the turn is answered exactly once, with the
-        -- attempt's outcome, accepted, throttled with its Retry-After, or
-        -- rejected, and whether the pod is still due, or with nothing due,
-        -- which also answers a turn for a terminating pod, one without a
-        -- reading or one the LIST no longer shows, and every cleanup turn
-        -- until lifecycle's Cleanup is built.
-        -- A 422 ends the entry: nothing of the pod is handed over again
-        -- until the next LIST refreshes the view (Rejected422); a 429
-        -- stays due and waits out the pause, and any other refusal stays
-        -- due and is tried again after the pod's interval. The clock is
+        -- later reading that finds one. A cleanup is handed over by the
+        -- cycle, not by a reading: each discovery cycle in which every LIST
+        -- succeeds builds lifecycle's View for every pod the unselected pod
+        -- LIST shows, and every View whose due is not empty rides with the
+        -- listed pods as a budget Pending entry with purpose cleanup,
+        -- carrying the pod, the View's deployment, the interval, which is
+        -- the target's patch interval or config.patch_interval for a pod
+        -- that is not a target (lifecycle Cleanup Retry), and the clock the
+        -- cycle read. The patcher prunes, registers and refreshes intervals
+        -- in that one step, before it grants any turn or reports any
+        -- Deployment quiet, and the first such cycle after a start
+        -- registers every due cleanup at once, with no startup pass
+        -- (lifecycle Cleanup Order, Restart NoStartupStep). The patcher
+        -- serves the entries oldest-due first under WriteBudget, one turn
+        -- out at a time. On the pod's turn the change is re-derived from
+        -- the newest view and the latest reading (Pending) and one patch
+        -- attempt is made through k8s_client's patch_pod, whatever its
+        -- outcome (Sequence; budget PerPod); the turn is answered exactly
+        -- once, with the attempt's outcome, accepted, throttled with its
+        -- Retry-After, or rejected, and whether the pod is still due, or
+        -- with nothing due, which also answers a turn for a terminating
+        -- pod, one without a reading or one the LIST no longer shows, and a
+        -- cleanup turn whose due is now empty, or blocked, for a pod held
+        -- until the next LIST, which spends no token and keeps the entry.
+        -- On a cleanup turn the due
+        -- names are re-derived with lifecycle's due from the cycle's View,
+        -- its held following the pod's newest view, the LIST's or knarr's
+        -- own accepted patch response, every due name passes to ownership's
+        -- cleanup, and the one patch counts under the View's deployment
+        -- (lifecycle Cleanup Scope, Marker and Label). An accepted cleanup
+        -- ends the pod's rejection run; a 400 or 403 is a rejection at once
+        -- and stays due (lifecycle Cleanup Retry).
+        -- A 422 ends the entry of the purpose it refused: nothing of the
+        -- pod is attempted again until the next LIST refreshes the view. A
+        -- turn meanwhile for the pod's other purpose, or for either purpose
+        -- of a pod whose view an accepted patch left stale, is answered
+        -- blocked: its entry stays pending from when the change first
+        -- became due and is granted again once that LIST arrives (budget
+        -- Pending; lifecycle Cleanup Order). A kept 422 on any
+        -- listed pod, target or not, is classified against that LIST, a
+        -- cleanup's under the label it was counted under (Rejected422); a
+        -- 429 or a transport failure stays due and a 429 waits out the
+        -- pause, and any other refusal stays due and is tried again after
+        -- the pod's interval. The clock is
         -- read once after the cycle's LISTs for every view the cycle
         -- holds, once as each reading is delivered, once as a turn builds
         -- its request, which is the at ownership's Recorded marker holds,
         -- and once as the attempt returns, which the answer carries. The
-        -- cycle rebuilds the per-Deployment gauges when it completes. A
-        -- Deployment that left the target set keeps every series, gauges
-        -- included, until the patcher reports nothing of its pods pending
-        -- or in turn, and is then retired (observability SeriesLife); one
-        -- that returns first is not.
+        -- cycle rebuilds the per-Deployment gauges when it completes,
+        -- knarr_annotations counting a pod that is not a target under its
+        -- View's deployment. A name not in the target set that carries
+        -- series is retired under observability's SeriesLife once
+        -- lifecycle's done holds for it: at each complete cycle the
+        -- reconciler finds every such name done over this cycle's Views and
+        -- marks it departing, the patcher reports it quiet once nothing of
+        -- its pods is pending or in turn, and its series are retired on
+        -- that report only while the last cycle still found it departing,
+        -- so a cycle that finds a due again drops the mark and a stale
+        -- report retires nothing. An opt-out's series so last until the
+        -- first LIST after its cleanup is accepted, its per-Deployment
+        -- gauges at their last values until then except knarr_annotations,
+        -- rebuilt from the Views; a Deployment that returns to the target
+        -- set first is not retired.
     @invariant Pure
         -- parse_applied, safe_to_evict_usable, desired and due are
         -- functions of their arguments alone: the state, the reading, the

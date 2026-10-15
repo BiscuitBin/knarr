@@ -8,7 +8,7 @@
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import knarr/k8s_client.{Owner, ReplicaSet}
+import knarr/k8s_client.{type ReplicaSet, Owner, ReplicaSet}
 import knarr/lifecycle.{
   Held, HeldConflict, HeldOwned, HeldYielded, Removal, View,
 }
@@ -262,15 +262,23 @@ const deployment_replica_set =
     owner: Some(Owner(kind: "Deployment", name: "worker", uid: "d1")),
   )
 
+/// The listed ReplicaSets keyed by uid, as the discovery cycle builds them
+/// once for every View.
+fn by_uid(replica_sets: List(ReplicaSet)) -> Dict(String, ReplicaSet) {
+  replica_sets
+  |> list.map(fn(replica_set) { #(replica_set.uid, replica_set) })
+  |> dict.from_list
+}
+
 // Cleanup.Label: a non-target pod's deployment is the name its ReplicaSet's
 // controller owner reference carries.
 pub fn deployment_of_a_replica_set_owned_by_a_deployment_is_its_name_test() -> Nil {
   let unrelated = ReplicaSet(name: "other-1a2", uid: "rs2", owner: None)
 
-  assert lifecycle.deployment_of(owner: replica_set_owner, replica_sets: [
-      unrelated,
-      deployment_replica_set,
-    ])
+  assert lifecycle.deployment_of(
+      owner: replica_set_owner,
+      replica_sets: by_uid([unrelated, deployment_replica_set]),
+    )
     == "worker"
 }
 
@@ -285,19 +293,25 @@ pub fn deployment_of_a_chain_naming_no_deployment_is_empty_test() -> Nil {
       owner: Some(Owner(kind: "Job", name: "worker", uid: "j1")),
     )
 
-  assert lifecycle.deployment_of(owner: None, replica_sets: [
-      deployment_replica_set,
-    ])
+  assert lifecycle.deployment_of(
+      owner: None,
+      replica_sets: by_uid([deployment_replica_set]),
+    )
     == ""
-  assert lifecycle.deployment_of(owner: replica_set_owner, replica_sets: [])
+  assert lifecycle.deployment_of(
+      owner: replica_set_owner,
+      replica_sets: by_uid([]),
+    )
     == ""
-  assert lifecycle.deployment_of(owner: replica_set_owner, replica_sets: [
-      orphan_replica_set,
-    ])
+  assert lifecycle.deployment_of(
+      owner: replica_set_owner,
+      replica_sets: by_uid([orphan_replica_set]),
+    )
     == ""
-  assert lifecycle.deployment_of(owner: replica_set_owner, replica_sets: [
-      job_replica_set,
-    ])
+  assert lifecycle.deployment_of(
+      owner: replica_set_owner,
+      replica_sets: by_uid([job_replica_set]),
+    )
     == ""
 }
 
@@ -369,6 +383,55 @@ pub fn held_is_one_entry_per_record_in_owned_order_test() -> Nil {
     == [ste_owned]
 }
 
+// reconcile Conflict and ownership Adoption: the effective standing, which
+// the reconciler's view and held share, is ownership's standing for a
+// record that parses as its annotation's value, conflict for an applied
+// record that does not, whatever the annotation holds, and unowned with no
+// record and no annotation.
+pub fn effective_standing_makes_an_unparsable_applied_record_conflict_test() -> Nil {
+  let parsable =
+    usable_marker([
+      Entry(pdc, AppliedRecord(Some("300"), at)),
+      Entry(ste, AppliedRecord(Some("false"), at)),
+    ])
+  let unparsable =
+    usable_marker([
+      Entry(pdc, AppliedRecord(Some("abc"), at)),
+      Entry(ste, AppliedRecord(Some("maybe"), at)),
+    ])
+
+  assert lifecycle.effective_standing(
+      marker: parsable,
+      annotations: annotations([#(pdc_key, "300")]),
+      owned: pdc,
+    )
+    == ownership.OwnedByKnarr
+  assert lifecycle.effective_standing(
+      marker: parsable,
+      annotations: annotations([#(ste_key, "false")]),
+      owned: ste,
+    )
+    == ownership.OwnedByKnarr
+  assert lifecycle.effective_standing(
+      marker: unparsable,
+      annotations: annotations([#(pdc_key, "abc")]),
+      owned: pdc,
+    )
+    == ownership.Conflict
+  assert lifecycle.effective_standing(
+      marker: unparsable,
+      annotations: annotations([#(ste_key, "maybe")]),
+      owned: ste,
+    )
+    == ownership.Conflict
+  assert lifecycle.effective_standing(
+      marker: absent_marker,
+      annotations: None,
+      owned: pdc,
+    )
+    == ownership.Unowned
+}
+
 // --------------------------------------------------------------- Restart ---
 
 // lifecycle Restart Informational: the marker's at and each record's at
@@ -422,12 +485,14 @@ pub fn due_done_held_and_deployment_of_are_pure_test() -> Nil {
     == lifecycle.done(views: [view], outstanding:, deployment: "worker")
   assert lifecycle.held(marker:, annotations: found)
     == lifecycle.held(marker:, annotations: found)
-  assert lifecycle.deployment_of(owner: replica_set_owner, replica_sets: [
-      deployment_replica_set,
-    ])
-    == lifecycle.deployment_of(owner: replica_set_owner, replica_sets: [
-      deployment_replica_set,
-    ])
+  assert lifecycle.deployment_of(
+      owner: replica_set_owner,
+      replica_sets: by_uid([deployment_replica_set]),
+    )
+    == lifecycle.deployment_of(
+      owner: replica_set_owner,
+      replica_sets: by_uid([deployment_replica_set]),
+    )
 }
 
 // ----------------------------------------------------------- Obligations ---
