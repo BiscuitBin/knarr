@@ -1,12 +1,14 @@
 //// The reconcile process: the driver on the LIST timer that reconcile's
 //// Loop Cycle states (docs/specs/reconcile.allium). Every tick it reads the
 //// token and the namespace, runs one discovery cycle of three LISTs, derives
-//// the target set (config Discovery), remembers every target's newest view,
-//// rebuilds the gauges and announces the states from the latest readings,
-//// and hands the scheduler the listed pods and the joiners, the targets
-//// with a pod IP (budget Leaving, reconcile NoPodIp). Each reading comes
-//// back from the scheduler on its own, at the pod's rung; the reconciler
-//// observes it into the pod's memory and decides whether anything is due
+//// the target set (config Discovery), remembers every listed pod's newest
+//// view with its lifecycle View, rebuilds the gauges and announces the
+//// states from the latest readings, hands the scheduler the listed pods and
+//// the joiners, the targets with a pod IP (budget Leaving, reconcile
+//// NoPodIp), and hands the patcher every cleanup a View makes due
+//// (lifecycle Cleanup Scope, Order). Each reading comes back from the
+//// scheduler on its own, at the pod's rung; the reconciler observes it
+//// into the pod's memory and decides whether anything is due
 //// on the pod against its marker; if so it tells the patcher, which grants
 //// one turn at a time as budget's WriteBudget allows. On a turn the change
 //// is re-derived from the newest view and the latest reading (budget
@@ -179,7 +181,9 @@ pub type Message {
 /// (reconcile Sequence), its latest reading with the clock it came at, none
 /// before its first poll returns (JustStarted), and its active rejection
 /// runs, at most one per reason, from a rejection to the pod's next
-/// accepted patch (observability Events Rejected, Cadence OnEntry).
+/// accepted patch (observability Events Rejected, Cadence OnEntry), and
+/// the lifecycle View the last cycle in which every LIST succeeded built
+/// for it, none before one has (lifecycle Cleanup View).
 type Memory {
   Memory(
     state: PodState,
@@ -188,6 +192,7 @@ type Memory {
     stale: Bool,
     latest: Option(#(Reading, Int)),
     runs: List(Entry),
+    cleanup_view: Option(lifecycle.View),
   )
 }
 
@@ -697,41 +702,49 @@ fn discovered(
   ])
   let #(invalid, cycle) =
     overrides(previous: state.invalid, deployments:, cycle:)
-  // Every target's memory, kept from the last cycle or begun here, with the
-  // LIST's view as its newest, no longer stale, and a 422's operations
-  // classified against it (reconcile Rejected422, Sequence; ownership
-  // Rejected). A terminating pod leaves every state, its rejection runs
-  // among them (observability Cadence OnEntry). A memory of a pod the LIST
-  // no longer shows is dropped with it, and one the LIST shows under
-  // another uid is begun afresh, as a restart begins it (reconcile Cycle).
-  let #(memories, cycle) =
-    list.fold(targets, #([], cycle), fn(acc, target) {
-      let #(memories, cycle) = acc
-      case list.find(pods, fn(pod) { pod.name == target.pod_name }) {
-        Ok(pod) -> {
-          let memory = case dict.get(state.pods, pod.name) {
-            Ok(memory) if memory.pod.uid == pod.uid -> memory
-            _ -> fresh(pod)
-          }
-          let runs = case pod.deletion_timestamp {
-            Some(_) -> []
-            None -> memory.runs
-          }
-          let #(memory, cycle) =
-            classify_kept(
-              cycle:,
-              deployment: target.deployment_name,
-              pod:,
-              memory: Memory(..memory, pod:, stale: False, runs:),
-            )
-          #([#(target, memory), ..memories], cycle)
-        }
-        // Every target is one of the listed pods, so this arm is unreachable.
-        Error(Nil) -> #(memories, cycle)
+  // Every listed pod's memory, kept from the last cycle or begun here, with
+  // this cycle's lifecycle View, and a 422's operations classified against
+  // the LIST's view under the View's deployment, a pod that left the target
+  // set since included (reconcile Rejected422, Sequence; ownership
+  // Rejected; observability Labels). A memory of a pod the LIST no longer
+  // shows is dropped with it.
+  let by_name =
+    list.fold(targets, dict.new(), fn(acc, target) {
+      dict.insert(acc, target.pod_name, target)
+    })
+  let #(listed_pods, cycle) =
+    list.fold(pods, #([], cycle), fn(acc, pod) {
+      let #(listed_pods, cycle) = acc
+      let target = dict.get(by_name, pod.name) |> option.from_result
+      let view = cleanup_view(pod:, target:, replica_sets:)
+      let #(memory, cycle) =
+        classify_kept(
+          cycle:,
+          deployment: view.deployment,
+          pod:,
+          memory: listed_memory(previous: state.pods, pod:, target:),
+        )
+      let memory = Memory(..memory, cleanup_view: Some(view))
+      #([#(target, memory, view), ..listed_pods], cycle)
+    })
+  let listed_pods = list.reverse(listed_pods)
+  // The gauges, the announcements, the schedule and the patcher's applies
+  // read the targets' memories alone.
+  let memories =
+    list.filter_map(listed_pods, fn(item) {
+      case item {
+        #(Some(target), memory, _) -> Ok(#(target, memory))
+        #(None, _, _) -> Error(Nil)
       }
     })
-  let memories = list.reverse(memories)
-  let current = gauges(targets:, pods: memories)
+  let others =
+    list.filter_map(listed_pods, fn(item) {
+      case item {
+        #(None, _, view) -> Ok(view)
+        #(Some(_), _, _) -> Error(Nil)
+      }
+    })
+  let current = gauges(targets:, pods: memories, others:)
   let #(seen, cycle) = announce(seen: state.seen, pods: memories, cycle:)
   // The schedule learns joining and leaving from the LIST alone: every
   // target by name, and a joiner for each with a pod IP (budget Leaving,
@@ -758,28 +771,50 @@ fn discovered(
     })
   let listed = list.map(targets, fn(target) { target.pod_name })
   notify(config.names.scheduler, scheduler.Listed(listed:, joining:))
-  // The patcher learns the same: the apply of a pod not listed, or listed
-  // terminating, is discarded (budget Pending, Leaving), the apply and the
-  // last attempt of a pod listed under another uid are forgotten (budget
-  // PerPod, Pending), the last attempt of every pod the LIST shows is kept,
-  // and a listed Deployment is not departing. This cycle derives no
-  // lifecycle due yet, so every listed pod counts as cleaning and a pending
-  // cleanup is kept while its pod is listed.
+  // The patcher learns the same in one message: the apply of a pod not
+  // listed, or listed terminating, is discarded (budget Pending, Leaving),
+  // the apply, the cleanup and the last attempt of a pod listed under
+  // another uid are forgotten (budget PerPod, Pending), the last attempt of
+  // every pod the LIST shows is kept, and a listed Deployment is not
+  // departing; then every View with a Removal is a pending cleanup, a kept
+  // one refreshed with the interval this cycle derives. One message, so the
+  // patcher grants nothing and settles no departure between the prune and
+  // the cleanups, and before any departure, so a Deployment a cleanup holds
+  // is busy when it departs. Every cleanup of this cycle carries the
+  // cycle's clock, so the first cycle after a start derives every due
+  // cleanup at once with one due_since (lifecycle Cleanup Order, Retry,
+  // Restart NoStartupStep; budget Restart); a repeat keeps its own. The
+  // interval is the target's, config.patch_interval for a pod that is not
+  // one (budget PerPod).
   let replaced =
-    list.filter_map(memories, fn(item) {
-      let #(target, memory) = item
-      case dict.get(state.pods, target.pod_name) {
-        Ok(before) if before.pod.uid != memory.pod.uid -> Ok(target.pod_name)
+    list.filter_map(listed_pods, fn(item) {
+      let #(_, memory, _) = item
+      case dict.get(state.pods, memory.pod.name) {
+        Ok(before) if before.pod.uid != memory.pod.uid -> Ok(memory.pod.name)
         _ -> Error(Nil)
       }
     })
+  let cleaning =
+    list.filter_map(listed_pods, fn(item) {
+      let #(target, _, view) = item
+      use <- bool.guard(lifecycle.due(view) == [], Error(Nil))
+      let interval_s = case target {
+        Some(target) -> target.settings.patch_interval
+        None -> defaults.patch_interval
+      }
+      Ok(patcher.Cleaning(
+        pod_name: view.pod_name,
+        deployment: view.deployment,
+        interval_s:,
+        at_ms: cycle.now,
+      ))
+    })
   let deployment_names =
     list.map(targets, fn(target) { target.deployment_name }) |> list.unique
-  let pod_names = list.map(pods, fn(pod) { pod.name })
   notify(
     config.names.patcher,
     patcher.Listed(
-      listed: pod_names,
+      listed: list.map(pods, fn(pod) { pod.name }),
       targets: listed,
       terminating: list.filter_map(memories, fn(item) {
         case { item.1 }.pod.deletion_timestamp {
@@ -789,17 +824,14 @@ fn discovered(
       }),
       replaced:,
       deployments: deployment_names,
-      cleaning: pod_names,
+      cleaning:,
     ),
   )
   let memories =
-    list.fold(memories, dict.new(), fn(acc, item) {
-      dict.insert(acc, { item.0 }.pod_name, item.1)
+    list.fold(listed_pods, dict.new(), fn(acc, item) {
+      let #(_, memory, _) = item
+      dict.insert(acc, memory.pod.name, memory)
     })
-  // The gauges, the announcements and both actors above read the targets'
-  // memories alone, so the runs retained here for pods outside the target
-  // set affect nothing else.
-  let memories = retain_runs(previous: state.pods, current: memories, pods:)
   // A Deployment has left when no current target carries its name: the
   // series are labelled by name, so one recreated under the same name
   // between two LISTs keeps them (observability SeriesLife). One that left
@@ -825,8 +857,11 @@ fn discovered(
     |> list.unique
   // The gauge series of a departing Deployment are held, not rebuilt away,
   // until it is quiet; every other series of the last cycle that this one
-  // did not set leaves the exposition.
+  // did not set leaves the exposition. A held series this cycle set again,
+  // as knarr_annotations for a departing Deployment's pods that are no
+  // longer targets, is kept once.
   let #(held, previous) = list.partition(state.gauges, labelled(_, departing))
+  let held = list.filter(held, fn(series) { !list.contains(current, series) })
   let gauges = list.append(rebuild(previous, current), held)
   State(
     ..state,
@@ -840,8 +875,8 @@ fn discovered(
   )
 }
 
-/// The memory a pod begins with: no reading, no kept 422, no run, and the
-/// view the LIST gave.
+/// The memory a pod begins with: no reading, no kept 422, no run, the view
+/// the LIST gave, and no lifecycle View yet.
 fn fresh(pod: Pod) -> Memory {
   Memory(
     state: reconcile.initial(),
@@ -850,35 +885,72 @@ fn fresh(pod: Pod) -> Memory {
     stale: False,
     latest: None,
     runs: [],
+    cleanup_view: None,
   )
 }
 
-/// The memories of this cycle plus the rejection runs of every pod the
-/// unselected pod LIST still shows live but that is not a target: a run
-/// lasts while the pod is listed and not terminating, whether or not its
-/// Deployment is a target this cycle (observability Cadence OnEntry), so a
-/// Deployment that opts out and back in announces no second Event; ticket
-/// 47's cleanup_rejected run rides on this. Only the runs are kept: the
-/// reading state of a pod that is not a target is not, and a pod that is
-/// terminating, no longer listed or listed under another uid drops
-/// everything (reconcile Cycle).
-fn retain_runs(
+/// One listed pod's memory for this cycle. A target keeps its memory with
+/// the LIST's view as its newest, no longer stale. A pod that is not a
+/// target keeps only its rejection runs and a kept 422, which this LIST
+/// classifies: it is in no state but the rejection runs, whose LIST is the
+/// unselected pod LIST, while every other state's is the target set
+/// (observability Cadence OnEntry), so it rejoins the schedule from the
+/// initial state (reconcile NoPodIp). A terminating pod leaves every state,
+/// its runs among them, and a pod the LIST shows under another uid is begun
+/// afresh, as a restart begins it (reconcile Cycle).
+fn listed_memory(
   previous previous: Dict(String, Memory),
-  current current: Dict(String, Memory),
-  pods pods: List(Pod),
-) -> Dict(String, Memory) {
-  list.fold(pods, current, fn(memories, pod) {
-    case
-      pod.deletion_timestamp,
-      dict.has_key(memories, pod.name),
-      dict.get(previous, pod.name)
-    {
-      None, False, Ok(Memory(runs: [_, ..] as runs, pod: before, ..))
-        if before.uid == pod.uid
-      -> dict.insert(memories, pod.name, Memory(..fresh(pod), runs:))
-      _, _, _ -> memories
-    }
-  })
+  pod pod: Pod,
+  target target: Option(Target),
+) -> Memory {
+  let memory = case dict.get(previous, pod.name) {
+    Ok(memory) if memory.pod.uid == pod.uid -> memory
+    _ -> fresh(pod)
+  }
+  let runs = case pod.deletion_timestamp {
+    Some(_) -> []
+    None -> memory.runs
+  }
+  case target {
+    Some(_) -> Memory(..memory, pod:, stale: False, runs:)
+    None -> Memory(..fresh(pod), kept: memory.kept, runs:)
+  }
+}
+
+/// A listed pod's lifecycle View (lifecycle Cleanup View): `target` from
+/// config's target set; `enabled` pod-deletion-cost always and
+/// safe-to-evict while the target's Deployment opts in, nothing for a pod
+/// that is not a target; `terminating` from deletionTimestamp; `deployment`
+/// the target's Deployment, else the name its ReplicaSet's controller owner
+/// carries, empty when the chain names no Deployment (Label); `held` from
+/// the pod's newest API-returned view, which at the cycle is its LIST's
+/// (ownership Adoption).
+fn cleanup_view(
+  pod pod: Pod,
+  target target: Option(Target),
+  replica_sets replica_sets: List(ReplicaSet),
+) -> lifecycle.View {
+  let #(deployment, enabled) = case target {
+    Some(target) -> #(
+      target.deployment_name,
+      case target.settings.safe_to_evict {
+        True -> [ownership.pod_deletion_cost.name, ownership.safe_to_evict.name]
+        False -> [ownership.pod_deletion_cost.name]
+      },
+    )
+    None -> #(lifecycle.deployment_of(owner: pod.owner, replica_sets:), [])
+  }
+  lifecycle.View(
+    pod_name: pod.name,
+    deployment:,
+    target: option.is_some(target),
+    enabled:,
+    terminating: option.is_some(pod.deletion_timestamp),
+    held: lifecycle.held(
+      marker: ownership.read(pod.annotations),
+      annotations: pod.annotations,
+    ),
+  )
 }
 
 /// Whether a series is labelled with one of the Deployments given.
@@ -1340,8 +1412,9 @@ fn due_operations(
 /// one answer, always: `Attempted` with the outcome and whether anything
 /// is still due, or `NothingDue` when the pod is gone, terminating, has no
 /// reading yet (JustStarted), holds a 422 for the next LIST (Rejected422)
-/// or has nothing to write. A cleanup turn is nothing due until ticket 47
-/// derives cleanups; none is sent for one here. An accepted response
+/// or has nothing to write. A cleanup turn, which discovery now enqueues,
+/// is still answered nothing due: re-deriving it from the newest view and
+/// sending it is ticket 47's next step. An accepted response
 /// becomes the pod's view. The request is built at the turn's clock, the
 /// marker's `at` among it, and the answer carries the clock after the
 /// attempt returned, so the pod's interval and a pause run from the
@@ -2030,11 +2103,45 @@ fn foreign_line(
 
 /// Every per-Deployment gauge series of this cycle (observability Tiers,
 /// Standing; reconcile Gauges, NotReadyWithCost), from each pod's newest
-/// view and latest reading. A terminating pod counts on none of them.
+/// view and latest reading. A terminating pod counts on none of them. A pod
+/// that is not a target, given by its View in `others`, counts only on
+/// knarr_annotations, under its View's deployment and only for an
+/// annotation standing owned, so a yielded or conflict record an opt-out
+/// leaves counts nowhere (observability Standing).
 fn gauges(
   targets targets: List(Target),
   pods pods: List(#(Target, Memory)),
+  others others: List(lifecycle.View),
 ) -> List(Series) {
+  let other_standings = fn(name) {
+    others
+    |> list.filter(fn(view) { view.deployment == name && !view.terminating })
+    |> list.flat_map(fn(view) {
+      list.filter_map(view.held, fn(held) {
+        case held.standing {
+          lifecycle.HeldOwned -> Ok(#(held.name, "owned"))
+          lifecycle.HeldConflict | lifecycle.HeldYielded -> Error(Nil)
+        }
+      })
+    })
+  }
+  let annotations = fn(name, pairs) {
+    counted(pairs, fn(pair: #(String, String)) {
+      Series(observability.annotations, [
+        observability.Label("deployment", name),
+        observability.Label("annotation", pair.0),
+        observability.Label("standing", pair.1),
+      ])
+    })
+  }
+  let names =
+    list.map(targets, fn(target) { target.deployment_name }) |> list.unique
+  let others_only =
+    others
+    |> list.map(fn(view) { view.deployment })
+    |> list.unique
+    |> list.filter(fn(name) { !list.contains(names, name) })
+    |> list.flat_map(fn(name) { annotations(name, other_standings(name)) })
   targets
   |> list.map(fn(target) {
     #(target.deployment_name, target.settings.thresholds)
@@ -2083,13 +2190,8 @@ fn gauges(
           }
         })
       })
-      |> counted(fn(pair) {
-        Series(observability.annotations, [
-          observability.Label("deployment", name),
-          observability.Label("annotation", pair.0),
-          observability.Label("standing", pair.1),
-        ])
-      })
+      |> list.append(other_standings(name))
+      |> annotations(name, _)
     let by_state = fn(metric, predicate: fn(Pod, Memory, Views) -> Bool) {
       let count =
         list.count(views, fn(item) { predicate(item.0, item.1, item.2) })
@@ -2106,6 +2208,7 @@ fn gauges(
       ..list.append(tiers, standings)
     ]
   })
+  |> list.append(others_only)
   |> list.map(fn(pair) {
     let #(series, value) = pair
     metrics.set(series.name, list.map(series.labels, fn(l) { l.value }), value)
