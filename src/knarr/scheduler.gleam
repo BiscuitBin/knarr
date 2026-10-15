@@ -87,12 +87,17 @@ pub type Job {
   )
 }
 
+/// The timers below are armed on this process's name, so one that fires
+/// after a restart reaches the replacement, not nobody: a `Wake` only
+/// settles, which is idempotent, and a `Deadline` names a flight the
+/// replacement does not hold, so it is nothing.
 pub type Message {
   /// From the reconciler after every successful discovery cycle: every
   /// target pod's name, and the joiners, the targets with a pod IP, each
   /// with its interval.
   Listed(listed: List(String), joining: List(Joiner))
-  /// The single due-time timer, or a test moving the clock.
+  /// The single due-time timer, or a test moving the clock. Any `Wake` is
+  /// a settle and nothing more, whichever timer sent it.
   Wake
   /// From a worker: the reading and the wall time the poll took.
   Returned(
@@ -102,16 +107,23 @@ pub type Message {
     elapsed_ms: Int,
   )
   /// The per-flight watchdog: the worker did not return within twice the
-  /// timeout and a second.
+  /// timeout and a second. Acted on only while that worker is the pod's
+  /// flight.
   Deadline(pod_name: String, worker: Pid)
   /// A worker exited, from `process.select_monitors`.
   Down(process.Down)
 }
 
 /// One scheduled pod: its place on the ladder and what a poll of it needs.
+/// `served` is the rung its outstanding poll is for, from the moment the
+/// rung came due until the poll returns; `schedule.next_due` is then the
+/// rung after, climbed and counted as skipped whenever it passes while the
+/// poll is queued or in flight (budget NoOverlap). An entry with no poll
+/// outstanding has `served` None and `next_due` the rung it waits for.
 type Entry {
   Entry(
     schedule: Schedule,
+    served: Option(Int),
     deployment: String,
     interval_s: Int,
     endpoint: Endpoint,
@@ -130,11 +142,13 @@ type State {
     /// The plain subject workers answer on: a send to it after this process
     /// died is dropped, where a send to the name would crash the worker.
     replies: Subject(Message),
-    /// By pod name. The queue is derived: every entry outstanding with no
-    /// flight, oldest due first.
+    /// By pod name. The queue is derived: every entry with a poll
+    /// outstanding and no flight, oldest served rung first.
     schedules: Dict(String, Entry),
     /// By pod name; `sent` is its size.
     flights: Dict(String, Flight),
+    /// The one due-time timer last armed, cancelled before every re-arm so
+    /// no second chain of wakes starts, whichever `Wake` is being handled.
     wake: Option(process.Timer),
   )
 }
@@ -183,7 +197,7 @@ pub fn start(config: Config) -> actor.StartResult(Subject(Message)) {
 fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
   case message {
     Listed(listed:, joining:) -> join(state:, listed:, joining:)
-    Wake -> State(..state, wake: None)
+    Wake -> state
     Returned(pod_name:, worker:, reading:, elapsed_ms:) ->
       returned(state:, pod_name:, worker:, reading:, elapsed_ms:)
     Deadline(pod_name:, worker:) -> overdue(state:, pod_name:, worker:)
@@ -197,10 +211,14 @@ fn on_message(state: State, message: Message) -> actor.Next(State, Message) {
 
 /// The schedules after a LIST (budget Leaving, Phase): a joiner with no
 /// entry gets its phase from a fresh draw, one already scheduled keeps its
-/// ladder and takes the Deployment, interval and endpoint the LIST now
-/// shows, and `budget.on_list` drops every pod the LIST no longer shows,
-/// its queued poll with it and its flight's reply made unknown. A
-/// Deployment with no pod left loses its skipped-poll series.
+/// ladder, its outstanding poll and its queue place, and takes the
+/// Deployment, interval and endpoint the LIST now shows, and
+/// `budget.on_list` drops every pod the LIST no longer shows, its queued
+/// poll with it. A dropped pod's flight is released and its worker killed,
+/// so a poll of it never outlives it and a pod that rejoins has one poll
+/// running at most. A Deployment that no entry names any more, its pods
+/// gone or moved to another Deployment, loses its skipped-poll series
+/// (observability SeriesLife).
 fn join(
   state state: State,
   listed listed: List(String),
@@ -231,12 +249,25 @@ fn join(
     list.fold(survivors, dict.new(), fn(acc, schedule) {
       let pod_name = schedule.pod_name
       case dict.get(joiners, pod_name), dict.get(state.schedules, pod_name) {
-        Ok(joiner), _ ->
+        Ok(joiner), Ok(entry) ->
+          dict.insert(
+            acc,
+            pod_name,
+            Entry(
+              ..entry,
+              schedule:,
+              deployment: joiner.deployment,
+              interval_s: joiner.interval_s,
+              endpoint: joiner.endpoint,
+            ),
+          )
+        Ok(joiner), Error(Nil) ->
           dict.insert(
             acc,
             pod_name,
             Entry(
               schedule:,
+              served: None,
               deployment: joiner.deployment,
               interval_s: joiner.interval_s,
               endpoint: joiner.endpoint,
@@ -247,33 +278,30 @@ fn join(
         Error(Nil), Error(Nil) -> acc
       }
     })
-  let dropped =
-    state.schedules
-    |> dict.to_list
-    |> list.filter(fn(pair) { !dict.has_key(schedules, pair.0) })
   let flights =
-    list.fold(dropped, state.flights, fn(flights, pair) {
-      case dict.get(flights, pair.0) {
-        Ok(flight) -> {
-          release(flight)
-          dict.delete(flights, pair.0)
-        }
-        Error(Nil) -> flights
-      }
+    state.flights
+    |> dict.to_list
+    |> list.fold(state.flights, fn(flights, pair) {
+      let #(pod_name, flight) = pair
+      use <- bool.guard(dict.has_key(schedules, pod_name), flights)
+      release(flight)
+      process.kill(flight.worker)
+      dict.delete(flights, pod_name)
     })
-  let remaining =
-    schedules
-    |> dict.values
-    |> list.map(fn(entry) { entry.deployment })
-    |> set.from_list
-  dropped
-  |> list.map(fn(pair) { { pair.1 }.deployment })
-  |> list.unique
-  |> list.filter(fn(deployment) { !set.contains(remaining, deployment) })
-  |> list.each(fn(deployment) {
+  let remaining = deployments(schedules)
+  deployments(state.schedules)
+  |> set.filter(fn(deployment) { !set.contains(remaining, deployment) })
+  |> set.each(fn(deployment) {
     metrics.remove(observability.polls_skipped_total, [deployment])
   })
   State(..state, schedules:, flights:)
+}
+
+fn deployments(schedules: Dict(String, Entry)) -> set.Set(String) {
+  schedules
+  |> dict.values
+  |> list.map(fn(entry) { entry.deployment })
+  |> set.from_list
 }
 
 // ---------------------------------------------------------- The returns ---
@@ -305,7 +333,9 @@ fn returned(
 
 /// The watchdog fired for a flight still out: the worker broke
 /// `poller_http.send`'s bound and is killed, and the pod's reading is
-/// timed_out at the timeout (worker_contract Transport).
+/// timed_out at the timeout (worker_contract Transport). A deadline whose
+/// worker is no longer the pod's flight, as after the poll returned, the pod
+/// left, or this process restarted, is nothing.
 fn overdue(
   state state: State,
   pod_name pod_name: String,
@@ -380,7 +410,11 @@ fn deliver(
         at_ms: now,
       ))
       let entry =
-        Entry(..entry, schedule: Schedule(..entry.schedule, outstanding: False))
+        Entry(
+          ..entry,
+          served: None,
+          schedule: Schedule(..entry.schedule, outstanding: False),
+        )
         |> skip_passed(config: state.config, now:)
       State(..state, schedules: dict.insert(state.schedules, pod_name, entry))
     }
@@ -400,39 +434,47 @@ fn settle(state: State) -> actor.Next(State, Message) {
   actor.continue(State(..state, wake: rearm(state, now)))
 }
 
-/// An entry whose due time has come joins the queue; one whose next rung
-/// came while its poll is in flight skips that rung (budget NoOverlap); one
-/// waiting in the queue keeps the due time it is served by.
+/// An entry whose rung has come joins the queue, served for that rung, with
+/// its ladder climbed to the rung after; one already outstanding, queued or
+/// in flight, skips every rung that has passed since, each counted (budget
+/// NoOverlap). After this no entry's next rung is at or before now.
 fn mark(state: State, now: Int) -> State {
   let schedules =
-    dict.map_values(state.schedules, fn(pod_name, entry) {
-      let schedule = entry.schedule
-      use <- bool.guard(schedule.next_due > now, entry)
-      case schedule.outstanding, dict.has_key(state.flights, pod_name) {
-        False, _ ->
-          Entry(..entry, schedule: Schedule(..schedule, outstanding: True))
-        True, True -> skip_passed(entry:, config: state.config, now:)
-        True, False -> entry
+    dict.map_values(state.schedules, fn(_pod_name, entry) {
+      use <- bool.guard(entry.schedule.next_due > now, entry)
+      case entry.served {
+        None ->
+          Entry(
+            ..entry,
+            served: Some(entry.schedule.next_due),
+            schedule: Schedule(
+              ..next_rung(entry, state.config),
+              outstanding: True,
+            ),
+          )
+        Some(_) -> entry
       }
+      |> skip_passed(config: state.config, now:)
     })
   State(..state, schedules:)
 }
 
-/// The queue served oldest due first while budget admits (Concurrency). A
-/// worker the factory refused leaves its poll queued for the next settle.
+/// The queue served oldest rung first while budget admits the rung each
+/// poll is for (Concurrency). A worker the factory refused leaves its poll
+/// queued for the next settle.
 fn dispatch(state: State, now: Int) -> State {
   case queue(state) {
     [] -> state
     [entry, ..] -> {
       let admitted =
         budget.admit(
-          schedule: entry.schedule,
+          schedule: Schedule(..entry.schedule, next_due: serving(entry)),
           now:,
           sent: dict.size(state.flights),
           concurrency: state.config.concurrency,
         )
       use <- bool.guard(!admitted, state)
-      case send(state:, entry:, now:) {
+      case send(state, entry) {
         Some(state) -> dispatch(state, now)
         None -> state
       }
@@ -441,9 +483,9 @@ fn dispatch(state: State, now: Int) -> State {
 }
 
 /// One poll sent: a worker under the factory, monitored and given its
-/// deadline, and the ladder climbed to the rung after the one this poll
-/// consumed, skipping any that passed while it waited in the queue.
-fn send(state state: State, entry entry: Entry, now now: Int) -> Option(State) {
+/// deadline. The ladder was climbed when the rung came due, so the entry
+/// is unchanged.
+fn send(state: State, entry: Entry) -> Option(State) {
   let config = state.config
   let pod_name = entry.schedule.pod_name
   let job =
@@ -467,15 +509,8 @@ fn send(state state: State, entry entry: Entry, now now: Int) -> Option(State) {
           Deadline(pod_name:, worker: started.pid),
         )
       let flight = Flight(worker: started.pid, monitor:, deadline:)
-      let entry =
-        Entry(..entry, schedule: next_rung(entry, config))
-        |> skip_passed(config:, now:)
       Some(
-        State(
-          ..state,
-          flights: dict.insert(state.flights, pod_name, flight),
-          schedules: dict.insert(state.schedules, pod_name, entry),
-        ),
+        State(..state, flights: dict.insert(state.flights, pod_name, flight)),
       )
     }
     Error(error) -> {
@@ -499,28 +534,37 @@ fn start_error(error: actor.StartError) -> String {
 @external(erlang, "observability_ffi", "log")
 fn log(level: Level, msg: String, fields: List(Field)) -> Nil
 
-/// The entries outstanding and not sent, oldest due first, by name among
-/// equals.
+/// The entries with a poll outstanding and not sent, oldest served rung
+/// first, by name among equals.
 fn queue(state: State) -> List(Entry) {
   state.schedules
   |> dict.values
   |> list.filter(fn(entry) {
-    entry.schedule.outstanding
+    option.is_some(entry.served)
     && !dict.has_key(state.flights, entry.schedule.pod_name)
   })
-  |> list.sort(by_due)
+  |> list.sort(by_served)
 }
 
-fn by_due(a: Entry, b: Entry) -> Order {
-  case int.compare(a.schedule.next_due, b.schedule.next_due) {
+/// The rung an outstanding entry's poll is for; for one not outstanding,
+/// the rung it waits for.
+fn serving(entry: Entry) -> Int {
+  option.unwrap(entry.served, entry.schedule.next_due)
+}
+
+fn by_served(a: Entry, b: Entry) -> Order {
+  case int.compare(serving(a), serving(b)) {
     Eq -> string.compare(a.schedule.pod_name, b.schedule.pod_name)
     other -> other
   }
 }
 
-/// The one timer, re-armed for the earliest due time that a timer serves:
-/// an entry not outstanding, or one in flight whose next rung would be
-/// skipped. A queued entry is served by a return, not a timer.
+/// The one timer, re-armed for the earliest next rung of any entry: the
+/// rung a waiting pod is polled on, or the one a queued or in-flight pod
+/// skips. The timer last armed is always cancelled first, fired or not,
+/// since cancelling a spent timer is harmless and the recorded timer is the
+/// only one this process may have running; a `Wake` arriving from an
+/// earlier timer therefore never leaves a second chain behind.
 fn rearm(state: State, now: Int) -> Option(process.Timer) {
   case state.wake {
     Some(timer) -> {
@@ -532,10 +576,6 @@ fn rearm(state: State, now: Int) -> Option(process.Timer) {
   let earliest =
     state.schedules
     |> dict.values
-    |> list.filter(fn(entry) {
-      !entry.schedule.outstanding
-      || dict.has_key(state.flights, entry.schedule.pod_name)
-    })
     |> list.map(fn(entry) { entry.schedule.next_due })
     |> list.reduce(int.min)
   case earliest {
@@ -546,7 +586,7 @@ fn rearm(state: State, now: Int) -> Option(process.Timer) {
 
 // ----------------------------------------------------------- The ladder ---
 
-/// The rung after the one a sent poll consumed (budget Jitter).
+/// The rung after the entry's next one (budget Jitter).
 fn next_rung(entry: Entry, config: Config) -> Schedule {
   budget.next(
     schedule: entry.schedule,

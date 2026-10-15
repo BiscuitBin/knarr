@@ -19,6 +19,7 @@ import gleam/result
 import gleam/string
 import gleeunit/should
 import knarr/metrics
+import knarr/observability
 import knarr/poller.{type Endpoint, Endpoint}
 import knarr/reconcile
 import knarr/scheduler.{type Polled, Joiner, Listed, Wake}
@@ -161,20 +162,42 @@ fn joiner(pod: String, deployment: String) -> scheduler.Joiner {
   )
 }
 
-fn listed(harness: Harness, joining: List(scheduler.Joiner)) -> Nil {
-  let names = list.map(joining, fn(one) { one.pod_name })
-  process.send(harness.scheduler, Listed(listed: names, joining:))
+/// A gauge value no queue in these tests reaches, written before a send so
+/// the settle that follows the message is seen to overwrite it.
+const sentinel = 99
+
+/// Sends a message and returns once the scheduler has settled after it:
+/// every settle sets knarr_poll_queue_depth, so the sentinel written before
+/// the send is gone once the message is processed. A test moves the
+/// scripted clock only after this returns, so no message sees a later clock
+/// than the one it was sent under.
+fn send_settled(harness: Harness, message: scheduler.Message) -> Nil {
+  metrics.set(observability.poll_queue_depth, [], sentinel)
+  process.send(harness.scheduler, message)
+  assert await(
+    fn() { sample("knarr_poll_queue_depth") != int.to_float(sentinel) },
+    100,
+  )
 }
 
+fn listed(harness: Harness, joining: List(scheduler.Joiner)) -> Nil {
+  let names = list.map(joining, fn(one) { one.pod_name })
+  send_settled(harness, Listed(listed: names, joining:))
+}
+
+/// Moves the scripted clock to `at` seconds and wakes the scheduler,
+/// returning once it has settled at that clock.
 fn wake(harness harness: Harness, at at: Int) -> Nil {
   put(harness.table, "now", int.to_string(at))
-  process.send(harness.scheduler, Wake)
+  send_settled(harness, Wake)
 }
 
 fn next_held(harness: Harness) -> Held {
   process.receive(harness.gate, 1000) |> should.be_ok
 }
 
+/// Nothing reaches the gate for 200 ms: an assertion that no poll was
+/// sent, never an acknowledgement that a message was processed.
 fn quiet(harness: Harness) -> Nil {
   assert process.receive(harness.gate, 200) == Error(Nil)
 }
@@ -533,5 +556,166 @@ pub fn the_skipped_poll_series_leaves_with_its_deployment_test() -> Nil {
   )
   process.send(held.release, valid(1))
   assert process.receive(harness.sink, 300) == Error(Nil)
+  stop_root(harness.root)
+}
+
+// Leaving, and the concurrency bound: a pod that leaves while its poll is
+// out loses that worker, so when it rejoins its new poll is the only one
+// running and the old worker's answer never reaches the sink.
+pub fn a_pod_that_leaves_and_rejoins_has_one_poll_running_and_the_old_worker_dead_test() -> Nil {
+  let table = table_new()
+  put(table, "now", "1000")
+  put(table, "draws", "0")
+  let gate = process.new_subject()
+  let harness =
+    start(
+      table:,
+      gate:,
+      poll: held(gate),
+      concurrency: 1,
+      poll_timeout_s: 1,
+      now: fn() { scripted_now(table) },
+    )
+  listed(harness, [joiner("a", "rejoin")])
+  let old = next_held(harness)
+  assert old.pod == "a"
+  listed(harness, [])
+  listed(harness, [joiner("a", "rejoin")])
+  let new = next_held(harness)
+  assert new.pod == "a"
+  assert new.worker != old.worker
+  assert await(fn() { !process.is_alive(old.worker) }, 50)
+  process.send(old.release, valid(1))
+  assert process.receive(harness.sink, 300) == Error(Nil)
+  process.send(new.release, valid(2))
+  assert next_polled(harness).reading.cost == Some(2)
+  stop_root(harness.root)
+}
+
+// NoOverlap, and Concurrency: a rung that passes while the pod waits in the
+// queue is skipped and counted at once, and the count survives the pod
+// leaving before it was served.
+pub fn a_rung_passing_while_queued_is_counted_and_kept_when_the_pod_leaves_test() -> Nil {
+  let table = table_new()
+  put(table, "now", "1000")
+  put(table, "draws", "0,0")
+  let gate = process.new_subject()
+  let harness =
+    start(
+      table:,
+      gate:,
+      poll: held(gate),
+      concurrency: 1,
+      poll_timeout_s: 1,
+      now: fn() { scripted_now(table) },
+    )
+  let slow = Joiner(..joiner("a", "queued"), interval_s: 90)
+  listed(harness, [slow, joiner("b", "queued")])
+  let held = next_held(harness)
+  assert held.pod == "a"
+  assert await_metric("knarr_poll_queue_depth 1\n")
+  wake(harness:, at: 1030)
+  assert await_metric("knarr_polls_skipped_total{deployment=\"queued\"} 1\n")
+  put(harness.table, "now", "1031")
+  listed(harness, [slow])
+  assert await_metric("knarr_poll_queue_depth 0\n")
+  assert await_metric("knarr_polls_skipped_total{deployment=\"queued\"} 1\n")
+  process.send(held.release, valid(1))
+  assert next_polled(harness).pod_name == "a"
+  quiet(harness)
+  stop_root(harness.root)
+}
+
+// NoOverlap, and Jitter: after a rung passed while the pod was queued, its
+// poll is served for the rung it was queued on, and the following one is
+// due on the next rung from the skipped due time.
+pub fn a_pod_served_after_a_queued_skip_is_next_due_on_the_rung_after_the_skipped_one_test() -> Nil {
+  let table = table_new()
+  put(table, "now", "1000")
+  put(table, "draws", "0,0")
+  let gate = process.new_subject()
+  let harness =
+    start(
+      table:,
+      gate:,
+      poll: held(gate),
+      concurrency: 1,
+      poll_timeout_s: 1,
+      now: fn() { scripted_now(table) },
+    )
+  let slow = Joiner(..joiner("a", "served"), interval_s: 90)
+  listed(harness, [slow, joiner("b", "served")])
+  let held = next_held(harness)
+  assert held.pod == "a"
+  wake(harness:, at: 1030)
+  assert await_metric("knarr_polls_skipped_total{deployment=\"served\"} 1\n")
+  put(harness.table, "now", "1031")
+  process.send(held.release, valid(1))
+  assert next_polled(harness).pod_name == "a"
+  let held = next_held(harness)
+  assert held.pod == "b"
+  process.send(held.release, valid(1))
+  assert next_polled(harness).pod_name == "b"
+  wake(harness:, at: 1059)
+  quiet(harness)
+  wake(harness:, at: 1060)
+  assert next_held(harness).pod == "b"
+  stop_root(harness.root)
+}
+
+// The wake timer: a Wake that is not the recorded timer's, as one from a
+// timer that fired before a later message re-armed, leaves no second timer
+// running. The clock is scripted and the timer real: the first timer is
+// armed for two seconds; a stale Wake and a LIST then re-arm for ten; the
+// clock is moved to where the LIST's pod is due, and nothing polls it
+// within the first timer's two seconds.
+pub fn a_stale_wake_leaves_no_second_timer_running_test() -> Nil {
+  let harness = harness("2,10,0")
+  listed(harness, [joiner("a", "stale")])
+  send_settled(harness, Wake)
+  listed(harness, [
+    Joiner(..joiner("b", "stale"), interval_s: 90),
+    joiner("c", "stale"),
+  ])
+  assert next_held(harness).pod == "c"
+  put(harness.table, "now", "1010")
+  assert process.receive(harness.gate, 2500) == Error(Nil)
+  stop_root(harness.root)
+}
+
+// observability SeriesLife: the skipped-poll series of a Deployment leaves
+// the exposition when its last pod moves to another Deployment, the pod
+// itself staying scheduled.
+pub fn the_skipped_poll_series_leaves_when_its_last_pod_moves_to_another_deployment_test() -> Nil {
+  let harness = harness("0")
+  listed(harness, [joiner("a", "before")])
+  let held = next_held(harness)
+  wake(harness:, at: 1030)
+  assert await_metric("knarr_polls_skipped_total{deployment=\"before\"} 1\n")
+  listed(harness, [joiner("a", "after")])
+  assert await(
+    fn() {
+      !string.contains(
+        metrics.collect(),
+        "knarr_polls_skipped_total{deployment=\"before\"}",
+      )
+    },
+    50,
+  )
+  process.send(held.release, valid(1))
+  assert next_polled(harness).deployment == "after"
+  stop_root(harness.root)
+}
+
+// Transport, and the per-flight deadline: a poll that returned in time is
+// not timed out when its deadline would have fired. The deadline is real,
+// three seconds at a timeout of one, so the sink is watched past it.
+pub fn a_poll_that_returned_is_not_timed_out_when_its_deadline_would_have_fired_test() -> Nil {
+  let harness = harness("0")
+  listed(harness, [joiner("a", "returned")])
+  let held = next_held(harness)
+  process.send(held.release, valid(1))
+  assert next_polled(harness).reading.kind == reconcile.Valid
+  assert process.receive(harness.sink, 3500) == Error(Nil)
   stop_root(harness.root)
 }

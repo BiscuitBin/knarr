@@ -89,7 +89,10 @@ pub type Message {
   /// From the reconciler: a Deployment left the target set. Answered on
   /// `quiet` once nothing of its pods is pending or in turn.
   Departed(deployment: String)
-  /// The pause, refill or interval timer, or a test moving the clock.
+  /// The pause, refill or interval timer, or a test moving the clock. The
+  /// timer is armed on this process's name, so one that fires after a
+  /// restart reaches the replacement, which settles again: a `Wake` is
+  /// idempotent, whichever timer sent it.
   Wake
   /// From the reconciler: its answer to a turn, after one attempt on the
   /// pod, which spends one token. `still_due` keeps the entry with its
