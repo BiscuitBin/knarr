@@ -697,6 +697,16 @@ pub fn metric_names_follow_the_naming_convention_test() -> Nil {
   assert observability.events_total == "knarr_events_total"
   assert observability.targets == "knarr_targets"
   assert observability.build_info == "knarr_build_info"
+  assert observability.patches_total == "knarr_patches_total"
+  assert observability.lists_total == "knarr_lists_total"
+  assert observability.polls_skipped_total == "knarr_polls_skipped_total"
+  assert observability.patches_pending == "knarr_patches_pending"
+  assert observability.patch_pending_oldest_seconds
+    == "knarr_patch_pending_oldest_seconds"
+  assert observability.paused == "knarr_paused"
+  assert observability.pause_seconds == "knarr_pause_seconds"
+  assert observability.poll_queue_depth == "knarr_poll_queue_depth"
+  assert observability.poll_duration_seconds == "knarr_poll_duration_seconds"
 }
 
 // ----------------------------------------------------------- Obligations ---

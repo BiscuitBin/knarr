@@ -1,6 +1,6 @@
 //// The sole application interface to the Prometheus library. Every series
-//// observability's Catalogue names for ticket 31 is declared once at
-//// application start in `metrics_ffi`; the functions here count, set,
+//// observability's Catalogue names for tickets 31, 32 and 46 is declared
+//// once at application start in `metrics_ffi`; the functions here count, set,
 //// observe and remove by metric name and label values. Removing a series is
 //// how SeriesLife retires a Deployment.
 
@@ -20,7 +20,8 @@ pub fn set(name: String, labels: List(String), value: Int) -> Nil
 @external(erlang, "metrics_ffi", "observe")
 pub fn observe(name: String, value: Float) -> Nil
 
-/// Removes one series of a counter or a gauge, so it leaves the exposition.
+/// Removes one series of a counter, a gauge or a histogram, so it leaves
+/// the exposition; a histogram's one series has no labels.
 @external(erlang, "metrics_ffi", "remove")
 pub fn remove(name: String, labels: List(String)) -> Nil
 

@@ -1,5 +1,5 @@
 -module(reconciler_test_ffi).
--export([cycle_finished/1, cycle_barrier_timeout_test/0, children/1, await_new_child/2, stop_actor/1, stop_root/1, write_file/2, delete_file/1,
+-export([children/1, await_new_children/2, stop_actor/1, stop_root/1, write_file/2, delete_file/1,
   table_new/0, table_put/3, table_get/2, table_append/3, table_list/2,
   capture_logs/1, release_logs/0, log/2]).
 
@@ -7,13 +7,16 @@
 children(Supervisor) ->
   [Pid || {_, Pid, _, _} <- lists:reverse(supervisor:which_children(Supervisor)), is_pid(Pid)].
 
-await_new_child(Supervisor, Previous) -> await_new_child(Supervisor, Previous, 100).
+%% Waits until the supervisor's children are all new: as many as before and
+%% no pid in common with Previous, which is what a one-for-all restart leaves.
+await_new_children(Supervisor, Previous) -> await_new_children(Supervisor, Previous, 100).
 
-await_new_child(_Supervisor, _Previous, 0) -> error(no_restart);
-await_new_child(Supervisor, Previous, Attempts) ->
-  case children(Supervisor) of
-    [Pid] when Pid =/= Previous -> Pid;
-    _ -> timer:sleep(20), await_new_child(Supervisor, Previous, Attempts - 1)
+await_new_children(_Supervisor, _Previous, 0) -> error(no_restart);
+await_new_children(Supervisor, Previous, Attempts) ->
+  Current = children(Supervisor),
+  case length(Current) =:= length(Previous) andalso Current -- Previous =:= Current of
+    true -> Current;
+    false -> timer:sleep(20), await_new_children(Supervisor, Previous, Attempts - 1)
   end.
 
 %% A bare actor is stopped with the signal its supervisor would send: an
@@ -87,24 +90,3 @@ log(Event, #{config := Table}) ->
   Line = observability_ffi:format(Event, #{}),
   table_append(Table, <<"logs">>, iolist_to_binary(Line)),
   ok.
-
-%% sys:get_state is answered only after the current synchronous cycle. The
-%% reply and all requests sent by that actor reach the test in signal order.
-cycle_finished(Pid) -> cycle_finished(Pid, 5000).
-
-cycle_finished(Pid, Timeout) ->
-  _ = sys:get_state(Pid, Timeout),
-  nil.
-
-%% The failure path remains bounded even if a cycle never returns.
-cycle_barrier_timeout_test() ->
-  Pid = spawn(fun() -> receive after infinity -> ok end end),
-  try
-    try cycle_finished(Pid, 10) of
-      _ -> error(barrier_did_not_time_out)
-    catch
-      exit:{timeout, _} -> ok
-    end
-  after
-    exit(Pid, kill)
-  end.
