@@ -72,12 +72,14 @@ GROUPS = {
         ),
     ),
     "cluster": (
-        "cluster_commands cluster_name fake_worker_cluster",
+        "cluster_commands cluster_name fake_worker_cluster keda_e2e",
         (
             "scripts/checks/cluster.py",
+            "scripts/checks/keda_e2e.py",
             "scripts/cluster-name.sh",
             "deploy/**",
             "fixtures/fake_worker/deploy/**",
+            "fixtures/keda_e2e/**",
         ),
     ),
     "release": (

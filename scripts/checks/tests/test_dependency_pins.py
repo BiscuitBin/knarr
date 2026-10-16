@@ -411,3 +411,11 @@ def test_the_routine_updates_are_grouped_and_wait_only_for_the_landing_hold(
     settings = effective(dependency)
     assert settings.get("groupName") == group
     assert "dependencyDashboardApproval" not in settings
+
+
+def test_keda_moves_only_by_hand() -> None:
+    # fixtures/keda_e2e/keda.json pins the release YAML by sha256 and its
+    # images by digest; they move together, and no bot can rehash the YAML.
+    for image in ("ghcr.io/kedacore/keda", "ghcr.io/kedacore/keda-metrics-apiserver"):
+        dependency = {"manager": "custom.regex", "packageName": image, "datasource": "docker"}
+        assert effective(dependency).get("enabled") is False, image

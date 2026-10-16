@@ -125,7 +125,28 @@ def test_wrong_ca_variant_only_redirects_the_ca_file():
         {"name": "wrong-ca", "mountPath": "/etc/knarr/wrong-ca", "readOnly": True}
     ]
     assert pod["volumes"] == [{"name": "wrong-ca", "configMap": {"name": "knarr-wrong-ca"}}]
-    assert deployment.variants() == ["base", "release", "wrong-ca"]
+    assert deployment.variants() == ["base", "e2e-fast", "release", "wrong-ca"]
+
+
+def test_e2e_fast_variant_only_shortens_the_intervals():
+    # The KEDA harness's comparison phase (ticket 33). Rate and burst are not
+    # named, so they stay at the defaults budget's 5·W + 10 bound is stated for.
+    patch = json.loads((ROOT / "deploy/e2e-fast/patch.json").read_text())
+    pod = patch["spec"]["template"]["spec"]
+    assert pod == {
+        "containers": [
+            {
+                "name": "knarr",
+                "env": [
+                    {
+                        "name": "ERL_FLAGS",
+                        "value": "-knarr discovery true -knarr list_interval 10"
+                        " -knarr poll_interval 5 -knarr poll_timeout 4 -knarr patch_interval 10",
+                    }
+                ],
+            }
+        ]
+    }
 
 
 def test_unknown_variant_is_refused():
@@ -452,11 +473,17 @@ def test_render_builds_and_validates_every_variant_and_checks_the_difference(tmp
     assert result.returncode == 0, result.stderr
     assert [arguments for tool, arguments, _ in calls if tool == "kustomize"] == [
         ["build", str(ROOT / "deploy/base")],
+        ["build", str(ROOT / "deploy/e2e-fast")],
         ["build", str(ROOT / "deploy/release")],
         ["build", str(ROOT / "deploy/wrong-ca")],
     ]
     validated = [(arguments, stdin) for tool, arguments, stdin in calls if tool == "kubeconform"]
-    assert [stdin for _, stdin in validated] == [BASE_RENDER, RELEASE_RENDER, BASE_RENDER]
+    assert [stdin for _, stdin in validated] == [
+        BASE_RENDER,
+        BASE_RENDER,
+        RELEASE_RENDER,
+        BASE_RENDER,
+    ]
     assert all("-strict" in arguments for arguments, _ in validated)
     assert f"ghcr.io/steven-cutting/knarr@{DIGEST}" in result.stdout
 
@@ -468,4 +495,4 @@ def test_render_fails_when_the_overlay_changes_anything_else(tmp_path):
     assert result.returncode != 0
     assert "replicas" in result.stderr
     # The difference is checked after every variant is validated.
-    assert [tool for tool, _, _ in calls] == ["kustomize", "kubeconform"] * 3
+    assert [tool for tool, _, _ in calls] == ["kustomize", "kubeconform"] * 4

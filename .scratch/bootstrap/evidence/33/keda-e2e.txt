@@ -1,0 +1,78 @@
+python3 scripts/checks/keda_e2e.py "/home/runner/work/knarr/knarr" "$1" "$2"
+deployment.apps/keda-operator condition met
+deployment.apps/keda-metrics-apiserver condition met
+apiservice.apiregistration.k8s.io/v1beta1.external.metrics.k8s.io condition met
+ok   KEDA 2.21.0 installed from https://github.com/kedacore/keda/releases/download/v2.21.0/keda-2.21.0-core.yaml, images pinned by digest
+Image: "fake-worker:knarr-12fc945d" with ID "sha256:2ab585b62db5506982041e525313b222e2250b3a2d0c9ca0009646cc07cb2228" not yet present on node "knarr-12fc945d-control-plane", loading...
+service/fake-worker-collector created
+deployment.apps/fake-worker created
+deployment.apps/fake-worker-collector created
+scaledobject.keda.sh/fake-worker created
+deployment "coredns" successfully rolled out
+Waiting for deployment "fake-worker-collector" rollout to finish: 0 of 1 updated replicas are available...
+deployment "fake-worker-collector" successfully rolled out
+Waiting for deployment "fake-worker" rollout to finish: 5 of 6 updated replicas are available...
+deployment "fake-worker" successfully rolled out
+scaledobject.keda.sh/fake-worker condition met
+scaledobject.keda.sh/fake-worker patched (no change)
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 1: 1 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 2: 2 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 3: 1 of 3 victims busy
+Image: "knarr:knarr-12fc945d" with ID "sha256:4116ffa128e5fa0b5a048c5bc08c80d07b616deed4a6632a034daabee77a0bda" not yet present on node "knarr-12fc945d-control-plane", loading...
+serviceaccount/knarr created
+role.rbac.authorization.k8s.io/knarr created
+rolebinding.rbac.authorization.k8s.io/knarr created
+deployment.apps/knarr created
+Waiting for deployment "knarr" rollout to finish: 0 of 1 updated replicas are available...
+deployment "knarr" successfully rolled out
+deployment.apps/fake-worker labeled
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 1: 0 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 2: 0 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 3: 0 of 3 victims busy
+busy kills: baseline 4 of 9 victims over 3 rounds, knarr 0 of 9; threshold knarr 0 per round and baseline >= 1: PASS
+ok   patch rate, deploy/e2e-fast: 78 scrapes, worst window 2 patches in 1.0 s of 20 allowed, peak 60-s count 15 of 310, 0 windows over 5·W + 10
+scaledobject.keda.sh "fake-worker" deleted from default namespace
+deployment.apps "fake-worker" deleted from default namespace
+Image: "knarr:knarr-12fc945d" with ID "sha256:4116ffa128e5fa0b5a048c5bc08c80d07b616deed4a6632a034daabee77a0bda" found to be already present on all nodes.
+serviceaccount/knarr unchanged
+role.rbac.authorization.k8s.io/knarr unchanged
+rolebinding.rbac.authorization.k8s.io/knarr unchanged
+deployment.apps/knarr configured
+Waiting for deployment "knarr" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "knarr" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "knarr" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "knarr" rollout to finish: 0 of 1 updated replicas are available...
+deployment "knarr" successfully rolled out
+deployment.apps/fake-worker-untouched created
+deployment.apps/fake-worker-changed created
+deployment.apps/fake-worker-optout created
+Waiting for deployment "fake-worker-untouched" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "fake-worker-untouched" rollout to finish: 1 of 2 updated replicas are available...
+deployment "fake-worker-untouched" successfully rolled out
+deployment "fake-worker-changed" successfully rolled out
+Waiting for deployment "fake-worker-optout" rollout to finish: 1 of 2 updated replicas are available...
+deployment "fake-worker-optout" successfully rolled out
+ok   settled: each Deployment's busy worker at 1800 with the marker, nothing pending
+deployment.apps/knarr scaled
+deployment.apps/fake-worker-optout unlabeled
+ok   downtime: fake-worker-changed-77955b4594-dcl2v set to 1800, fake-worker-optout opted out
+deployment.apps/knarr scaled
+ok   /readyz 200 after the restart
+ok   (a) untouched: knarr_patches_total 0 for 300 s after readiness, 298 scrapes
+ok   (b) opt-out: annotation and marker gone 0.0 s after readiness, bound 120 s
+ok   (c) changed: pod-deletion-cost=1800 25.7 s after readiness, bound 93 s
+ok   preconditions: no throttled result and knarr_paused 0 in 299 scrapes
+ok   patch rate, after the restart: 299 scrapes, worst window 1 patches in 1.0 s of 20 allowed, peak 60-s count 1 of 310, 0 windows over 5·W + 10
+summary: KEDA 2.21.0, kind v0.33.0, node v1.35.8; KEDA 28 s, fixture 21 s, comparison 224 s, restart 399 s; total 672 s
+keda-e2e: all checks passed

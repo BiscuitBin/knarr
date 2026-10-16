@@ -399,6 +399,16 @@ fake-worker-deploy image=fake_worker_image: cluster-tools
 fake-worker-smoke: cluster-tools
     python3 scripts/checks/cluster.py fake-worker-smoke "{{ justfile_directory() }}"
 
+# Ticket 33's KEDA end-to-end harness: the three §3 success criteria in one run
+# on this worktree's kind cluster, after image-build and fake-worker-image-build.
+# It downloads the KEDA release fixtures/keda_e2e/keda.json pins and runs for
+# about 11 minutes, so it is outside `check`; the keda-e2e workflow runs it
+# (docs/reference/keda-e2e.md). Its records land under build/keda-e2e/.
+[group('cluster')]
+[doc('Count busy kills under KEDA scale-in with and without knarr, then judge the restart and patch-rate thresholds (needs network)')]
+keda-e2e rounds="3" seed="33": cluster-tools
+    python3 scripts/checks/keda_e2e.py "{{ justfile_directory() }}" "$1" "$2"
+
 [group('cluster')]
 [doc('Render and validate every deploy/ variant, and hold the release overlay to its two-line difference')]
 deployment-check: cluster-tools

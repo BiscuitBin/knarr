@@ -18,6 +18,7 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 - [Reference](reference/documentation-contract.md): the documentation contract enforced by the gate, and the [agent contract](reference/agent-contract.md) for the agent guidance, skills and bridges it also enforces.
 - [Testing](reference/testing.md): the unit-test toolkit, the snapshot workflow, and the sans-IO pattern.
 - [The fake worker fixture](reference/fake-worker.md): the worker image tests on kind run against, and the collector that counts busy kills.
+- [The KEDA end-to-end harness](reference/keda-e2e.md): busy kills under KEDA scale-in with and without knarr, the restart threshold and the patch rate, in one run on kind.
 - [Project](project/README.md): current direction and deferred work.
 - [Decisions](decisions/README.md): accepted architectural and tooling choices.
 - [Run the walking skeleton locally](how-to/local-cluster.md): build, deploy and check the local skeleton.

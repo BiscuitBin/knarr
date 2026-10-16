@@ -30,7 +30,14 @@ KWOK_IMAGES = {
 # actions that need real pods.
 FAKE_WORKER = ROOT / "fixtures/fake_worker/deploy"
 WORKERS = "app.kubernetes.io/name=fake-worker"
-KIND_ONLY = {"deploy", "smoke", "image-load", "fake-worker-deploy", "fake-worker-smoke"}
+KIND_ONLY = {
+    "deploy",
+    "smoke",
+    "image-load",
+    "fake-worker-deploy",
+    "fake-worker-smoke",
+    "keda-e2e",
+}
 # What the smoke sets on four workers through control, and what each one's status
 # endpoint must then answer, byte for byte (worker_contract.allium). Every body
 # names every member, so a second run resets what the first set.
@@ -169,20 +176,19 @@ def expect(got, wanted, what):
         raise RuntimeError(f"{what}: wanted {wanted!r}, got {got!r}")
 
 
-def ready_workers():
-    """The worker pods the smoke may use: Ready and not terminating. A pod an
-    earlier run deleted stays Running while it drains, so phase alone would
-    pick it."""
-    pods = json.loads(output("kubectl", "get", "pods", "-l", WORKERS, "-o", "json"))["items"]
-    return sorted(
-        pod["metadata"]["name"]
-        for pod in pods
-        if "deletionTimestamp" not in pod["metadata"]
-        and any(
-            condition.get("type") == "Ready" and condition.get("status") == "True"
-            for condition in pod.get("status", {}).get("conditions", [])
-        )
+def live(pod):
+    """Ready and not terminating. A pod being deleted stays Running while it
+    drains, so phase alone would count it."""
+    return "deletionTimestamp" not in pod["metadata"] and any(
+        condition.get("type") == "Ready" and condition.get("status") == "True"
+        for condition in pod.get("status", {}).get("conditions", [])
     )
+
+
+def ready_workers():
+    """The worker pods the smoke may use: the live ones."""
+    pods = json.loads(output("kubectl", "get", "pods", "-l", WORKERS, "-o", "json"))["items"]
+    return sorted(pod["metadata"]["name"] for pod in pods if live(pod))
 
 
 def await_workers(count):
@@ -283,9 +289,11 @@ def render(state, image, variant):
     return target
 
 
-def main():
-    action, checkout = sys.argv[1:3]
-    checkout = Path(checkout).resolve()
+def environment(action, checkout):
+    """Scope this process to the worktree's cluster for `action`: the runner, the
+    cluster's name and its state directory. Every command it runs afterwards
+    sees only the worktree's kubeconfig, never the caller's context or an
+    in-cluster service account. Shared with keda_e2e.py."""
     runner = os.environ.get("KNARR_CLUSTER", "kind")
     if runner not in {"kind", "kwok"}:
         raise ValueError("KNARR_CLUSTER must be kind or kwok")
@@ -305,6 +313,43 @@ def main():
     os.environ["KUBECONFIG"] = str(state / "kubeconfig")
     os.environ["KWOK_WORKDIR"] = str(state / "kwok")
     os.environ["KWOK_KUBE_VERSION"] = "v1.35.5"
+    return runner, name, state
+
+
+def deploy(name, state, image, variant):
+    """Load knarr's image into kind and roll out the base or a deploy/ variant."""
+    run("kind", "load", "docker-image", image, "--name", name)
+    rendered = output("kustomize", "build", str(render(state, image, variant)))
+    run("kubectl", "apply", "-f", "-", input=rendered)
+    run("kubectl", "rollout", "status", "deployment/knarr", "--timeout=120s")
+
+
+def fake_worker_deploy(name, state, image, extra=()):
+    """Load the fake worker's image into kind and roll out its manifests, and
+    any `extra` manifest files after them."""
+    run("kind", "load", "docker-image", image, "--name", name)
+    rendered = output("kustomize", "build", str(render_fake_worker(state, image)))
+    run("kubectl", "apply", "-f", "-", input=rendered)
+    for path in extra:
+        run("kubectl", "apply", "-f", str(path))
+    # Workers reach the collector by its Service name, so DNS must answer.
+    run(
+        "kubectl",
+        "rollout",
+        "status",
+        "--namespace=kube-system",
+        "deployment/coredns",
+        "--timeout=120s",
+    )
+    for deployment in ("fake-worker-collector", "fake-worker"):
+        run("kubectl", "rollout", "status", f"deployment/{deployment}", "--timeout=120s")
+
+
+def main():
+    action, checkout = sys.argv[1:3]
+    checkout = Path(checkout).resolve()
+    runner, name, state = environment(action, checkout)
+    marker = state / "runner"
     default = "fake-worker" if action.startswith("fake-worker") else "knarr"
     image = sys.argv[3] if len(sys.argv) > 3 else f"{default}:{name}"
     variant = sys.argv[4] if len(sys.argv) > 4 else "base"
@@ -383,27 +428,11 @@ def main():
     elif action == "image-load":
         run("kind", "load", "docker-image", image, "--name", name)
     elif action == "deploy":
-        run("kind", "load", "docker-image", image, "--name", name)
-        rendered = output("kustomize", "build", str(render(state, image, variant)))
-        run("kubectl", "apply", "-f", "-", input=rendered)
-        run("kubectl", "rollout", "status", "deployment/knarr", "--timeout=120s")
+        deploy(name, state, image, variant)
     elif action == "smoke":
         smoke(state)
     elif action == "fake-worker-deploy":
-        run("kind", "load", "docker-image", image, "--name", name)
-        rendered = output("kustomize", "build", str(render_fake_worker(state, image)))
-        run("kubectl", "apply", "-f", "-", input=rendered)
-        # Workers reach the collector by its Service name, so DNS must answer.
-        run(
-            "kubectl",
-            "rollout",
-            "status",
-            "--namespace=kube-system",
-            "deployment/coredns",
-            "--timeout=120s",
-        )
-        for deployment in ("fake-worker-collector", "fake-worker"):
-            run("kubectl", "rollout", "status", f"deployment/{deployment}", "--timeout=120s")
+        fake_worker_deploy(name, state, image)
     elif action == "fake-worker-smoke":
         fake_worker_smoke(state)
     elif action == "diagnostics":
