@@ -168,7 +168,8 @@ def test_busy_kills_count_only_the_rounds_victims() -> None:
         record("w-a", busy=True),
         record("w-b", busy=False),
         record("w-c", busy=True),
-        # A pod the round did not scale away, such as a rollout's.
+        # A pod the round did not scale away; round_victims refuses the round
+        # before this count, but the count itself ignores it.
         record("w-z", busy=True),
     ]
     assert keda_e2e.busy_kills(records, {"w-a", "w-b", "w-c"}) == 2
@@ -178,6 +179,27 @@ def test_busy_kills_count_only_the_rounds_victims() -> None:
 def test_a_victim_without_a_kill_record_fails_the_count() -> None:
     with pytest.raises(RuntimeError, match="no kill record for w-d"):
         keda_e2e.busy_kills([record("w-a", busy=True)], {"w-a", "w-d"})
+
+
+COHORT = [f"w-{n:02d}" for n in range(1, 7)]
+
+
+def test_the_victims_are_the_cohort_less_the_survivors() -> None:
+    victims = keda_e2e.round_victims(COHORT, ["w-01", "w-03", "w-05"], ["w-02", "w-04", "w-06"])
+    assert victims == ["w-02", "w-04", "w-06"]
+
+
+def test_a_replaced_survivor_makes_the_round_invalid() -> None:
+    # w-01 died and w-07 replaced it: four of the cohort are gone, and the
+    # round no longer removed the step it is judged against.
+    with pytest.raises(RuntimeError, match="survivor w-07 was not among the 6"):
+        keda_e2e.round_victims(COHORT, ["w-03", "w-05", "w-07"], ["w-01", "w-02", "w-04", "w-06"])
+
+
+def test_a_kill_outside_the_scale_in_makes_the_round_invalid() -> None:
+    # w-01 died, and its replacement was among those the scale-in removed.
+    with pytest.raises(RuntimeError, match="kill record for w-01, which the scale-in did not"):
+        keda_e2e.round_victims(COHORT, ["w-01", "w-03", "w-05"], ["w-01", "w-02", "w-04", "w-06"])
 
 
 def rounds(*busy: int, idle: int = 3) -> list[keda_e2e.Round]:
@@ -229,12 +251,12 @@ def test_a_busy_kill_with_knarr_fails_even_when_the_baseline_is_void() -> None:
     assert outcome == "FAIL"
 
 
-def test_a_knarr_round_with_fewer_idle_pods_than_the_step_does_not_count_against_it() -> None:
-    # Four victims and three idle pods: one busy kill is no fault of knarr's.
+def test_a_round_with_fewer_idle_pods_than_victims_is_refused_rather_than_exempt() -> None:
+    # The split always covers the step, so four victims mean churn; exempting
+    # the round would let a busy kill pass.
     knarr = [keda_e2e.Round(victims=4, busy=1, idle=3), *rounds(0, 0)]
-    line, outcome = keda_e2e.verdict(rounds(1, 1, 1), knarr)
-    assert outcome == "PASS"
-    assert "knarr 1 of 10" in line
+    with pytest.raises(ValueError, match="knarr round 1 removed 4 pods with 3 idle"):
+        keda_e2e.verdict(rounds(1, 1, 1), knarr)
 
 
 def test_the_verdict_needs_the_same_rounds_in_both_phases() -> None:
@@ -254,6 +276,7 @@ knarr_paused{scope="patch"} 0
 knarr_paused{scope="list"} 0
 knarr_events_total{reason="a \\"quoted\\", comma"} 3
 knarr_targets 2
+knarr_build_info{version="0.1.0"} 1
 """
 
 
@@ -276,6 +299,17 @@ def test_a_failed_scrape_parses_to_none() -> None:
 def test_an_unreadable_scrape_counts_as_failed_rather_than_ending_the_run() -> None:
     # Parsing runs after a phase ends; one cut-off body must not discard it.
     assert keda_e2e.parse_metrics(SCRAPE + 'knarr_patches_total{deployment="fake-wor') is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["", "# at 1760000000.5\n", "# at 1760000000.5\nknarr_targets 2\n"],
+    ids=["empty", "comments", "no-build-info"],
+)
+def test_a_body_without_knarr_build_info_counts_as_failed(body: str) -> None:
+    # knarr sets knarr_build_info at startup, so every scrape of it holds the
+    # series; a 200 without it is not evidence of knarr's counts.
+    assert keda_e2e.parse_metrics(body) is None
 
 
 def scrape(*series: tuple[str, float]) -> list[keda_e2e.Sample]:
@@ -310,6 +344,43 @@ def test_the_patch_rate_holds_within_five_per_second_and_a_burst_of_ten() -> Non
     assert keda_e2e.rate_violations(samples, 5, 10) == []
     # The 60 s from 2.5 to 62.5 hold 300 of them.
     assert keda_e2e.peak_count(samples, 60) == 300
+
+
+def answered(*times: float) -> list[tuple[float, list[keda_e2e.Sample] | None]]:
+    return [(t, scrape(("a", 0))) for t in times]
+
+
+def test_scrapes_cover_a_segment_with_no_gap_over_the_bound() -> None:
+    parsed = [(0.0, None), *answered(1.0, 2.0), (3.0, None), *answered(31.0, 32.0)]
+    assert keda_e2e.judge_coverage(parsed, 30, "deploy/e2e-fast") == (
+        True,
+        "ok   coverage, deploy/e2e-fast: 4 of 6 scrapes answered, longest gap 29.0 s of 30 s",
+    )
+
+
+@pytest.mark.parametrize(
+    ("parsed", "line"),
+    [
+        ([], "0 of 0 scrapes answered, fewer than 2"),
+        ([(0.0, None), *answered(1.0), (2.0, None)], "1 of 3 scrapes answered, fewer than 2"),
+        ([*answered(0.0, 1.0), (20.0, None), *answered(32.0)], "longest gap 31.0 s of 30 s"),
+        ([(0.0, None), (31.5, None), *answered(32.0, 33.0)], "longest gap 32.0 s of 30 s"),
+        ([*answered(0.0, 1.0), (2.0, None), (40.0, None)], "longest gap 39.0 s of 30 s"),
+    ],
+    ids=["none", "one", "interior-outage", "leading-outage", "trailing-outage"],
+)
+def test_a_segment_the_scrapes_do_not_cover_is_invalid(
+    parsed: list[tuple[float, list[keda_e2e.Sample] | None]], line: str
+) -> None:
+    ok, got = keda_e2e.judge_coverage(parsed, 30, "deploy/e2e-fast")
+    assert ok is False
+    assert got.startswith("INVALID coverage, deploy/e2e-fast: ")
+    assert line in got
+
+
+def test_the_patch_rate_fails_a_segment_without_two_answered_scrapes() -> None:
+    assert keda_e2e.patch_rate([("deploy/e2e-fast", [(0.0, None), *answered(1.0)])]) is False
+    assert keda_e2e.patch_rate([("deploy/e2e-fast", answered(0.0, 1.0))]) is True
 
 
 def test_a_window_over_the_bound_is_a_violation() -> None:
@@ -454,8 +525,10 @@ class FakeCluster:
     With knarr, a cost set through control lands on the pod's annotation.
     """
 
-    def __init__(self, names: list[str], *, knarr: bool) -> None:
+    def __init__(self, names: list[str], *, knarr: bool, replace: str | None = None) -> None:
         self.knarr = knarr
+        # A pod that dies during the scale-in, and its ReplicaSet replaces.
+        self.replace = replace
         self.pods: dict[str, dict] = {name: {"cost": 0, "annotations": {}} for name in names}
         self.created = len(names)
         self.kills: list[dict] = [record("stale", busy=True)]
@@ -479,6 +552,7 @@ class FakeCluster:
         assert bounds["minReplicaCount"] == bounds["maxReplicaCount"]
         wanted = bounds["maxReplicaCount"]
         self.events.append(("bounds", wanted))
+        shrinking = len(self.pods) > wanted
         while len(self.pods) < wanted:
             self.created += 1
             self.pods[f"w-{self.created:02d}"] = {"cost": 0, "annotations": {}}
@@ -490,6 +564,12 @@ class FakeCluster:
             )
             pod = self.pods.pop(victim)
             self.kills.append(record(victim, busy=pod["cost"] > 0))
+        if shrinking and self.replace in self.pods:
+            pod = self.pods.pop(self.replace)
+            self.kills.append(record(self.replace, busy=pod["cost"] > 0))
+            self.created += 1
+            self.pods[f"w-{self.created:02d}"] = {"cost": 0, "annotations": {}}
+            self.replace = None
 
     @contextlib.contextmanager
     def port_forward(self, _state: Path, target: str, port: int):
@@ -569,6 +649,18 @@ def test_a_baseline_round_counts_the_busy_pods_the_replicaset_chose(
     result = scale_round(monkeypatch, fake, tmp_path, "baseline")
     assert result == keda_e2e.Round(victims=3, busy=len(newest & set(busy)), idle=3)
     assert sorted(fake.pods) == ["w-01", "w-02", "w-03"]
+
+
+def test_a_knarr_round_with_a_replaced_pod_is_invalid_rather_than_judged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A busy survivor dies during the scale-in: four of the cohort are gone,
+    # one of them busy, and a replacement stands in the survivors.
+    busy, _ = keda_e2e.pick_busy([f"w-{n:02d}" for n in range(1, 7)], 33, 1)
+    fake = FakeCluster([f"w-{n:02d}" for n in range(1, 4)], knarr=True, replace=busy[0])
+    with pytest.raises(RuntimeError, match="survivor w-07 was not among the 6"):
+        scale_round(monkeypatch, fake, tmp_path, "knarr")
+    assert not (tmp_path / "out/knarr-round-1.json").exists()
 
 
 def test_a_baseline_pod_with_a_knarr_annotation_fails_the_round(

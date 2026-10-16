@@ -18,6 +18,7 @@ from __future__ import annotations
 import contextlib
 import copy
 import hashlib
+import itertools
 import json
 import math
 import random
@@ -55,6 +56,9 @@ WATCH = 300  # (a): no patch of the untouched Deployment for 300 s
 CLEANUP_BOUND = 120  # (b): two list intervals at the defaults
 REWRITE_BOUND = 93  # (c): poll interval 30 s, its 10 % jitter, patch interval 60 s
 RATE, BURST = 5, 10  # the defaults, which deploy/e2e-fast keeps
+# The longest a segment may go without an answered scrape: cluster.py's 30 s
+# for a port forward to come up, so a longer gap is more than one reconnect.
+COVERAGE = 30
 
 
 class Round(NamedTuple):
@@ -140,6 +144,26 @@ def pick_busy(pods, seed, number):
     return sorted(pods[:half]), sorted(pods[half:])
 
 
+def round_victims(before, survivors, killed):
+    """The pods a round's scale-in removed: the cohort before it less the
+    survivors. Churn makes the round invalid rather than judged, since its
+    victims would no longer be the step the verdict judges: a survivor not in
+    the cohort is a replacement, and a kill record for a pod that is not a
+    victim is a death outside the scale-in."""
+    if new := sorted(set(survivors) - set(before)):
+        raise RuntimeError(
+            f"survivor {', '.join(new)} was not among the {len(before)} before the scale-in: "
+            "a pod was replaced during the round"
+        )
+    victims = sorted(set(before) - set(survivors))
+    if extra := sorted(set(killed) - set(victims)):
+        raise RuntimeError(
+            f"kill record for {', '.join(extra)}, which the scale-in did not remove: "
+            "a pod died outside the scale-in"
+        )
+    return victims
+
+
 def busy_kills(records, victims):
     """How many of the round's victims the collector recorded as busy when
     SIGTERM reached them. A victim with no record fails the round: the count
@@ -154,13 +178,22 @@ def verdict(baseline, knarr):
     """The threshold the maintainer set on 2026-10-15 (OVERVIEW §3): with knarr,
     no busy kill in any round whose idle pods cover the scale-in step; the
     baseline must kill at least one busy pod over the run, or the run is void.
-    Returns the line the hand-back quotes and PASS, FAIL or VOID."""
+    Returns the line the hand-back quotes and PASS, FAIL or VOID. The split
+    always covers the step, so a round with fewer idle pods than victims is
+    churn the round should have refused, and is refused here rather than
+    exempted."""
     if len(baseline) != len(knarr):
         raise ValueError(f"{len(baseline)} baseline rounds and {len(knarr)} knarr rounds")
+    for phase, rounds in (("baseline", baseline), ("knarr", knarr)):
+        for number, r in enumerate(rounds, 1):
+            if r.idle < r.victims:
+                raise ValueError(
+                    f"{phase} round {number} removed {r.victims} pods with {r.idle} idle"
+                )
     base_busy = sum(r.busy for r in baseline)
     # A busy kill knarr could have avoided fails the run whatever the baseline
     # did; a void baseline only makes a clean knarr phase inconclusive.
-    if any(r.busy > 0 and r.idle >= r.victims for r in knarr):
+    if any(r.busy > 0 for r in knarr):
         outcome = "FAIL"
     elif base_busy == 0:
         outcome = "VOID"
@@ -181,7 +214,9 @@ LABEL = re.compile(r'([a-zA-Z_]\w*)="((?:[^"\\]|\\.)*)"')
 
 def parse_metrics(text):
     """The samples of one /metrics scrape as (name, labels, value), or None for
-    a scrape the harness recorded as failed or one with an unreadable line."""
+    a scrape the harness recorded as failed, one with an unreadable line, or
+    one without knarr_build_info, which knarr sets at startup: a 200 without
+    it is not knarr's counts."""
     samples = []
     for line in text.splitlines():
         if line.startswith("# scrape failed"):
@@ -197,6 +232,8 @@ def parse_metrics(text):
             for key, value in LABEL.findall(match[2] or "")
         }
         samples.append(Sample(match[1], labels, float(match[3])))
+    if not any(sample.name == "knarr_build_info" for sample in samples):
+        return None
     return samples
 
 
@@ -347,6 +384,22 @@ def judge_rewrite(reads, t_ready, bound):
     return within(since, bound, what)
 
 
+def judge_coverage(parsed, bound, label):
+    """Whether one knarr process's scrapes cover its segment, which the patch
+    rate needs: at least two answered, and no gap over `bound` seconds between
+    answered scrapes or between one and the segment's first or last attempt.
+    The windows only see patches between answered scrapes. `parsed` are (t,
+    samples or None) in time order."""
+    answered = [t for t, samples in parsed if samples is not None]
+    what = f"coverage, {label}: {len(answered)} of {len(parsed)} scrapes answered"
+    if len(answered) < 2:
+        return False, f"INVALID {what}, fewer than 2"
+    times = [parsed[0][0], *answered, parsed[-1][0]]
+    gap = max(t1 - t0 for t0, t1 in itertools.pairwise(times))
+    ok = gap <= bound
+    return ok, f"{'ok  ' if ok else 'INVALID'} {what}, longest gap {gap:.1f} s of {bound} s"
+
+
 def judge_preconditions(scrapes):
     """The run (b) and (c) are bounds for: no response answered 429, so no
     result is throttled, and no pause. A breach makes the run invalid, not a
@@ -494,8 +547,8 @@ def scale_round(state, out, number, seed, phase):
     survivors = wait_until(
         lambda: exactly_live(cluster.WORKERS, STEP), SCALE, f"the scale-in to {STEP}"
     )
-    victims = sorted(set(before) - set(survivors))
     kills = json.loads(collector(state, "GET"))["kills"]
+    victims = round_victims(before, survivors, [record["pod"] for record in kills])
     killed = busy_kills(kills, victims)
     for pod in survivors:
         control(state, pod, 0)
@@ -791,23 +844,23 @@ def restart(run):
 
 def patch_rate(segments):
     """Budget `Threshold` over each knarr process's scrapes: no window holds
-    more than RATE x its seconds, rounded up, + BURST patches."""
+    more than RATE x its seconds, rounded up, + BURST patches. A segment its
+    scrapes do not cover fails rather than passes."""
     held = True
     limit = RATE * 60 + BURST
     for label, parsed in segments:
+        covered, line = judge_coverage(parsed, COVERAGE, label)
+        print(line)
+        if not covered:
+            held = False
+            continue
         samples = cumulative_patches(parsed)
         violations = rate_violations(samples, RATE, BURST)
         worst = worst_window(samples, RATE, BURST)
         peak = peak_count(samples, 60)
         verdict = "FAIL" if violations else "ok  "
         held = held and not violations
-        detail = (
-            "no two scrapes"
-            if worst is None
-            else (
-                f"worst window {worst[2]:g} patches in {worst[1] - worst[0]:.1f} s of {worst[3]} allowed"
-            )
-        )
+        detail = f"worst window {worst[2]:g} patches in {worst[1] - worst[0]:.1f} s of {worst[3]} allowed"
         print(
             f"{verdict} patch rate, {label}: {len(samples)} scrapes, {detail}, "
             f"peak 60-s count {peak:g} of {limit}, {len(violations)} windows over 5·W + 10"

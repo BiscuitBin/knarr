@@ -77,6 +77,17 @@ A `/code-review high` pass on 2026-10-15 found these, each fixed test-first wher
 
 Not changed: one port forward per settle poll and per control request. The settle loop scrapes only once the annotations have settled, so the cost is small.
 
+### Corrections after adversarial review
+
+A Codex adversarial review on `gpt-6-astra` on 2026-10-15 found two ways a run could pass without the evidence it claims. Each was fixed test-first: every new test failed before its code.
+
+- A pod replaced during a round made its victims four, and `verdict` exempted any round with fewer idle pods than victims, so a busy kill in it passed. The threshold compares the idle pods with the scale-in step, which the split always covers. `round_victims` now fails the run when a survivor was not in the cohort or a kill record names a pod that is not a victim, and `verdict` refuses a round with fewer idle pods than victims instead of exempting it.
+- The patch rate passed a segment with fewer than two answered scrapes, printing `ok` beside `no two scrapes`, and a 200 with no samples counted as an answered scrape. `judge_coverage` now requires at least two answered scrapes and no gap over 30 s between them or at either end of the segment, and fails the run with `INVALID` otherwise. `parse_metrics` counts a scrape without `knarr_build_info`, which knarr sets at startup, as failed.
+
+These landed after the recorded run at `01125a8`. Its transcript shows three victims in every round and 78 and 299 answered scrapes, but it kept no kill records or scrape times, so it cannot show that no extra kill or long gap occurred, and the harness that produced it was the older one. The 30 s bound is the time a port forward has to come up, not a measured gap: the recorded run kept no scrapes.
+
+Verified: `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`, 57 passed; `just test-checkers-selected cluster`, 80 passed; `just docs-check`; and `just check` at the staged tree: All checks passed and the worktree is unchanged. The harness has not been rerun on kind since.
+
 ### Residual risks and open questions
 
 - The first run settled the HPA's scale-down timing and KEDA's behaviour with an inactive cron trigger. Equal bounds held the replica count, and each round's scale-in finished within 18 s.
@@ -87,6 +98,6 @@ Not changed: one port forward per settle poll and per control request. The settl
 ### What later tickets need
 
 - **39:** this harness is the kind-tier proof of the three criteria. GKE repeats the comparison at production scale.
-- **40:** run the `keda-e2e` workflow before tagging, and quote its verdict line.
+- **40:** run the `keda-e2e` workflow before tagging, and quote its verdict line. That run is the first of the harness with the cohort and coverage checks from the adversarial review; quote its two coverage lines too.
 - **35:** 32's owed admission-webhook rejection proof is still owed. This harness installs no webhook, and KEDA's core YAML carries none.
 - **35:** the `keda-e2e` workflow uploads nothing. An `actions/upload-artifact` of `build/keda-e2e/` under `always()` would keep the scrapes, pod reads and kill records, so a reader could check (b)'s cleanup count rather than infer it from the readiness latch.
