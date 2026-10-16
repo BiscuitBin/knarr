@@ -314,25 +314,77 @@ def peak_count(samples, seconds):
 def judge_untouched(reads, t_ready, seconds):
     """Restart `Threshold` (a): the new process's knarr_patches_total for the
     untouched Deployment stays 0 for `seconds` after readiness. `reads` are
-    (t, count) per scrape, None for a failed one."""
-    answered = [(t, count) for t, count in reads if count is not None and t >= t_ready]
-    for t, count in answered:
-        if t - t_ready <= seconds and count != 0:
+    (t, count) per scrape, None for a failed one, in time order. The window
+    closes at the first answered scrape at or past `seconds`, and that scrape
+    must read 0 too: a patch late in the window shows only in it."""
+    included = []
+    for t, count in reads:
+        if count is None or t < t_ready:
+            continue
+        included.append((t, count))
+        if t - t_ready >= seconds:
+            break
+    for t, count in included:
+        if count != 0:
             return False, (
                 f"FAIL (a) untouched: knarr_patches_total {count:g} at "
                 f"{t - t_ready:.1f} s after readiness"
             )
-    last = max((t for t, _ in answered), default=t_ready) - t_ready
+    last = max((t for t, _ in included), default=t_ready) - t_ready
     if last < seconds:
         return False, (
             f"FAIL (a) untouched: the last scrape was {last:.1f} s after readiness, "
             f"short of {seconds} s"
         )
-    scrapes = sum(1 for t, _ in answered if t - t_ready <= seconds)
+    scrapes = len(included)
     return True, (
         f"ok   (a) untouched: knarr_patches_total 0 for {seconds} s after readiness, "
         f"{scrapes} scrapes"
     )
+
+
+def process_identity(items):
+    """The knarr process one read of its pods sees: each live pod's name, uid
+    and (container, restartCount) pairs, sorted. A terminating pod is left
+    out: its process is the one being replaced."""
+    return tuple(
+        sorted(
+            (
+                pod["metadata"]["name"],
+                pod["metadata"]["uid"],
+                tuple(
+                    sorted(
+                        (status["name"], status["restartCount"])
+                        for status in pod.get("status", {}).get("containerStatuses", [])
+                    )
+                ),
+            )
+            for pod in items
+            if "deletionTimestamp" not in pod["metadata"]
+        )
+    )
+
+
+def process_change(start, end):
+    """None when the reads at a segment's start and end saw the same one knarr
+    pod with the same restart counts; otherwise why not. Budget `Threshold`
+    holds within one run of the process, and (a) reads the new process's
+    counter, so a segment that spans a restart is not one run. A uid is never
+    reused and a restartCount only rises, so equal ends mean no restart
+    between them."""
+    if start == end and len(start) == 1:
+        return None
+    return f"knarr pods {start} at the start, {end} at the end"
+
+
+def stamped(read, clock=time.monotonic):
+    """(the time `read` returned, its value, or None for a failed kubectl). A
+    stamp taken before a slow read would date a late observation early."""
+    try:
+        value = read()
+    except subprocess.CalledProcessError:
+        value = None
+    return clock(), value
 
 
 def settled_at(reads, t_ready, wanted):
@@ -467,6 +519,12 @@ def read_pods(selector):
     }
 
 
+def knarr_process():
+    """The knarr process as one read of its pods sees it (process_identity)."""
+    pods = json.loads(cluster.output("kubectl", "get", "pods", "-l", KNARR, "-o", "json"))
+    return process_identity(pods["items"])
+
+
 def exactly_live(selector, count):
     """The sorted names when `selector` matches exactly `count` pods and every
     one is live: a scale-out is done when the new pods are Ready, a scale-in
@@ -562,28 +620,44 @@ def scale_round(state, out, number, seed, phase):
 class Scraper:
     """Scrapes knarr's /metrics about once a second on a thread while open,
     through a port forward it reopens whenever a scrape fails: the phases run
-    for minutes, longer than a forward reliably lives. Each scrape is kept
-    under `out`, numbered, its first line the time it was taken; a failed one
-    keeps only a `# scrape failed` line."""
+    for minutes, longer than a forward reliably lives. A reopened forward
+    reaches whichever pod the Deployment resolves to, so the knarr process is
+    read when scraping starts and when it ends, and a change fails the phase.
+    Each scrape is kept under `out`, numbered, its first line the time it
+    returned; a failed one keeps only a `# scrape failed` line."""
 
     def __init__(self, state, out):
         self.state = state
         self.out = out
         self.scrapes = []
         self.error = None
+        self._process = None
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, daemon=True)
 
     def __enter__(self):
         self.out.mkdir(parents=True, exist_ok=True)
+        self._process = knarr_process()
         self._thread.start()
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, exc_type, *_):
         self._stop.set()
         self._thread.join()
         if self.error is not None:
             raise RuntimeError(f"the /metrics scraper stopped: {self.error!r}")
+        if exc_type is not None:
+            return
+        end = knarr_process()
+        if change := process_change(self._process, end):
+            raise RuntimeError(
+                f"knarr was not one process through the {self.out.name} scrapes: {change}"
+            )
+        [(pod, _, restarts)] = end
+        print(
+            f"ok   one knarr process through the {self.out.name} scrapes: pod {pod}, "
+            f"restarts {sum(count for _, count in restarts)}"
+        )
 
     def answered_since(self, t):
         """True once a scrape at or after `t` answered."""
@@ -793,14 +867,11 @@ def restart(run):
     with Scraper(state, out / "scrapes/restart") as scraper:
         # Until the window is read through and a scrape at or past its end has
         # answered, which (a) needs, with a margin for a forward that drops
-        # near the end.
-        while (t := time.monotonic()) <= t_ready + WATCH + POLL or (
-            not scraper.answered_since(t_ready + WATCH) and t < t_ready + WATCH + 60
+        # near the end. Each read is stamped when it returns.
+        while (now := time.monotonic()) <= t_ready + WATCH + POLL or (
+            not scraper.answered_since(t_ready + WATCH) and now < t_ready + WATCH + 60
         ):
-            try:
-                reads.append((t, read_pods(selector)))
-            except subprocess.CalledProcessError:
-                reads.append((t, None))
+            reads.append(stamped(lambda: read_pods(selector)))
             time.sleep(POLL)
     with (out / "restart-pods.jsonl").open("w") as kept:
         for t, pods in reads:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import subprocess
 import urllib.parse
 from pathlib import Path
 
@@ -413,6 +414,156 @@ def test_an_untouched_window_cut_short_fails() -> None:
         False,
         "FAIL (a) untouched: the last scrape was 199.0 s after readiness, short of 300 s",
     )
+
+
+def test_a_patch_seen_first_by_the_closing_scrape_fails_the_untouched_deployment() -> None:
+    # A patch at 299.9 s shows only in the scrape at 300.1 s, which closes the
+    # window; its timestamp cannot meet the duration while its count is ignored.
+    reads = [(100.0 + 299, 0), (100.0 + 300.1, 1)]
+    assert keda_e2e.judge_untouched(reads, 100.0, 300) == (
+        False,
+        "FAIL (a) untouched: knarr_patches_total 1 at 300.1 s after readiness",
+    )
+
+
+@pytest.mark.parametrize(
+    ("closing", "result"),
+    [
+        (1, (False, "FAIL (a) untouched: knarr_patches_total 1 at 320.0 s after readiness")),
+        (
+            0,
+            (
+                True,
+                "ok   (a) untouched: knarr_patches_total 0 for 300 s after readiness, 2 scrapes",
+            ),
+        ),
+    ],
+    ids=["patched", "clean"],
+)
+def test_an_outage_across_the_deadline_is_closed_by_the_next_answered_scrape(
+    closing: int, result: tuple[bool, str]
+) -> None:
+    reads = [(100.0 + 299, 0), (100.0 + 305, None), (100.0 + 320, closing)]
+    assert keda_e2e.judge_untouched(reads, 100.0, 300) == result
+
+
+def knarr_pod(
+    name: str = "knarr-a", uid: str = "u-1", restarts: int = 0, *, terminating: bool = False
+) -> dict:
+    metadata: dict[str, object] = {"name": name, "uid": uid}
+    if terminating:
+        metadata["deletionTimestamp"] = "2026-10-15T00:00:00Z"
+    return {
+        "metadata": metadata,
+        "status": {"containerStatuses": [{"name": "knarr", "restartCount": restarts}]},
+    }
+
+
+def test_the_knarr_process_is_its_live_pods_uids_and_restart_counts() -> None:
+    items = [knarr_pod("knarr-b", "u-2", terminating=True), knarr_pod(restarts=1)]
+    assert keda_e2e.process_identity(items) == (("knarr-a", "u-1", (("knarr", 1),)),)
+    assert keda_e2e.process_identity([{"metadata": {"name": "knarr-a", "uid": "u-1"}}]) == (
+        ("knarr-a", "u-1", ()),
+    )
+
+
+def test_one_pod_with_the_same_uid_and_restarts_is_one_process() -> None:
+    one = keda_e2e.process_identity([knarr_pod()])
+    assert keda_e2e.process_change(one, one) is None
+
+
+@pytest.mark.parametrize(
+    "end",
+    [
+        [knarr_pod(restarts=1)],
+        [knarr_pod("knarr-b", "u-2")],
+        [knarr_pod(), knarr_pod("knarr-b", "u-2")],
+        [],
+    ],
+    ids=["container-restart", "replaced-pod", "two-pods", "no-pod"],
+)
+def test_a_restart_or_a_second_pod_is_a_change_of_process(end: list[dict]) -> None:
+    start = keda_e2e.process_identity([knarr_pod()])
+    change = keda_e2e.process_change(start, keda_e2e.process_identity(end))
+    assert change is not None
+    assert "knarr-a" in change
+    assert str(keda_e2e.process_identity(end)) in change
+
+
+def test_two_pods_at_both_ends_are_not_one_process() -> None:
+    two = keda_e2e.process_identity([knarr_pod(), knarr_pod("knarr-b", "u-2")])
+    assert keda_e2e.process_change(two, two) is not None
+
+
+def scraper(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *ends: list[dict]
+) -> keda_e2e.Scraper:
+    """A Scraper whose forwards always fail, over knarr pod lists read in turn."""
+    lists = iter(ends)
+
+    def output(*arguments: str) -> str:
+        assert arguments == ("kubectl", "get", "pods", "-l", keda_e2e.KNARR, "-o", "json")
+        return json.dumps({"items": next(lists)})
+
+    @contextlib.contextmanager
+    def port_forward(*_: object):
+        raise RuntimeError("port-forward failed")
+        yield
+
+    monkeypatch.setattr(cluster, "output", output)
+    monkeypatch.setattr(cluster, "port_forward", port_forward)
+    monkeypatch.setattr(keda_e2e, "POLL", 0.01)
+    return keda_e2e.Scraper(tmp_path, tmp_path / "scrapes/restart")
+
+
+def test_a_knarr_restart_during_the_scrapes_aborts_the_phase(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    scrapes = scraper(monkeypatch, tmp_path, [knarr_pod()], [knarr_pod(restarts=1)])
+    with (
+        pytest.raises(RuntimeError, match="knarr was not one process through the restart scrapes"),
+        scrapes,
+    ):
+        pass
+
+
+def test_one_knarr_process_through_the_scrapes_passes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with scraper(monkeypatch, tmp_path, [knarr_pod()], [knarr_pod()]):
+        pass
+    assert capsys.readouterr().out == (
+        "ok   one knarr process through the restart scrapes: pod knarr-a, restarts 0\n"
+    )
+
+
+def test_a_failure_inside_the_scrapes_is_not_replaced_by_the_continuity_check(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    scrapes = scraper(monkeypatch, tmp_path, [knarr_pod()], [knarr_pod(restarts=1)])
+    with pytest.raises(ValueError, match="the body failed"), scrapes:
+        raise ValueError("the body failed")
+
+
+def test_a_read_is_stamped_when_it_returns() -> None:
+    # A read that starts at 119 s and sees the cleanup at 125 s is late.
+    times = iter([119.0, 125.0])
+    now = [next(times)]
+
+    def read() -> bool:
+        now[0] = next(times)
+        return True
+
+    stamp = keda_e2e.stamped(read, clock=lambda: now[0])
+    assert stamp == (125.0, True)
+    assert keda_e2e.judge_cleanup([(10.0, False), stamp], 0.0, 120)[0] is False
+
+
+def test_a_failed_read_is_stamped_as_unknown() -> None:
+    def read() -> None:
+        raise subprocess.CalledProcessError(1, ["kubectl"])
+
+    assert keda_e2e.stamped(read, clock=lambda: 7.0) == (7.0, None)
 
 
 def test_a_cleanup_within_two_list_intervals_passes() -> None:

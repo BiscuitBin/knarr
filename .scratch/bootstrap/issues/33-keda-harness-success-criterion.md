@@ -88,6 +88,18 @@ These landed after the recorded run at `01125a8`. Its transcript shows three vic
 
 Verified: `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`, 57 passed; `just test-checkers-selected cluster`, 80 passed; `just docs-check`; and `just check` at the staged tree: All checks passed and the worktree is unchanged. The harness has not been rerun on kind since.
 
+### Corrections after PR review
+
+Copilot's review of pull request #43 at `c8a3bf8` found three more ways a run could pass without the evidence it claims. Each was fixed test-first: every new test failed before its code, except the one that pins a body's own failure over the continuity check, which guards the new check rather than an old defect.
+
+- `judge_untouched` checked counts only up to 300 s but took the duration from the last answered scrape, so a patch first seen by the scrape that closes the window, at 300.1 s, passed. It now walks the answered scrapes up to and including the first at or past 300 s, and every one of them must read 0. An outage across the deadline is closed by the next answered scrape, whose count is judged too.
+- The scraper's forward reopens to whichever pod `deployment/knarr` resolves to, so a knarr restart with a scrape gap under 30 s passed coverage, though budget `Threshold` holds within one run of the process and (a) reads the new process's counter. `process_identity` and `process_change` are new pure functions: the scraper reads the live knarr pods' names, UIDs and container restart counts when it opens and again when it closes. Any change, or other than one live pod, raises a `RuntimeError` like a churned round, unless the phase already failed. A UID is never reused and a restart count only rises, so the check at the end covers every reconnect.
+- The restart watch stamped each pod read before `kubectl get` ran, so a slow read could date a late cleanup or rewrite under its bound. `stamped` is new: it runs the read and stamps the time it returned. Scrapes were already stamped after the response.
+
+Not changed: `t_ready` still lags true readiness by up to a second or two, which gives the bounds that much slack, as the residual risks below record.
+
+Verified: `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`, 72 passed; `just test-checkers-selected cluster`, 95 passed; `just docs-check`; and `just check` at the staged tree: All checks passed and the worktree is unchanged. The harness has not been rerun on kind since.
+
 ### Residual risks and open questions
 
 - The first run settled the HPA's scale-down timing and KEDA's behaviour with an inactive cron trigger. Equal bounds held the replica count, and each round's scale-in finished within 18 s.
@@ -98,6 +110,6 @@ Verified: `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`, 57 passed; 
 ### What later tickets need
 
 - **39:** this harness is the kind-tier proof of the three criteria. GKE repeats the comparison at production scale.
-- **40:** run the `keda-e2e` workflow before tagging, and quote its verdict line. That run is the first of the harness with the cohort and coverage checks from the adversarial review; quote its two coverage lines too.
+- **40:** run the `keda-e2e` workflow before tagging, and quote its verdict line. That run is the first of the harness with the cohort and coverage checks from the adversarial review and the continuity check from the PR review. Quote its two coverage lines too, and its two continuity lines, which begin `ok   one knarr process through the comparison scrapes` and `ok   one knarr process through the restart scrapes`.
 - **35:** 32's owed admission-webhook rejection proof is still owed. This harness installs no webhook, and KEDA's core YAML carries none.
 - **35:** the `keda-e2e` workflow uploads nothing. An `actions/upload-artifact` of `build/keda-e2e/` under `always()` would keep the scrapes, pod reads and kill records, so a reader could check (b)'s cleanup count rather than infer it from the readiness latch.
