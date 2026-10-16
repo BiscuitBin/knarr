@@ -36,6 +36,8 @@ busy kills: baseline 4 of 9 victims over 3 rounds, knarr 0 of 9; threshold knarr
 
 KEDA 2.21.0, kind v0.33.0 with node image v1.35.8. The harness ran for 672 s and the job for 12 min 40 s. Restart (a) held for 300 s, (b) landed at readiness against a bound of 120 s, and (c) landed at 25.7 s against 93 s, with no throttled result and no pause. The patch rate peaked at 15 in 60 s under `deploy/e2e-fast` and at 1 after the restart, against 310. [Evidence 33](../evidence/33/README.md) has the transcript and why (b) reads 0.0 s.
 
+The label stayed on, so the harness ran again on each push. Both reruns passed, the one at `f9da061` with every correction below. [The rerun at `f9da061`](#the-rerun-at-f9da061) has its lines.
+
 ### The maintainer's decisions (2026-10-15)
 
 - **Threshold:** with knarr, 0 busy kills in every round where the idle pods are at least the scale-in step. The baseline must kill at least 1 busy pod over the run, or the run is void. Recorded in [OVERVIEW §3](../../../docs/OVERVIEW.md#success-criteria-v1-thresholds-set-in-916).
@@ -86,7 +88,7 @@ A Codex adversarial review on `gpt-6-astra` on 2026-10-15 found two ways a run c
 
 These landed after the recorded run at `01125a8`. Its transcript shows three victims in every round and 78 and 299 answered scrapes, but it kept no kill records or scrape times, so it cannot show that no extra kill or long gap occurred, and the harness that produced it was the older one. The 30 s bound is the time a port forward has to come up, not a measured gap: the recorded run kept no scrapes.
 
-Verified: `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`, 57 passed; `just test-checkers-selected cluster`, 80 passed; `just docs-check`; and `just check` at the staged tree: All checks passed and the worktree is unchanged. The harness has not been rerun on kind since.
+Verified: `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`, 57 passed; `just test-checkers-selected cluster`, 80 passed; `just docs-check`; and `just check` at the staged tree: All checks passed and the worktree is unchanged. On kind, the labelled run at `c8a3bf8`, [38847326962](https://github.com/steven-cutting/knarr/actions/runs/38847326962), passed: baseline 5 of 9, knarr 0 of 9.
 
 ### Corrections after PR review
 
@@ -98,18 +100,32 @@ Copilot's review of pull request #43 at `c8a3bf8` found three more ways a run co
 
 Not changed: `t_ready` still lags true readiness by up to a second or two, which gives the bounds that much slack, as the residual risks below record.
 
-Verified: `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`, 72 passed; `just test-checkers-selected cluster`, 95 passed; `just docs-check`; and `just check` at the staged tree: All checks passed and the worktree is unchanged. The harness has not been rerun on kind since.
+Verified: `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`, 72 passed; `just test-checkers-selected cluster`, 95 passed; `just docs-check`; and `just check` at the staged tree: All checks passed and the worktree is unchanged. On kind, the rerun below.
+
+### The rerun at `f9da061`
+
+The labelled run at `f9da061`, [38852252385](https://github.com/steven-cutting/knarr/actions/runs/38852252385/job/116815839782), is the first on kind of the harness with every correction above: the cohort and coverage checks from the adversarial review, and the closing scrape, the continuity check and the read stamps from the PR review. It passed every check. [keda-e2e-f9da061.txt](../evidence/33/keda-e2e-f9da061.txt) is its transcript.
+
+```text
+busy kills: baseline 6 of 9 victims over 3 rounds, knarr 0 of 9; threshold knarr 0 per round and baseline >= 1: PASS
+ok   one knarr process through the comparison scrapes: pod knarr-7fdb4db96c-d2ht5, restarts 0
+ok   coverage, deploy/e2e-fast: 61 of 61 scrapes answered, longest gap 1.0 s of 30 s
+ok   one knarr process through the restart scrapes: pod knarr-5b5b9995f6-7s82w, restarts 0
+ok   coverage, after the restart: 299 of 299 scrapes answered, longest gap 1.0 s of 30 s
+```
+
+Restart (a) held for 300 s over 299 scrapes, (b) landed at the first read after readiness, 0.2 s, against 120 s, and (c) landed at 16.2 s against 93 s, with no throttled result and no pause. The patch rate peaked at 11 in 60 s under `deploy/e2e-fast` and at 1 after the restart, against 310. The harness ran for 652 s and the job for 12 min 30 s. The baseline differs from the first run's with the same seed because the split is seeded over pod names, which are random per run.
 
 ### Residual risks and open questions
 
 - The first run settled the HPA's scale-down timing and KEDA's behaviour with an inactive cron trigger. Equal bounds held the replica count, and each round's scale-in finished within 18 s.
-- CI uploads no scrapes, so the committed transcript shows each judge's verdict but not the counts behind (b)'s cleanup.
+- CI uploads no scrapes, so the committed transcripts show each judge's verdict but not the counts behind (b)'s cleanup.
 - The seeded split is deterministic over the pod names, which are random per run. The baseline's chance of 0 busy kills is about 1 in 20 per round if the ReplicaSet's choice is independent of the load, about 1 in 8000 over three rounds. A void run is rerun with another seed.
 - `t_ready` lags true readiness by up to a second or two, which gives (b) and (c) that much slack.
 
 ### What later tickets need
 
 - **39:** this harness is the kind-tier proof of the three criteria. GKE repeats the comparison at production scale.
-- **40:** run the `keda-e2e` workflow before tagging, and quote its verdict line. That run is the first of the harness with the cohort and coverage checks from the adversarial review and the continuity check from the PR review. Quote its two coverage lines too, and its two continuity lines, which begin `ok   one knarr process through the comparison scrapes` and `ok   one knarr process through the restart scrapes`.
+- **40:** run the `keda-e2e` workflow before tagging, and quote its verdict line. The rerun at `f9da061` already ran the cohort, coverage and continuity checks on kind and passed, so the release run repeats that proof at the tagged commit. Quote its two coverage lines too, and its two continuity lines, which begin `ok   one knarr process through the comparison scrapes` and `ok   one knarr process through the restart scrapes`.
 - **35:** 32's owed admission-webhook rejection proof is still owed. This harness installs no webhook, and KEDA's core YAML carries none.
 - **35:** the `keda-e2e` workflow uploads nothing. An `actions/upload-artifact` of `build/keda-e2e/` under `always()` would keep the scrapes, pod reads and kill records, so a reader could check (b)'s cleanup count rather than infer it from the readiness latch.
