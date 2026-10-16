@@ -16,8 +16,9 @@ packages; agents need explicit network authorization. Docker must be running.
 The image build also downloads its locked build dependencies and base images.
 
 Run `just cluster-up`, `just image-build`, `just deploy`, then `just smoke`.
-On an Apple-silicon host the image build fails under emulation;
-[Image and checks](#image-and-checks) says why and what runs in CI instead.
+The image builds for the host architecture, so on an Apple-silicon host it is
+a native linux/arm64 image for the arm64 kind node;
+[Image and checks](#image-and-checks) says what differs from the release.
 The default runner is kind. The default image tag is derived from the physical
 worktree path, so separate worktrees do not overwrite each other's image.
 `just deploy` loads that image, renders its tag into the deployment, applies it
@@ -57,19 +58,15 @@ as recorded in [Decision 0007](../decisions/0007-local-cluster.md).
 ## Image and checks
 
 The image is a Gleam erlang-shipment with the locked pixi runtime environment,
-copied at its original absolute prefix. The image targets linux/amd64, the
-locked CI platform. On an Apple-silicon host, OTP 29's amd64 BEAM fails under
-Rosetta in `prim_tty`, both when the image is built and when it runs, so the
-image is built and the kind proofs run in CI
-([Decision 0012](../decisions/0012-release-and-packaging.md),
-[Decision 0013](../decisions/0013-in-cluster-client.md#findings)).
-`ERL_FLAGS='+JMsingle true'` lets a prebuilt image's runtime start there, but
-no recipe or manifest sets it: the committed Dockerfile does not build on that
-host, no registry image exists yet, native amd64 needs no flag, and the flag
-maps JIT code writable and executable at once instead of through two separate
-mappings. On such a host the flag would go into the Deployment's existing
-`ERL_FLAGS` value. An arm64 image, which ticket 38 prices, would need no
-emulation.
+copied at its original absolute prefix. `just image-build` and
+`just fake-worker-image-build` build for the host architecture: linux/amd64 on
+an x86_64 host, as in CI, and linux/arm64 on an Apple-silicon host, from the
+lock's `linux-aarch64` entries. Pass a platform as the second argument to
+override it, as in `just image-build knarr:local linux/amd64`, but an amd64
+image does not build or run under Rosetta: OTP 29's amd64 BEAM fails there in
+`prim_tty`. `just image-check` runs the image at its own architecture. The
+release image is linux/amd64 only and is built in CI
+([Decision 0012](../decisions/0012-release-and-packaging.md)).
 `just image-check` and `just smoke` verify the Docker and kind paths separately. The image runs as UID/GID 10001. The Deployment
 uses a read-only root filesystem, a writable temporary volume, dropped
 capabilities, no privilege escalation and RuntimeDefault seccomp. The Role

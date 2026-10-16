@@ -16,6 +16,8 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ### Changed
 
+- Local image builds are native: `just image-build` and `just fake-worker-image-build` build linux/arm64 on an arm64 host, from new `linux-aarch64` entries in `pixi.lock`, so the kind loop runs on Apple silicon. The release image stays linux/amd64.
+- kubectl in the cluster environment moves from 1.34.3 to 1.36.0, because 1.34.3 has no linux-aarch64 build.
 - `deploy/release` pins the digest of 0.1.0, the first published release.
 
 ### Removed

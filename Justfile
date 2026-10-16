@@ -308,6 +308,11 @@ check:
 # Cluster effects are deliberately outside the offline repository gate.
 cluster_image := "knarr:" + `sh scripts/cluster-name.sh . name`
 
+# Local images build for the host architecture, so the BEAM runs natively on
+# an Apple-silicon kind node. CI runners are x86_64 and still build amd64; the
+# release workflow sets its own platform.
+image_platform := if arch() == "aarch64" { "linux/arm64" } else { "linux/amd64" }
+
 [private]
 cluster-tools:
     test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
@@ -328,9 +333,9 @@ cluster-ready: cluster-tools
     python3 scripts/checks/cluster.py ready "{{ justfile_directory() }}"
 
 [group('cluster')]
-[doc('Build the linux/amd64 shipment image (needs network)')]
-image-build image=cluster_image:
-    docker build --platform linux/amd64 --tag "$1" .
+[doc('Build the shipment image for the host architecture (needs network)')]
+image-build image=cluster_image platform=image_platform:
+    docker build --platform "$2" --tag "$1" .
 
 [group('cluster')]
 [doc('Load a local image into this worktree kind cluster')]
@@ -380,9 +385,9 @@ packaging-check:
 fake_worker_image := replace(cluster_image, "knarr:", "fake-worker:")
 
 [group('cluster')]
-[doc('Build the linux/amd64 fake worker image (needs network)')]
-fake-worker-image-build image=fake_worker_image:
-    docker build --platform linux/amd64 --file fixtures/fake_worker/Dockerfile --tag "$1" .
+[doc('Build the fake worker image for the host architecture (needs network)')]
+fake-worker-image-build image=fake_worker_image platform=image_platform:
+    docker build --platform "$2" --file fixtures/fake_worker/Dockerfile --tag "$1" .
 
 [group('cluster')]
 [doc('Verify the fake worker image: numeric user, OTP, restricted runtime and a SIGTERM drain')]

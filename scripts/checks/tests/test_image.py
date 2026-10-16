@@ -19,7 +19,8 @@ def test_startup_failure_retains_logs_and_cleans_container(monkeypatch):
         if arguments[-1] == "ulimit -Sn":
             return "65536"
         if arguments[1:3] == ("image", "inspect"):
-            return json.dumps([{"Config": {"User": "10001:10001", "Entrypoint": ENTRYPOINT}}])
+            config = {"User": "10001:10001", "Entrypoint": ENTRYPOINT}
+            return json.dumps([{"Architecture": "amd64", "Config": config}])
         if arguments[1] == "port":
             return "127.0.0.1:49152"
         if "--detach" in arguments:
@@ -43,6 +44,8 @@ def test_startup_failure_retains_logs_and_cleans_container(monkeypatch):
     assert "--memory=268435456" in detached
     assert "--memory-swap=268435456" in detached
     assert "--ulimit=nofile=131072:131072" in detached
+    # The run uses the image's own architecture, not a fixed one.
+    assert "--platform=linux/amd64" in detached
     assert ["docker", "logs", "test-container"] in [args for args, _ in commands]
     assert commands[-1] == (["docker", "rm", "--force", "test-container"], {"check": False})
 
@@ -52,7 +55,8 @@ def test_optional_stats_failure_does_not_fail_a_healthy_image(monkeypatch):
         if arguments[-1] == "ulimit -Sn":
             return "65536"
         if arguments[1:3] == ("image", "inspect"):
-            return json.dumps([{"Config": {"User": "10001:10001", "Entrypoint": ENTRYPOINT}}])
+            config = {"User": "10001:10001", "Entrypoint": ENTRYPOINT}
+            return json.dumps([{"Architecture": "amd64", "Config": config}])
         if arguments[1] == "stats":
             raise subprocess.CalledProcessError(1, arguments)
         return "29"
@@ -112,7 +116,7 @@ def test_fake_worker_profile_runs_its_own_image_checks(monkeypatch):
             return "65536"
         if arguments[1:3] == ("image", "inspect"):
             config = {"User": "10001:10001", "Entrypoint": FAKE_WORKER_ENTRYPOINT}
-            return json.dumps([{"Config": config}])
+            return json.dumps([{"Architecture": "arm64", "Config": config}])
         if "--detach" in arguments:
             return "worker-container"
         return "29"
@@ -141,6 +145,9 @@ def test_fake_worker_profile_runs_its_own_image_checks(monkeypatch):
     assert "--publish=127.0.0.1::8080" in detached
     assert "--publish=127.0.0.1::8081" in detached
     assert "--env=PREPARED=1" in detached
+    # An arm64 image, as an Apple-silicon host builds, runs as arm64.
+    assert "--platform=linux/arm64" in detached
+    assert "--platform=linux/arm64" in descriptors
 
 
 def test_fake_worker_session_runs_a_collector_on_a_private_network(monkeypatch):
