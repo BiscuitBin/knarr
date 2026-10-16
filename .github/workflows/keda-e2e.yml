@@ -13,6 +13,13 @@ name: KEDA e2e
 # not, and an unlabelled pull request never waits on a cluster.
 on:
   workflow_dispatch:
+    inputs:
+      rounds:
+        description: Scale-in rounds in each phase
+        default: "3"
+      seed:
+        description: The busy split's seed; a void run is rerun with another
+        default: "33"
   pull_request:
     types: [labeled, synchronize, reopened]
 
@@ -46,7 +53,10 @@ jobs:
       - run: just image-build
       - run: just image-check
       - run: just fake-worker-image-build
-      - run: just keda-e2e
+      - run: just keda-e2e "${ROUNDS:-3}" "${SEED:-33}"
+        env:
+          ROUNDS: ${{ inputs.rounds }}
+          SEED: ${{ inputs.seed }}
       - if: failure()
         run: just cluster-diagnostics
       - if: always()

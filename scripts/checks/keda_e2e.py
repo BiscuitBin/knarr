@@ -857,13 +857,24 @@ def main():
             reset()
             scaled = [FIXTURE / "scaledobject.json"]
             cluster.fake_worker_deploy(name, state, run.worker, scaled)
+            # KEDA's core YAML has no admission webhook: a trigger the operator
+            # refuses still applies, and shows only in this condition.
+            cluster.run(
+                "kubectl",
+                "wait",
+                "--for=condition=Ready",
+                "scaledobject/fake-worker",
+                "--timeout=120s",
+            )
         with timed(times, "comparison"):
             baseline, knarr, during = comparison(run, rounds, seed)
         line, outcome = verdict(baseline, knarr)
         print(line)
+        # Judged before the restart, so a restart that fails keeps it.
+        rated = patch_rate([("deploy/e2e-fast", during)])
         with timed(times, "restart"):
             restarted, after = restart(run)
-        rated = patch_rate([("deploy/e2e-fast", during), ("after the restart", after)])
+        rated = patch_rate([("after the restart", after)]) and rated
     except ValueError, RuntimeError, OSError, subprocess.CalledProcessError:
         diagnostics()
         raise
