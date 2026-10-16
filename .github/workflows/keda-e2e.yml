@@ -1,0 +1,63 @@
+name: KEDA e2e
+
+# Ticket 33's KEDA end-to-end harness on kind: busy kills under KEDA scale-in
+# with and without knarr, lifecycle's restart threshold and budget's patch
+# rate, in one `just keda-e2e` run. It runs on native linux/amd64, where the
+# images build; it downloads the KEDA release fixtures/keda_e2e/keda.json
+# pins and runs for about 11 minutes, 13 with setup and the image builds, so
+# it is never in ci.yml's check job and never required. It runs on
+# workflow_dispatch, whose log is where the committed transcript under
+# .scratch/bootstrap/evidence/33/ is cut from, and on a pull request only
+# while it carries the keda-e2e label: adding the label runs it, and each
+# push to a labelled pull request runs it again. Adding any other label does
+# not, and an unlabelled pull request never waits on a cluster.
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: Scale-in rounds in each phase
+        default: "3"
+      seed:
+        description: The busy split's seed; a void run is rerun with another
+        default: "33"
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: keda-e2e-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  keda-e2e:
+    name: Kind KEDA e2e (non-required)
+    runs-on: ubuntu-24.04
+    if: >-
+      github.event_name != 'pull_request'
+      || (contains(github.event.pull_request.labels.*.name, 'keda-e2e')
+      && (github.event.action != 'labeled' || github.event.label.name == 'keda-e2e'))
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      KNARR_CLUSTER: kind
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          cluster: "true"
+      - run: just cluster-up
+      - run: just image-build
+      - run: just image-check
+      - run: just fake-worker-image-build
+      - run: just keda-e2e "${ROUNDS:-3}" "${SEED:-33}"
+        env:
+          ROUNDS: ${{ inputs.rounds }}
+          SEED: ${{ inputs.seed }}
+      - if: failure()
+        run: just cluster-diagnostics
+      - if: always()
+        run: just cluster-down

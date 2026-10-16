@@ -80,6 +80,7 @@ These come from [pins.txt](../../.scratch/bootstrap/evidence/10/pins.txt). Each 
 | kwok all-in-one cluster image | `registry.k8s.io/kwok/cluster:v0.8.0-k8s.v1.35.5@sha256:77483c585cf148b9689e9800b807e6e6e6cdc7a08363997ef144f0fde41df90a`, for a single-container kwok cluster when kwokctl is unavailable. Not used by the recipe |
 | Cluster Autoscaler (for 15) | `registry.k8s.io/autoscaling/cluster-autoscaler:v1.35.2@sha256:aac369dc283927a623deb1af54696efcc722ae79255aa07788422e495bab887d`, re-resolved and unchanged from 0003 |
 | kubectl | conda-forge 1.34.3 from the `cluster` environment, one minor behind the 1.35 servers, within kubectl's skew |
+| KEDA (for 33) | 2.21.0 in `fixtures/keda_e2e/keda.json`: the `keda-2.21.0-core.yaml` release asset by sha256 and the `ghcr.io/kedacore/keda` and `keda-metrics-apiserver` image indexes by digest, resolved on 2026-10-15. 2.21 supports Kubernetes 1.34 to 1.36. [The KEDA harness page](../reference/keda-e2e.md#settings-and-pins) says how it moves |
 
 The kind node image is pinned by digest in the recipe. Ticket 10's experiment resolved kwok component images by tag through `KWOK_KUBE_VERSION`. Ticket 13's implemented recipe supplies all five digest-pinned images explicitly through `--kube-apiserver-image`, `--kube-controller-manager-image`, `--kube-scheduler-image`, `--etcd-image` and `--kwok-controller-image`. The Linux CI kwok readiness job exercised this path. The committed experiment transcripts retain the original tag-based invocation.
 

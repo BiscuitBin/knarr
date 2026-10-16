@@ -134,7 +134,7 @@ Knarr's primary mechanism covers **Path A**. Knarr's safe-to-evict lever on Path
 
 ### Success criteria (v1; thresholds set in §9.16)
 
-- On a KEDA-scaled Deployment running a mixed fake-worker load on kind, fewer busy pods are killed on scale-in than in a baseline run without Knarr.
+- On a KEDA-scaled Deployment running a mixed fake-worker load on kind, fewer busy pods are killed on scale-in than in a baseline run without Knarr. The §9.16 threshold, set by the maintainer on 2026-10-15 (ticket 33): with Knarr, 0 busy kills in every round where the idle pods are at least the scale-in step; the baseline must kill at least 1 busy pod over the run, or the run is void. [The KEDA end-to-end harness](reference/keda-e2e.md) measures it.
 - The pod patch rate stays within the configured write budget.
 - Restarting Knarr does not make annotations flap: there is no startup pass, marked pods go through the normal loop, and a found value stands until its reading window elapses again or a valid reading corrects it. The §9.16 threshold has three parts, settled in [lifecycle.allium](specs/lifecycle.allium) (`Restart` `Threshold`): (a) zero patches for 300 s after readiness for each Deployment whose opt-ins did not change and none of whose costs moved its mapped value; (b) an opt-out made during the downtime cleaned up within two list intervals, 120 s at the defaults; (c) a cost change during the downtime that moves the mapped value rewritten within about 100 s at the defaults. One restart run asserts all three; (b) and (c) hold for a run with no back-off pause and no more patches than the bucket serves in the window.
 

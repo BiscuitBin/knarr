@@ -1,0 +1,9 @@
+{
+  "version": "2.21.0",
+  "url": "https://github.com/kedacore/keda/releases/download/v2.21.0/keda-2.21.0-core.yaml",
+  "sha256": "e682084c3a93b8adc30fb22f2e63a1604ef1832d31769976a40682c5fa745927",
+  "images": [
+    "ghcr.io/kedacore/keda:2.21.0@sha256:81fe6547ce8d1cc29273f887b76507e9b853e5bc1f875ec23fe60061a38ed809",
+    "ghcr.io/kedacore/keda-metrics-apiserver:2.21.0@sha256:255375037fe592732eeb554743aae360c2da88cf0b9b1258d0a987ef885f0881"
+  ]
+}

@@ -459,6 +459,20 @@
         "release_upgrade"
       ],
       "requires": []
+    },
+    {
+      "path": "reference/keda-e2e.md",
+      "title": "The KEDA end-to-end harness",
+      "kind": "reference",
+      "audience": [
+        "contributor",
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "keda_e2e_harness"
+      ],
+      "requires": []
     }
   ]
 }

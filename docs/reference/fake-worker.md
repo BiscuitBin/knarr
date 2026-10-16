@@ -8,7 +8,7 @@ requires: []
 
 # The fake worker fixture
 
-The fake worker is a configurable worker that serves knarr's status contract, so tests on kind can drive a realistic mixed load and count the busy pods a scale-down kills ([ticket 29](../../.scratch/bootstrap/issues/29-fake-worker-fixture.md)). It implements the worker side of `StatusEndpoint` in [worker_contract.allium](../specs/worker_contract.allium). Ticket 33's KEDA harness is its first consumer.
+The fake worker is a configurable worker that serves knarr's status contract, so tests on kind can drive a realistic mixed load and count the busy pods a scale-down kills ([ticket 29](../../.scratch/bootstrap/issues/29-fake-worker-fixture.md)). It implements the worker side of `StatusEndpoint` in [worker_contract.allium](../specs/worker_contract.allium). [Ticket 33's KEDA harness](keda-e2e.md) is its first consumer.
 
 It is a second Gleam project, `fixtures/fake_worker/`, with its own `gleam.toml` and `manifest.toml`. It never ships in knarr's image, and running it never starts knarr. The gate builds, tests and lints it (`just fake-worker-build`, `just fake-worker-test`, `just fake-worker-lint`). A checker test holds its locked packages to knarr's versions. The coverage report covers knarr's `src/` only, not the fixture.
 

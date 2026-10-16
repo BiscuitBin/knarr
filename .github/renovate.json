@@ -132,6 +132,14 @@
         "registry.k8s.io/kwok/kwok"
       ],
       "enabled": false
+    },
+    {
+      "description": "KEDA moves only by hand: fixtures/keda_e2e/keda.json pins the release's core YAML by sha256 and the two images it names by digest, and all three move together. No manager reads that file today, and no bot can rehash the YAML, so this keeps any later one off it (ticket 33).",
+      "matchPackageNames": [
+        "ghcr.io/kedacore/keda",
+        "ghcr.io/kedacore/keda-metrics-apiserver"
+      ],
+      "enabled": false
     }
   ],
   "customManagers": [
