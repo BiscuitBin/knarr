@@ -20,9 +20,9 @@ On Kubernetes 1.26 or later, with permission to read the apiserver's metrics, in
 kubectl get --raw /metrics | grep 'kubernetes_feature_enabled{name="PodDeletionCost"'
 ```
 
-For a behavioral check, use a disposable Deployment that is not opted into Knarr and has no other scaler or annotation writer. Bring up one Ready pod, wait, then scale it to two so the older pod also became Ready earlier. Keep both Running and Ready, with equal restart counts, on the same node, or on nodes with equal counts of related pods. These controls keep earlier ranking steps and later tie-breakers from obscuring the cost comparison ([budget.allium](../specs/budget.allium), `WriteBudget` guidance; [KEP-2255](https://github.com/kubernetes/enhancements/tree/master/keps/sig-apps/2255-pod-cost)).
+For a behavioral check, use a disposable Deployment that is not opted into Knarr and has no other scaler or annotation writer. Keep the first pod Ready for at least five minutes before scaling to two, then scale down within one minute of the second becoming Ready. The older pod must also have become Ready earlier. Keep both Running and Ready, with equal restart counts, on the same node, or on nodes with equal counts of related pods. At scale-down, the older pod's Ready age should exceed twice the newer pod's: [logarithmic age buckets](../DEFERRED.md#9-background-notes) can otherwise tie-break by UID and make a disabled gate look enabled. Restart the probe if a readiness transition or delay loses these controls ([budget.allium](../specs/budget.allium), `WriteBudget` guidance; [KEP-2255](https://github.com/kubernetes/enhancements/tree/master/keps/sig-apps/2255-pod-cost)).
 
-In that test namespace, annotate the older pod with `-1` and scale down by one. Substitute the actual names below. With the gate enabled, the older pod should be removed; with it disabled, the more recently Ready pod should be removed. Repeat under controlled conditions if the outcome is unclear: ordering is best-effort ([budget.allium](../specs/budget.allium), `WriteBudget` guidance; [ReplicaSet deletion cost](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/#pod-deletion-cost)):
+In that test namespace, annotate the older pod with `-1` and scale down by one. Substitute the actual names below. Under those controls, the older pod should be removed with the gate enabled, and the more recently Ready pod with it disabled. Require at least two consistent runs with fresh pods and corroborate with the controller-manager configuration or provider confirmation. Victim ordering is best-effort: a single apparently clear result does not prove the gate's state ([budget.allium](../specs/budget.allium), `WriteBudget` guidance; [ReplicaSet deletion cost](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/#pod-deletion-cost)):
 
 ```sh
 kubectl -n workers annotate pod older-probe-pod \
@@ -119,22 +119,35 @@ Keep Knarr running while removing the exact opt-in label from every managed Depl
 kubectl -n workers label deployment -l knarr.io/enabled=true knarr.io/enabled-
 ```
 
-Wait until the install's `knarr_annotations{standing="owned"}` series are all 0 or absent. Series disappear after a Deployment's cleanup finishes. Check the actual install's fresh metrics, rather than treating a stopped scrape or dead controller as successful cleanup. Then list remaining markers: yield, conflict, edited markers, and marker-only pending cleanup can leave one even after the owned count is zero ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`; [observability.allium](../specs/observability.allium), `Catalogue` `Standing`, `SeriesLife`):
+Record when label removal completes. From the running install's fresh metrics, require `knarr_last_discovery_timestamp_seconds` to be later than that time and `knarr_targets{kind="deployments"}` to be 0. Then wait until its `knarr_annotations{standing="owned"}` series are all 0 or absent. Series disappear after cleanup finishes, but are also absent before the first successful discovery after a restart; absence alone cannot establish cleanup. A stopped scrape or dead controller provides no completion evidence. Then list remaining markers: yield, conflict, edited markers, and marker-only pending cleanup can leave one even after the owned count is zero ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`; [observability.allium](../specs/observability.allium), `Catalogue` `Standing`, `SeriesLife`, `Install`):
 
 ```sh
 kubectl -n workers get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.knarr\.io/applied}{"\n"}{end}'
 ```
 
-Inspect each marked pod and release its marker together with the owned keys. This includes the safe-to-evict key for recovery of existing annotations, not as an available feature to enable. The full release command also removes another writer's value if one is present: where another writer is known, or a `CleanupRejected` message identifies values to preserve, remove only Knarr's keys one at a time as the message renders them. A marker-only rejection message supplies no removal command; do not erase records for values that still need ownership tracking ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`; [observability.allium](../specs/observability.allium), `Events` `CleanupRejected`):
+Inspect each marked pod's annotations and `metadata.resourceVersion`. A usable canonical marker records keys by short name (`pod-deletion-cost` and, if present, `safe-to-evict`). Remove a key only when its `applied` record is a valid annotation value and matches the current value. An absent value with an `applied: null` record needs no annotation removal. Preserve values with `yielded` records, mismatching `applied` records, or no record: they belong to another writer or conflict with Knarr's record. A marker alone never establishes ownership of both keys. The deferred policy creates no new safe-to-evict record, so an unrelated safe-to-evict annotation must remain ([ownership.allium](../specs/ownership.allium), `Ownership` `Recorded`, `Applied`, `Adoption`; [lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`; [reconcile.allium](../specs/reconcile.allium), `Loop` `Desired`):
+
+```sh
+kubectl -n workers get pod worker-pod -o yaml
+```
+
+After accounting for every record, remove the marker together with only confirmed Knarr-owned values. For example, if deletion cost is the only such value, set `inspected_resource_version` to the `metadata.resourceVersion` from that inspection and run the following. The precondition rejects a concurrent change; on rejection, inspect again before deciding what to remove. A `CleanupRejected` message can name keys to remove and values to preserve, but a marker-only rewrite rejection does not authorize discarding records needed for another cleanup ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`; [observability.allium](../specs/observability.allium), `Events` `CleanupRejected`):
 
 ```sh
 kubectl -n workers annotate pod worker-pod \
-  knarr.io/applied- \
-  controller.kubernetes.io/pod-deletion-cost- \
-  cluster-autoscaler.kubernetes.io/safe-to-evict-
+  --resource-version="${inspected_resource_version:?set from the inspected pod}" \
+  knarr.io/applied- controller.kubernetes.io/pod-deletion-cost-
 ```
 
-Once cleanup and marker inspection are complete, delete the install from the operator checkout used for installation. Deleting Knarr before that wait leaves every owned annotation as a leftover. Manual recovery after a dead install uses the same inspected per-pod release command above, with the same warning about other writers ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`):
+If only yielded, conflict, or null/absent records remain, remove just the marker with the same resource-version precondition, leaving other writers' values intact. An unusable or edited marker proves no ownership: remove values only with independent evidence that they are Knarr leftovers. Removing the marker alone leaves present values foreign to a running Knarr; deliberately resetting those protections requires a separate operator decision ([ownership.allium](../specs/ownership.allium), `Ownership` `Recorded`, `Adoption`; [lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`):
+
+```sh
+kubectl -n workers annotate pod worker-pod \
+  --resource-version="${inspected_resource_version:?set from the inspected pod}" \
+  knarr.io/applied-
+```
+
+Once cleanup and marker inspection are complete, delete the install from the operator checkout of the currently installed release. Deleting Knarr before that wait leaves every owned annotation as a leftover. Manual recovery after a dead install uses the same inspection and conditional per-pod removal above, preserving other writers' values ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`):
 
 ```sh
 kubectl -n workers delete -k deploy/release
@@ -144,5 +157,7 @@ A pod carrying a value without a marker is foreign, and the uninstall procedure 
 
 ```sh
 kubectl -n workers get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.controller\.kubernetes\.io/pod-deletion-cost}{"\t"}{.metadata.annotations.cluster-autoscaler\.kubernetes\.io/safe-to-evict}{"\n"}{end}'
-kubectl -n workers annotate pod worker-pod controller.kubernetes.io/pod-deletion-cost-
+kubectl -n workers annotate pod worker-pod \
+  --resource-version="${inspected_resource_version:?set from the inspected pod}" \
+  controller.kubernetes.io/pod-deletion-cost-
 ```

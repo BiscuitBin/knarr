@@ -169,10 +169,14 @@ contract Ownership {
         -- the test on its raw string. A foreign annotation is never
         -- written: a log line, at the cadence observability settles, and a
         -- gauge, no Event (ticket 30). The user releases a foreign
-        -- annotation by removing it. The operator releases a yield by
-        -- removing the marker together with every owned annotation on the
-        -- pod, after which each stands unowned; removing the marker alone
-        -- leaves every present value foreign.
+        -- annotation by removing it. During uninstall the operator follows
+        -- lifecycle's Recovery: inspect records and current values, remove
+        -- only confirmed knarr-owned values, and release the marker once
+        -- every record is accounted for, preserving yielded, conflict and
+        -- foreign values. Removing the marker alone leaves every present
+        -- value foreign; removing a value as well makes that key unowned.
+        -- A deliberate reset of another writer's value is a separate
+        -- operator decision, not the default release procedure.
     @invariant Objects
         -- knarr's only change to a workload object is a patch on a live
         -- Pod (§4); its one other write is the Event create k8s_client

@@ -10,6 +10,12 @@ requires: []
 
 > **Status:** Not in the MVP. This file holds options, alternatives and research notes that were cut from [OVERVIEW.md](OVERVIEW.md) when it was scoped to the MVP. Most of the text is moved verbatim. Section and item references such as §7 or §9.3 point to OVERVIEW.md; "old §…" names where moved text came from in the pre-MVP version of OVERVIEW.md (commit 284dca7).
 
+## Safe-to-evict policy deferred on 2026-10-15
+
+The maintainer deferred Knarr's safe-to-evict feature while implementing [ticket 34](../.scratch/bootstrap/issues/34-user-guides.md). It is outside the current MVP scope. [Ticket 25](../.scratch/bootstrap/issues/25-elicit-safe-to-evict-policy.md) retains the policy questions: threshold, removal versus `"true"`, local-storage handling, and node-pinning protection. Its future implementation must land before [ticket 49](../.scratch/bootstrap/issues/49-safe-to-evict-user-guidance.md) adds enablement guidance. The reserved parse alone is not a protection policy; leave the opt-in unset, as the [configuration reference](reference/configuration.md#deferred-safe-to-evict-feature) explains.
+
+The safe-to-evict discussion in [OVERVIEW §6](OVERVIEW.md#cluster-autoscalerkubernetesiosafe-to-evict-deferred) is retained as future design context. Current controller guidance covers deletion-cost bias and worker-owned graceful shutdown. Existing annotation ownership and manual recovery remain governed by [ownership.allium](specs/ownership.allium), `Ownership` `Adoption`, and [lifecycle.allium](specs/lifecycle.allium), `Uninstall` `Recovery`; deferral does not permit removing another writer's annotations.
+
 ## 1. Scaling option (b): quick follow
 
 The MVP uses option (a), annotations only (OVERVIEW §7). Option (b) is the planned quick follow. The option table below is from old §7.

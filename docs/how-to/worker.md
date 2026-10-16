@@ -30,17 +30,19 @@ On SIGTERM, stop accepting new work, report `accepting: false`, finish in-flight
 
 Use an exec-form image entrypoint, for example `ENTRYPOINT ["/app/worker"]`. A shell wrapper should end with `exec /app/worker` so the worker receives the termination signal. Set the pod's `terminationGracePeriodSeconds` to cover the longest job, drain overhead, and any `preStop` hook: the grace-period clock starts before that hook runs. These are worker responsibilities described by [Kubernetes pod termination](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination).
 
-For a Service-routed HTTP worker, a short `preStop` sleep can allow endpoint-removal changes to propagate before SIGTERM. For example, on Kubernetes 1.34 or later, merge this fragment into the worker pod spec and choose the duration for your own workload. A sleep delays shutdown and consumes the same grace budget; it does not finish work itself ([Kubernetes lifecycle hooks](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/)):
+For a Service-routed HTTP worker, a short `preStop` sleep can allow endpoint-removal changes to propagate before SIGTERM. For example, on Kubernetes 1.34 or later, merge the following Deployment fragment into your manifest. The shutdown fields live under `spec.template.spec`; preserve the worker container's existing fields and choose durations for your workload. A sleep delays shutdown and consumes the same grace budget; it does not finish work itself ([Kubernetes lifecycle hooks](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/)):
 
 ```yaml
 spec:
-  terminationGracePeriodSeconds: 660
-  containers:
-    - name: worker
-      lifecycle:
-        preStop:
-          sleep:
-            seconds: 10
+  template:
+    spec:
+      terminationGracePeriodSeconds: 660
+      containers:
+        - name: worker
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
 ```
 
 Long grace periods also hold capacity during scale-down. Upstream Cluster Autoscaler normally waits at most 600 seconds when removing a node, configurable through `--max-graceful-termination-sec`; managed providers may expose different controls. A longer pod grace period alone cannot extend that node-removal deadline. Check the actual provider policy and make long jobs resumable or retryable ([Cluster Autoscaler graceful termination](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#does-ca-respect-gracefultermination-in-scale-down)).

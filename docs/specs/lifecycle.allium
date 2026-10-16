@@ -345,41 +345,51 @@ contract Restart {
 
 contract Uninstall {
     @invariant Procedure
-        -- Uninstall is: opt every Deployment out, wait for cleanup, delete
-        -- knarr. The operator removes knarr.io/enabled from every opted-in
-        -- Deployment (config OptIn); waits until no knarr_annotations
-        -- series with standing owned is above 0 for the install, since a
-        -- Deployment's series are removed once its cleanup is done
-        -- (observability SeriesLife), so the count reads 0 or is absent;
-        -- then removes any marker left, whatever left it: a yield or a
-        -- conflict leaves one, since neither is ever cleaned up (Cleanup
-        -- Scope) and a conflict on a pod no longer polled is never
-        -- yielded, and a marker-only cleanup may still be pending. A
-        -- kubectl get pods -o jsonpath over knarr.io/applied lists every
-        -- marker, an unusable or edited one included, and each is released
-        -- with the full release
-        -- command ownership's Adoption names, kubectl annotate pod <p>
-        -- knarr.io/applied-
-        -- controller.kubernetes.io/pod-deletion-cost-
-        -- cluster-autoscaler.kubernetes.io/safe-to-evict-; then deletes
-        -- the install with kubectl delete -k. Deleting knarr before the
-        -- wait leaves every owned annotation standing as a leftover under
-        -- Restart Leftovers, which Recovery clears by hand. A value of an
-        -- owned key on a pod with no marker is foreign (ownership
-        -- Adoption) and the procedure leaves it, since it may be another
-        -- writer's. An operator who removed a marker by hand without its
-        -- annotations finds such values with a kubectl get pods -o jsonpath
-        -- over the two owned keys and removes them one key at a time as
-        -- Recovery says. The page is ticket 34's.
+        -- Uninstall is: opt every Deployment out, wait for cleanup, inspect
+        -- and release remaining markers under Recovery, then delete knarr.
+        -- The operator removes knarr.io/enabled from every opted-in
+        -- Deployment (config OptIn) and waits for a fresh successful cycle
+        -- after the opt-out: knarr_last_discovery_timestamp_seconds is
+        -- later than the label removal and knarr_targets with kind
+        -- deployments is 0 (observability Install). Then no
+        -- knarr_annotations series with standing owned may be above 0 for
+        -- the install. Series read 0 or are absent once a Deployment's
+        -- cleanup is done (observability SeriesLife); absence before the
+        -- first discovery after a restart is not proof of cleanup.
+        -- A kubectl get pods -o jsonpath over knarr.io/applied lists every
+        -- remaining marker, including a yield, conflict, marker-only
+        -- pending cleanup, or unusable or edited marker. The operator
+        -- inspects each as Recovery says; a marker alone is not evidence
+        -- of ownership of either annotation. Only after cleanup and
+        -- inspection does the operator delete the install with kubectl
+        -- delete -k. Deleting knarr before the wait leaves owned
+        -- annotations standing under Restart Leftovers. A value without a
+        -- usable marker is foreign (ownership Adoption) and is left alone
+        -- unless independent evidence confirms it is a knarr leftover.
+        -- The page is ticket 34's; its adversarial review corrected the
+        -- blanket release command on 2026-10-15 without changing automatic
+        -- cleanup or any controller behaviour.
     @invariant Recovery
-        -- Manual recovery after a dead install, or for a pod a permanent
-        -- rejection leaves annotated, is the same per-pod command:
-        -- removing the marker together with every owned annotation leaves
-        -- each unowned (ownership Adoption). The command also removes a
-        -- value another writer owns, so on a pod a CleanupRejected message
-        -- shows to carry one, or where another writer is known, the
-        -- operator removes knarr's keys one at a time as that message
-        -- renders them and leaves the other writer's alone. Removing the
-        -- marker alone leaves every present value foreign, which a running
-        -- knarr never writes.
+        -- Manual recovery after a dead install or a rejected cleanup uses
+        -- the same inspection. For a usable canonical marker (ownership
+        -- Recorded), remove only annotations whose valid applied record
+        -- equals the current value (ownership Adoption and Applied),
+        -- together with the marker once every record has been accounted
+        -- for. A null applied record with an absent annotation needs only
+        -- its record released. Preserve yielded, conflict and foreign
+        -- values: an applied record that differs from the current value
+        -- does not prove ownership. A marker with no safe-to-evict record
+        -- never authorizes removing that key; ticket 25's policy is
+        -- deferred. For an unusable or edited marker, confirm leftovers
+        -- from independent evidence before removing values, otherwise
+        -- preserve them. A CleanupRejected message can identify knarr's
+        -- keys to remove and another writer's values to preserve; a
+        -- marker-only rewrite rejection is not permission to discard
+        -- records still needed for another cleanup. Use the inspected
+        -- pod's resourceVersion as a precondition on manual annotation
+        -- changes, and re-inspect if it changes. Once no owned value
+        -- remains, remove any residual marker alone while preserving the
+        -- other writers' annotations; present values then stand foreign
+        -- to a running knarr. To deliberately reset another writer's
+        -- protection requires a separate operator decision, not uninstall.
 }
