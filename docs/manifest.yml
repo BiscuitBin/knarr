@@ -386,6 +386,79 @@
         "fake_worker_fixture"
       ],
       "requires": []
+    },
+    {
+      "path": "how-to/worker.md",
+      "title": "Prepare a worker for Knarr",
+      "kind": "how-to",
+      "audience": [
+        "user",
+        "operator"
+      ],
+      "canonical_for": [
+        "worker_integration",
+        "worker_shutdown",
+        "worker_readiness"
+      ],
+      "requires": []
+    },
+    {
+      "path": "how-to/keda.md",
+      "title": "Pair Knarr with KEDA",
+      "kind": "how-to",
+      "audience": [
+        "user",
+        "operator"
+      ],
+      "canonical_for": [
+        "keda_pairing",
+        "scale_from_zero"
+      ],
+      "requires": []
+    },
+    {
+      "path": "reference/configuration.md",
+      "title": "Deployment configuration",
+      "kind": "reference",
+      "audience": [
+        "user",
+        "operator"
+      ],
+      "canonical_for": [
+        "deployment_configuration"
+      ],
+      "requires": []
+    },
+    {
+      "path": "operations/controller.md",
+      "title": "Operate and remove Knarr",
+      "kind": "operations",
+      "audience": [
+        "operator",
+        "user"
+      ],
+      "canonical_for": [
+        "controller_operations",
+        "pod_deletion_cost_prerequisite",
+        "worker_network_policy",
+        "controller_observability",
+        "controller_uninstall"
+      ],
+      "requires": []
+    },
+    {
+      "path": "how-to/install.md",
+      "title": "Install a published Knarr release",
+      "kind": "how-to",
+      "audience": [
+        "user",
+        "operator"
+      ],
+      "canonical_for": [
+        "release_installation",
+        "release_upgrade"
+      ],
+      "requires": []
     }
   ]
 }

@@ -53,6 +53,7 @@ flowchart TD
     T46["46 Spec-then-build: poll schedule, patcher"]
     T47["47 Discovery cleanup hand-off"]
     T48["48 Detect patch on replacement pod"]:::offpath
+    T49["49 Deferred safe-to-evict user guidance"]:::offpath
 
     T01 --> T02
     T01 --> T03
@@ -133,8 +134,9 @@ flowchart TD
     T18 --> T34
     T23 --> T34
     T24 --> T34
-    T25 --> T34
     T28 --> T34
+    T25 --> T49
+    T34 --> T49
     T12 --> T36
     T28 --> T36
     T36 --> T37
@@ -180,7 +182,7 @@ A wave is the earliest point a ticket can start if every lane runs in parallel: 
 | 7 | [20](issues/20-elicit-cost-mapping.md), [29](issues/29-fake-worker-fixture.md), [30](issues/30-elicit-observability.md), [36](issues/36-release-workflow-and-overlay.md), [41](issues/41-k8s-client-spec-then-build.md), [42](issues/42-otp-ssl-findings.md), [43](issues/43-status-poller.md), [44](issues/44-renovate-activation.md), [45](issues/45-scan-image-runtime-environment.md) |
 | 8 | [21](issues/21-elicit-unknown-unreachable-policy.md), [23](issues/23-elicit-cleanup-staleness-restart.md), [37](issues/37-first-release-v0-1-0.md) |
 | 9 | [31](issues/31-spec-then-build-reconcile-core.md), [32](issues/32-spec-then-build-ownership-lifecycle.md), [34](issues/34-user-guides.md), [38](issues/38-attestations-sbom-arm64.md) |
-| 10 | [46](issues/46-spec-then-build-poll-schedule-and-patcher.md) |
+| 10 | [46](issues/46-spec-then-build-poll-schedule-and-patcher.md), [49](issues/49-safe-to-evict-user-guidance.md) |
 | 11 | [47](issues/47-discovery-cleanup-hand-off.md), [48](issues/48-detect-patch-on-replacement-pod.md) |
 | 12 | [33](issues/33-keda-harness-success-criterion.md), [40](issues/40-mvp-release.md) |
 | 13 | [39](issues/39-gke-production-rollout.md) |
@@ -188,3 +190,5 @@ A wave is the earliest point a ticket can start if every lane runs in parallel: 
 The longest chains are fourteen tickets: 01, 02, 03, 06 or 07, 09, 17, 18, 20, 21, 31, 46, 47, then 33 or 40, then 39. Tickets 30 to 34 are the follow-ups ticket 17 drafted; 31 to 34 are round 2. Tickets 36 to 40 are the follow-ups ticket 28 drafted, all round 2; 37, 39 and 40 also wait for a maintainer session, and 39 for GKE Standard access. Tickets 41 and 42 are the follow-ups ticket 14 drafted. Ticket 43 is the follow-up ticket 18 drafted. Tickets 44 and 45 are the follow-ups ticket 27 drafted, both off the MVP path; 44 waits for a maintainer session, and 45 needs none. Ticket 46 is the follow-up ticket 24 drafted. Ticket 47 is the follow-up ticket 31 drafted after merging 23. Ticket 48 is the follow-up ticket 32 drafted when it settled the pod-identity question, off the MVP path.
 
 When a ticket's **Blocked by** line changes, update both the diagram and this table.
+
+Ticket 49 carries the safe-to-evict guidance deferred from 34 on 2026-10-15. Its wave records the currently named blockers; it remains deferred until 25 settles the feature and its implementation follow-up lands. Ticket 25 adds that follow-up as a blocker of 49 when it is assigned.

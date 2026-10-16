@@ -6,7 +6,9 @@
 
 **Non-goals:** Controller behaviour. The API reference.
 
-**Blocked by:** 12, 18, 23, 24, 25, 28
+**Blocked by:** 12, 18, 23, 24, 28
+
+**Scope amendment (2026-10-15):** The maintainer deferred the safe-to-evict feature. [49](49-safe-to-evict-user-guidance.md) now owns user guidance that depends on 25, so 25 no longer blocks this ticket. The guides name the reserved parse as deferred and retain already-settled ownership and manual-recovery instructions. They describe the implemented controller while explicitly distinguishing the published `v0.1.0` skeleton; ticket 40 has not yet recorded an MVP release.
 
 **From 17:** [Decision 0009](../../../docs/decisions/0009-allium-objective-map.md), map rows marked guidance.
 
@@ -26,11 +28,31 @@
 
 **MVP critical path:** no. The MVP runs without them; users need them to adopt it.
 
-**Status:** ready-for-agent, round 2
+**Status:** done, round 2
 
-- [ ] A worker guide covers graceful shutdown (SIGTERM, exec-form entrypoint, `terminationGracePeriodSeconds`, `preStop` sleep, Cluster Autoscaler's termination cap) and the readiness trade-off as 18 settled it (§5, §9.7).
-- [ ] A KEDA pairing guide covers scale-from-zero and `behavior` tuning (§7).
-- [ ] A configuration page covers the schema as 19 settled it (§9.1), every paragraph naming its clause in `config.allium`.
-- [ ] An operations guide covers rollouts (§9.13), the `PodDeletionCost` prerequisite as 24 settled it (§9.11), NetworkPolicy configuration as 18 settled it (§9.4b), the unknown and absent windows as 21 settled it (§9.6), and uninstall with manual recovery as 23 settled it (§8, lifecycle `Uninstall`).
-- [ ] An install guide covers installing a published release from the digest-pinned release overlay as [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md) decides: the digest from the release run's summary, one install per namespace, the `PodDeletionCost` prerequisite, and how an upgrade is a new digest. Written once 36 has landed the overlay.
-- [ ] Every page passes `just docs-check`, and each paragraph that states behaviour names the clause it describes.
+- [x] A worker guide covers graceful shutdown (SIGTERM, exec-form entrypoint, `terminationGracePeriodSeconds`, `preStop` sleep, Cluster Autoscaler's termination cap) and the readiness trade-off as 18 settled it (§5, §9.7).
+- [x] A KEDA pairing guide covers scale-from-zero and `behavior` tuning (§7).
+- [x] A configuration page covers the schema as 19 settled it (§9.1), every paragraph naming its clause in `config.allium`.
+- [x] An operations guide covers rollouts (§9.13), the `PodDeletionCost` prerequisite as 24 settled it (§9.11), NetworkPolicy configuration as 18 settled it (§9.4b), the unknown and absent windows as 21 settled it (§9.6), and uninstall with manual recovery as 23 settled it (§8, lifecycle `Uninstall`).
+- [x] An install guide covers installing a published release from the digest-pinned release overlay as [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md) decides: the digest from the release run's summary, one install per namespace, the `PodDeletionCost` prerequisite, and how an upgrade is a new digest. Written once 36 has landed the overlay.
+- [x] Every page passes `just docs-check`, and each paragraph that states behaviour names the clause it describes.
+
+## Hand-back notes
+
+### What changed
+
+Added five registered, reachable handbook pages: [worker integration and shutdown](../../../docs/how-to/worker.md), [KEDA pairing and scale-from-zero](../../../docs/how-to/keda.md), [deployment configuration](../../../docs/reference/configuration.md), [controller operations and removal](../../../docs/operations/controller.md), and [published-release installation and upgrades](../../../docs/how-to/install.md). Behavioural guidance names its owning specification clauses; external Kubernetes, KEDA and provider facts link their primary references.
+
+The operations page includes NetworkPolicy, poll windows, rollout limits, probes, metrics, Events, discovery-stall alerting and ownership-aware manual recovery. The install page distinguishes the published walking skeleton from the implemented controller and explains local digest pinning at a release tag. No controller code, specifications or deployment manifests changed.
+
+The maintainer's safe-to-evict deferral is recorded in ticket 25 and the bootstrap dependency graph. [49](49-safe-to-evict-user-guidance.md) owns the deferred guide work, depends on 25 and 34, and is off the MVP critical path. Existing ownership and manual-recovery guidance remains applicable without enabling the deferred feature.
+
+### What was verified
+
+`just docs-check` validated 33 pages and 45 canonical topics. `just lint` passed with its cache under ignored `ai_tmp/`; the full `just check` gate passed without changing the worktree. The complete diff was reviewed against the documentation contract, owning specifications and dependency hand-backs using `review-change`. No live cluster was changed; the guides' commands are operator procedures, not a claim of a new deployment test.
+
+### What each later ticket needs
+
+- Ticket 40 must record the MVP release digest and its shipped behavior. The install guide currently uses the explicitly labelled `v0.1.0` skeleton as its worked example; update that example when the MVP is published.
+- Ticket 25 must settle the deferred safe-to-evict policy before ticket 49 describes its use. When an implementation ticket is assigned, add it as a blocker of 49; only document enabling the feature once that implementation ships.
+- Ticket 49 must extend the existing canonical configuration and operations pages rather than create competing topic owners. Its checklist names the deferred policy, eviction and node-pinning guidance to add.
