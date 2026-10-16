@@ -48,4 +48,10 @@ For a release containing the controller, prepare the [worker endpoint](worker.md
 
 Upgrade using a separate checkout of the new release tag, its own run's digest, `just release-pin`, and the same namespace-scoped `kubectl apply -k deploy/release`. The packaged Deployment uses `Recreate` and one replica; do not create a second install to overlap it. Existing annotations survive restart and are reconciled by the normal loop, without age-based expiry ([Decision 0012](../decisions/0012-release-and-packaging.md), digest-pinned installs; `deploy/base/resources.json`; [lifecycle.allium](../specs/lifecycle.allium), `Restart` `Replica`, `NoStartupStep`, `NoExpiry`).
 
-For removal, follow [uninstall and recovery](../operations/controller.md#uninstall-and-recover) before deleting the packaged resources. Deleting the controller first leaves its annotations behind ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Restart` `Leftovers`).
+For a fresh `v0.1.0` skeleton install, with no annotations left by an earlier controller in the namespace, delete the packaged resources directly from the retained operator checkout of that release. The skeleton runs no discovery loop and writes no worker annotations, so there is no controller cleanup to await and no discovery or target metrics to check ([tagged startup](https://github.com/steven-cutting/knarr/blob/v0.1.0/src/knarr/application_ffi.erl), [tagged runtime](https://github.com/steven-cutting/knarr/blob/v0.1.0/src/knarr/runtime.gleam)):
+
+```sh
+kubectl -n "$worker_namespace" delete -k deploy/release
+```
+
+For a release running the controller, follow [uninstall and recovery](../operations/controller.md#uninstall-and-recover) before deleting the packaged resources. Deleting the controller first leaves its annotations behind. If the skeleton replaced an earlier controller, or the controller is unavailable, remove Deployment opt-in labels and use [manual recovery](../operations/controller.md#manual-recovery) to inspect and remove confirmed leftovers before deleting the install; do not wait for discovery metrics from the skeleton or an unavailable controller ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`, `Restart` `Leftovers`).

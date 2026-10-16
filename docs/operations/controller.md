@@ -113,13 +113,19 @@ kubectl -n workers get events --field-selector type=Warning
 
 ## Uninstall and recover
 
+If the controller is unavailable, including when a `v0.1.0` skeleton has replaced it, remove the Deployment opt-in labels as below, then proceed directly to [manual recovery](#manual-recovery). The discovery and metric waits apply to a running controller; an unavailable controller cannot complete them. A fresh skeleton install with no earlier controller leftovers has its own [direct removal procedure](../how-to/install.md#upgrade-or-remove) ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`, `Restart` `Leftovers`).
+
 Keep Knarr running while removing the exact opt-in label from every managed Deployment. Cleanup begins from the next discovery cycle, on live pods, oldest-due first within the write budget; it is not an immediate synchronous operation. The following commands use namespace `workers`, matching the examples above ([config.allium](../specs/config.allium), `Configuration` `OptIn`, `Effective`; [lifecycle.allium](../specs/lifecycle.allium), `Cleanup` `Scope`, `Order`, `Uninstall` `Procedure`):
 
 ```sh
 kubectl -n workers label deployment -l knarr.io/enabled=true knarr.io/enabled-
 ```
 
-Record when label removal completes. From the running install's fresh metrics, require `knarr_last_discovery_timestamp_seconds` to be later than that time and `knarr_targets{kind="deployments"}` to be 0. Then wait until its `knarr_annotations{standing="owned"}` series are all 0 or absent. Series disappear after cleanup finishes, but are also absent before the first successful discovery after a restart; absence alone cannot establish cleanup. A stopped scrape or dead controller provides no completion evidence. Then list remaining markers: yield, conflict, edited markers, and marker-only pending cleanup can leave one even after the owned count is zero ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`; [observability.allium](../specs/observability.allium), `Catalogue` `Standing`, `SeriesLife`, `Install`):
+Record when label removal completes. From the running install's fresh metrics, require `knarr_last_discovery_timestamp_seconds` to be later than that time and `knarr_targets{kind="deployments"}` to be 0. Then wait until its `knarr_annotations{standing="owned"}` series are all 0 or absent. Series disappear after cleanup finishes, but are also absent before the first successful discovery after a restart; absence alone cannot establish cleanup. A stopped scrape or dead controller provides no completion evidence ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`; [observability.allium](../specs/observability.allium), `Catalogue` `Standing`, `SeriesLife`, `Install`).
+
+### Manual recovery
+
+After the running controller's cleanup, or directly after opt-out if the controller is unavailable, list remaining markers. Yield, conflict, edited markers, and marker-only pending cleanup can leave one even after the owned count is zero. An unavailable controller can also leave applied values, which require the same ownership inspection below ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`, `Restart` `Leftovers`):
 
 ```sh
 kubectl -n workers get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.knarr\.io/applied}{"\n"}{end}'
@@ -147,7 +153,7 @@ kubectl -n workers annotate pod worker-pod \
   knarr.io/applied-
 ```
 
-Once cleanup and marker inspection are complete, delete the install from the operator checkout of the currently installed release. Deleting Knarr before that wait leaves every owned annotation as a leftover. Manual recovery after a dead install uses the same inspection and conditional per-pod removal above, preserving other writers' values ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`):
+Once automatic cleanup or manual recovery and marker inspection are complete, delete the install from the operator checkout of the currently installed release. Deleting a running controller before its cleanup wait leaves every owned annotation as a leftover. Manual recovery after a dead install uses the same inspection and conditional per-pod removal above, preserving other writers' values ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`):
 
 ```sh
 kubectl -n workers delete -k deploy/release
