@@ -53,7 +53,8 @@ Built on 2026-10-15 in the worktree `33-keda-harness-success-criterion`. The kin
 - `python3 -m pytest scripts/checks/tests/test_keda_e2e.py`: 43 passed. Each seam's test failed before its code: on a missing function, on its assertion, or, for the two worked patch-rate examples, on a corrected expectation.
 - `just test-checkers-selected cluster`: 63 passed. `just docs-check`, `just agents-check` and `just packaging-check` passed.
 - `just check` on 2026-10-15 at the staged tree: All checks passed and the worktree is unchanged.
-- Not run: `just deployment-check`, which needs the `cluster` environment, not installed here. Its renders of `e2e-fast` are owed to CI or to a local install. Also not run: the harness itself on kind, `just links-audit` and `just hex-audit`.
+- `just deployment-check`, after `just cluster-install`: every variant renders and validates, `e2e-fast` included, and the release overlay still differs by its two lines. `kustomize build` over the downloaded 2.21.0 core YAML and `keda_kustomization`'s output names both KEDA images by their pinned digest.
+- Not run here: the harness itself on kind, `just links-audit` and `just hex-audit`.
 
 ### Corrections after review
 
