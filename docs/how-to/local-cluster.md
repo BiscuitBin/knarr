@@ -96,7 +96,7 @@ informational, not a peak measurement or a capacity guarantee for future work.
 The offline gate validates image lint, base resources against local Kubernetes
 schemas, and static security settings. `just deployment-check`, with the
 optional cluster tools installed, renders every variant under `deploy/`
-(`base`, `release` and `wrong-ca`) with kustomize and validates each. It fails
+(`base`, `e2e-fast`, `release` and `wrong-ca`) with kustomize and validates each. It fails
 unless the release overlay changes exactly two lines of the base's render: the
 image, pinned by digest, and the pull policy. Container checks separately prove both image stages use
 the pixi manifest's OTP major (with lock agreement checked by the gate) and that the runtime starts with a read-only root.
@@ -106,7 +106,9 @@ readiness only. Both jobs remain outside aggregate `check`.
 The fake worker fixture has its own recipes on the same cluster:
 `just fake-worker-image-build`, `just fake-worker-image-check`,
 `just fake-worker-deploy` and `just fake-worker-smoke`. Its
-[reference page](../reference/fake-worker.md) describes them.
+[reference page](../reference/fake-worker.md) describes them. `just keda-e2e`
+runs [the KEDA end-to-end harness](../reference/keda-e2e.md) on the same cluster
+after both images are built.
 
 After 14 consecutive days without infrastructure-related failures, a maintainer
 may consider making kind required. That is a separate branch-protection decision,

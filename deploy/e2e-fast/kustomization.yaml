@@ -1,0 +1,11 @@
+# The e2e-fast variant of the base (ticket 33): the KEDA harness's comparison
+# phase runs knarr with short intervals, so a scale-in round waits seconds
+# rather than minutes for the load's annotations. Rate and burst stay at the
+# defaults, so budget's 5·W + 10 bound holds as stated. The harness's restart
+# phase runs the base, at the defaults its thresholds name.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+patches:
+  - path: patch.json
