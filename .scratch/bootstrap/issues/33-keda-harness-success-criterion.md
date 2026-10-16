@@ -89,3 +89,4 @@ Not changed: one port forward per settle poll and per control request. The settl
 - **39:** this harness is the kind-tier proof of the three criteria. GKE repeats the comparison at production scale.
 - **40:** run the `keda-e2e` workflow before tagging, and quote its verdict line.
 - **35:** 32's owed admission-webhook rejection proof is still owed. This harness installs no webhook, and KEDA's core YAML carries none.
+- **35:** the `keda-e2e` workflow uploads nothing. An `actions/upload-artifact` of `build/keda-e2e/` under `always()` would keep the scrapes, pod reads and kill records, so a reader could check (b)'s cleanup count rather than infer it from the readiness latch.
