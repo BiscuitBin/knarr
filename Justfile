@@ -418,7 +418,7 @@ deployment-check: cluster-tools
 
 # Writes deploy/release/kustomization.yaml, a tracked file, so it is outside the
 # check group. Each release runs it after its run (ticket 37 did first), with
-# the bare sha256: digest: the run log's digest= line, or the part after @ in
+# the bare sha256: digest: the value after digest= in the log, or after @ in
 # the reference its run summary prints. It fails unless the overlay then
 # renders exactly that reference.
 [group('release')]

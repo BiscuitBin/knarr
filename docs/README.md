@@ -12,6 +12,11 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 
 ## Start here
 
+- [Install a published release](how-to/install.md): select a tag and digest, install in one namespace, and upgrade.
+- [Prepare a worker](how-to/worker.md): expose status, drain safely, and choose readiness behavior.
+- [Deployment configuration](reference/configuration.md): opt in and tune the supported overrides.
+- [Pair Knarr with KEDA](how-to/keda.md): external demand, scale-from-zero, and scale-down tuning.
+- [Operate and remove Knarr](operations/controller.md): prerequisites, NetworkPolicy, monitoring, rollouts, and recovery.
 - [Tutorials](tutorials/README.md): a first local check of the repository.
 - [How-to guides](how-to/README.md): add or change documentation.
 - [Explanation](explanation/README.md): understand the controller's purpose and boundaries.

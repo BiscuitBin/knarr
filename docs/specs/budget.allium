@@ -354,13 +354,25 @@ contract WriteBudget {
         -- on by default since Kubernetes 1.22, needed on kube-apiserver and
         -- kube-controller-manager, how to read it from the apiserver's
         -- kubernetes_feature_enabled metric on 1.26 or later, the
-        -- behavioural test of two Ready pods of one Deployment on one node
-        -- (or on nodes with equal counts of its pods), the older annotated
-        -- -1 and the Deployment scaled down by one, where the older goes
-        -- with the gate on and the newer goes with it off, since ranking
-        -- then prefers the pod that became Ready more recently, and that
-        -- with the gate off knarr's writes are harmless and useless while
-        -- safe-to-evict is unaffected.
+        -- behavioural probe of two Ready pods of one Deployment on one
+        -- node (or on nodes with equal counts of related pods), with equal
+        -- restart counts and no other scaler or annotation writer. The
+        -- older also became Ready earlier and is annotated -1 before
+        -- scale-down by one. Separate Ready ages by more than a factor of
+        -- two at scale-down: equal logarithmic age buckets can tie-break
+        -- by UID before exact age or restart count distinguishes them.
+        -- For example, let the first pod stay Ready for at least five
+        -- minutes before adding the second, then scale down within one
+        -- minute of the second becoming Ready; restart the probe if those
+        -- controls are lost. The older should go with the gate on and
+        -- the more recently Ready pod with it off under these controls.
+        -- Repeat with fresh pods for at least two consistent runs and
+        -- corroborate with controller-manager configuration or provider
+        -- confirmation; a best-effort victim-selection observation is not
+        -- proof of the gate's state. With the gate off knarr's writes are
+        -- harmless and useless while safe-to-evict is unaffected. Ticket
+        -- 34's adversarial review tightened this operator guidance on
+        -- 2026-10-15; controller behaviour is unchanged.
 }
 
 ------------------------------------------------------------

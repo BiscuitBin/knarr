@@ -26,9 +26,9 @@ Ticket 22 settled in [ownership.allium](../../../docs/specs/ownership.allium) th
 
 **From 30:** [observability.allium](../../../docs/specs/observability.allium) states the conventions any signal this ticket settles follows: metric names, labels and series life (`Catalogue` `Naming`, `Labels` and `SeriesLife`), Event reasons and type (`Events` `Conventions`), and log fields and levels (`Logs` `Format` and `Levels`). This ticket adds its own rows there with `tend` when it settles, without reopening 30 (`Catalogue` `LaterRows`). Already fixed: `knarr_annotations{deployment, annotation, standing}` with `annotation="safe-to-evict"` counts the annotation by ownership's standing on a pod exactly when reconcile asks its standing under ownership's `Adoption`, so a value an opt-out leaves counts until cleanup removes it and a `safe-to-evict` on a pod whose Deployment never enabled it counts nowhere (`Catalogue` `Standing`), and its writes count on `knarr_patches_total` with purpose `apply`, while the removal an opt-out leaves to 23 counts with purpose `cleanup` (`Patches`).
 
-**MVP critical path:** yes, for the opt-in `safe-to-evict` feature only.
+**MVP critical path:** no while the safe-to-evict feature is deferred. This ticket becomes a prerequisite when that opt-in feature resumes.
 
-**Status:** needs-human
+**Status:** deferred, needs-human. The maintainer deferred this feature on 2026-10-15 while picking up ticket 34. [49](49-safe-to-evict-user-guidance.md) carries the later user guidance; add the implementation follow-up this ticket creates as a blocker of 49 before enablement guidance is published. This ticket no longer blocks 34.
 
 - [ ] The `elicit` skill is run with the maintainer in a live session.
 - [ ] Every open point above is settled and recorded before any clause is written. Each one cites the S2a evidence it relies on, and S2b's (16) if that has landed.

@@ -6,7 +6,9 @@
 
 **Non-goals:** Controller behaviour. The API reference.
 
-**Blocked by:** 12, 18, 23, 24, 25, 28
+**Blocked by:** 12, 18, 23, 24, 28
+
+**Scope amendment (2026-10-15):** The maintainer deferred the safe-to-evict feature. [49](49-safe-to-evict-user-guidance.md) now owns user guidance that depends on 25, so 25 no longer blocks this ticket. The guides name the reserved parse as deferred and retain already-settled ownership and manual-recovery instructions. They describe the implemented controller while explicitly distinguishing the published `v0.1.0` skeleton; ticket 40 has not yet recorded an MVP release.
 
 **From 17:** [Decision 0009](../../../docs/decisions/0009-allium-objective-map.md), map rows marked guidance.
 
@@ -26,11 +28,58 @@
 
 **MVP critical path:** no. The MVP runs without them; users need them to adopt it.
 
-**Status:** ready-for-agent, round 2
+**Status:** done, round 2
 
-- [ ] A worker guide covers graceful shutdown (SIGTERM, exec-form entrypoint, `terminationGracePeriodSeconds`, `preStop` sleep, Cluster Autoscaler's termination cap) and the readiness trade-off as 18 settled it (§5, §9.7).
-- [ ] A KEDA pairing guide covers scale-from-zero and `behavior` tuning (§7).
-- [ ] A configuration page covers the schema as 19 settled it (§9.1), every paragraph naming its clause in `config.allium`.
-- [ ] An operations guide covers rollouts (§9.13), the `PodDeletionCost` prerequisite as 24 settled it (§9.11), NetworkPolicy configuration as 18 settled it (§9.4b), the unknown and absent windows as 21 settled it (§9.6), and uninstall with manual recovery as 23 settled it (§8, lifecycle `Uninstall`).
-- [ ] An install guide covers installing a published release from the digest-pinned release overlay as [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md) decides: the digest from the release run's summary, one install per namespace, the `PodDeletionCost` prerequisite, and how an upgrade is a new digest. Written once 36 has landed the overlay.
-- [ ] Every page passes `just docs-check`, and each paragraph that states behaviour names the clause it describes.
+- [x] A worker guide covers graceful shutdown (SIGTERM, exec-form entrypoint, `terminationGracePeriodSeconds`, `preStop` sleep, Cluster Autoscaler's termination cap) and the readiness trade-off as 18 settled it (§5, §9.7).
+- [x] A KEDA pairing guide covers scale-from-zero and `behavior` tuning (§7).
+- [x] A configuration page covers the schema as 19 settled it (§9.1), every paragraph naming its clause in `config.allium`.
+- [x] An operations guide covers rollouts (§9.13), the `PodDeletionCost` prerequisite as 24 settled it (§9.11), NetworkPolicy configuration as 18 settled it (§9.4b), the unknown and absent windows as 21 settled it (§9.6), and uninstall with manual recovery as 23 settled it (§8, lifecycle `Uninstall`).
+- [x] An install guide covers installing a published release from the digest-pinned release overlay as [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md) decides: the digest from the release run's summary, one install per namespace, the `PodDeletionCost` prerequisite, and how an upgrade is a new digest. Written once 36 has landed the overlay.
+- [x] Every page passes `just docs-check`, and each paragraph that states behaviour names the clause it describes.
+
+## Hand-back notes
+
+### What changed
+
+Added five registered, reachable handbook pages: [worker integration and shutdown](../../../docs/how-to/worker.md), [KEDA pairing and scale-from-zero](../../../docs/how-to/keda.md), [deployment configuration](../../../docs/reference/configuration.md), [controller operations and removal](../../../docs/operations/controller.md), and [published-release installation and upgrades](../../../docs/how-to/install.md). Behavioural guidance names its owning specification clauses; external Kubernetes, KEDA and provider facts link their primary references.
+
+The operations page includes NetworkPolicy, poll windows, rollout limits, probes, metrics, Events, discovery-stall alerting and ownership-aware manual recovery. The install page distinguishes the published walking skeleton from the implemented controller and explains local digest pinning at a release tag. The initial implementation changed no controller code, specifications or deployment manifests; the review amendment below corrects operator-facing specification clauses.
+
+The maintainer's safe-to-evict deferral is recorded in ticket 25 and the bootstrap dependency graph. [49](49-safe-to-evict-user-guidance.md) owns the deferred guide work, depends on 25 and 34, and is off the MVP critical path. Existing ownership and manual-recovery guidance remains applicable without enabling the deferred feature.
+
+### What was verified
+
+`just docs-check` validated 33 pages and 45 canonical topics. `just lint` passed with its cache under ignored `ai_tmp/`; the full `just check` gate passed without changing the worktree. The complete diff was reviewed against the documentation contract, owning specifications and dependency hand-backs using `review-change`. No live cluster was changed; the guides' commands are operator procedures, not a claim of a new deployment test.
+
+### What each later ticket needs
+
+- Ticket 40 must record the MVP release digest and its shipped behavior. The install guide currently uses the explicitly labelled `v0.1.0` skeleton as its worked example; update that example when the MVP is published.
+- Ticket 25 must settle the deferred safe-to-evict policy before ticket 49 describes its use. When an implementation ticket is assigned, add it as a blocker of 49; only document enabling the feature once that implementation ships.
+- Ticket 49 must extend the existing canonical configuration and operations pages rather than create competing topic owners. Its checklist names the deferred policy, eviction and node-pinning guidance to add.
+
+## Adversarial review amendment (2026-10-15)
+
+Claude Code reviewed commit `61cb9c7`. Each finding was checked against source, specifications, local tag contents and prior release evidence before applying the following corrections.
+
+| Finding | Assessment and applied solution |
+| --- | --- |
+| H1: blanket uninstall removes other writers' values | Valid. `ownership.standing` distinguishes applied values that still match from conflict, yielded and foreign values. The procedure now removes only confirmed Knarr-owned values, preserves the rest, and uses the inspected pod's resource version to reject concurrent changes. A marker without a safe-to-evict record never authorizes removing that annotation. Lifecycle `Uninstall` and ownership `Adoption` now state the same operator procedure. |
+| M1: a single victim-selection result can misidentify the gate | Valid; the handbook's existing victim-ranking background already records logarithmic age buckets and UID tie-breaking. The probe now separates Ready ages by more than a factor of two, gives concrete timing, requires repeated runs with fresh pods, and requires corroboration from controller-manager configuration or the provider. Budget `WriteBudget` guidance matches. |
+| L1: installation ordering and digest input | Valid. Context and rendered image inspection precede apply, unnecessary `initialize` is removed, the shell uses the installed cluster tools, and both the guide and Justfile comment specify the bare digest value rather than a whole log line. Context output remains an operator check, not an automatic guard. |
+| L2: install-wide configuration lacks a usable path | Valid. The canonical configuration page names the controller container's `ERL_FLAGS`, gives a complete example and explicitly preserves `-knarr discovery true`; it explains the disabled-discovery readiness trap. |
+| L3: reserved opt-in has effects despite deferred policy | Valid. The page says to leave it unset and describes foreign-annotation tracking and invalid-value Events. |
+| L4: overview still claims safe-to-evict is MVP scope | Valid. The overview's scope, status row and policy section now identify deferral and link the dated record in the canonical deferred-options page. Future policy discussion is explicitly retained as future context. |
+| L5: absent metrics can precede first discovery | Valid. Require a successful discovery timestamp after opt-out and zero Deployment targets before accepting owned-count 0 or absence; use fresh metrics from the running install. |
+| L6: ambiguous worker fragment and uninstall checkout | Valid. The YAML now shows `spec.template.spec` in a Deployment fragment, and uninstall names the currently installed release's checkout. |
+
+The review's question about recipes at `v0.1.0` is resolved: local `git show` confirms `cluster-install` and `release-pin` exist there. The tag's archived release overlay, locally pinned to the recorded digest, renders that image with kubectl v1.33.9 / bundled kustomize v5.6.0; ticket 37 separately records its pinned v1.34.3 / v5.7.1 render. No cluster installation, network audit, or live ranking probe was run for this amendment. External provider-specific behavior remains subject to the guide's stated verification requirements.
+
+Validation: 13 shell examples pass `sh -n`; kubectl's local help confirms the resource-version precondition; `just docs-check` validates 33 pages and 45 canonical topics; `just lint`, `just check-specs` and `just analyse-specs` pass. The full `just check` passes without changing the worktree. `just plan-spec` reports 8 obligations for lifecycle, 29 for ownership and 26 for budget. Only operator-facing prose clauses changed: no signatures, rules, controller behavior, test expectations or deployment manifests changed, so no new controller tests were derived. The full gate runs the existing tests.
+
+## PR 44 review amendment (2026-10-16)
+
+Copilot's [skeleton-removal finding](https://github.com/steven-cutting/knarr/pull/44#discussion_r4298028820) is valid. The `v0.1.0` startup and runtime have no discovery loop, and its metrics adapter declares only the startup counter alongside the library collectors. The install guide incorrectly sent that worked example to a removal procedure requiring discovery and target metrics it cannot emit.
+
+The install guide now gives a direct namespace-scoped delete command for a fresh skeleton install with no earlier controller leftovers. Controller releases retain the opt-out and cleanup procedure. A skeleton replacing an earlier controller, or an unavailable controller, instead leads to a linked manual-recovery entry point after opt-out, skipping the unavailable discovery metrics while preserving ownership inspection and resource-version preconditions. This corrects documentation only; no runtime behavior, specification, deployment manifest or public interface changes.
+
+Validation: the three removal paths were reviewed against the tagged skeleton source and lifecycle's `Uninstall` `Procedure` and `Recovery`. All 14 shell examples in the install and operations guides pass `sh -n`; `just docs-check` validates 34 pages and 46 canonical topics; `just lint` and the full `just check` pass with the worktree unchanged by the checks. The gate uses local socket access and the existing lint cache; no live cluster or network audit was run.
