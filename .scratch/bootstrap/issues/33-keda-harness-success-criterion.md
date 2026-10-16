@@ -16,19 +16,25 @@
 
 **MVP critical path:** yes. The MVP is measured with it.
 
-**Status:** in progress, round 2. The maintainer set the threshold on 2026-10-15; the harness is built and passes the local gate, and its first run on kind, in the `keda-e2e` workflow, is owed.
+**Status:** done, round 2. The maintainer set the threshold on 2026-10-15, and the harness's first run on kind passed it on 2026-10-16 ([evidence 33](../evidence/33/README.md)).
 
 - [x] The maintainer sets the threshold, and it is recorded in OVERVIEW §3 next to the criterion.
-- [ ] The run records the patch rate and shows it stayed within the §9.16 write-budget threshold from 24.
-- [ ] The run restarts knarr and asserts the three parts of the restart threshold from 23: 0 patches for 300 s for an untouched Deployment, an opt-out made during the downtime cleaned up within two list intervals, and a cost change during the downtime that moves the mapped value rewritten within about 100 s at the defaults, in a run with no 429 and no more patches due than the bucket serves in the window.
-- [ ] The recipe installs KEDA at a pinned version on the kind tier, scales the fake worker through a ScaledObject, and runs the same load with and without knarr.
-- [ ] Busy kills are counted from the sink 29 named, and the two counts and the threshold are printed in one line the hand-back quotes.
+- [x] The run records the patch rate and shows it stayed within the §9.16 write-budget threshold from 24.
+- [x] The run restarts knarr and asserts the three parts of the restart threshold from 23: 0 patches for 300 s for an untouched Deployment, an opt-out made during the downtime cleaned up within two list intervals, and a cost change during the downtime that moves the mapped value rewritten within about 100 s at the defaults, in a run with no 429 and no more patches due than the bucket serves in the window.
+- [x] The recipe installs KEDA at a pinned version on the kind tier, scales the fake worker through a ScaledObject, and runs the same load with and without knarr.
+- [x] Busy kills are counted from the sink 29 named, and the two counts and the threshold are printed in one line the hand-back quotes.
 - [x] The recipe is not in the aggregate `check`, and the testing reference says when to run it.
-- [ ] The hand-back records the KEDA version, the kind version and the run time.
+- [x] The hand-back records the KEDA version, the kind version and the run time.
 
 ## Hand-back notes
 
-Built on 2026-10-15 in the worktree `33-keda-harness-success-criterion`. The kind run is owed: this host cannot run the amd64 images, so the `keda-e2e` workflow is where it runs, and each push, label, dispatch and `gh` read needs its own go-ahead. The boxes the run proves stay open until its transcript is under `.scratch/bootstrap/evidence/33/`.
+Built on 2026-10-15 in the worktree `33-keda-harness-success-criterion`, and run on kind on 2026-10-16 in the `keda-e2e` workflow, because this host cannot run the amd64 images. The line this ticket owes, from run [38841125203](https://github.com/steven-cutting/knarr/actions/runs/38841125203/job/116781200596) at `01125a8`:
+
+```text
+busy kills: baseline 4 of 9 victims over 3 rounds, knarr 0 of 9; threshold knarr 0 per round and baseline >= 1: PASS
+```
+
+KEDA 2.21.0, kind v0.33.0 with node image v1.35.8. The harness ran for 672 s and the job for 12 min 40 s. Restart (a) held for 300 s, (b) landed at readiness against a bound of 120 s, and (c) landed at 25.7 s against 93 s, with no throttled result and no pause. The patch rate peaked at 15 in 60 s under `deploy/e2e-fast` and at 1 after the restart, against 310. [Evidence 33](../evidence/33/README.md) has the transcript and why (b) reads 0.0 s.
 
 ### The maintainer's decisions (2026-10-15)
 
@@ -54,7 +60,8 @@ Built on 2026-10-15 in the worktree `33-keda-harness-success-criterion`. The kin
 - `just test-checkers-selected cluster`: 63 passed. `just docs-check`, `just agents-check` and `just packaging-check` passed.
 - `just check` on 2026-10-15 at the staged tree: All checks passed and the worktree is unchanged.
 - `just deployment-check`, after `just cluster-install`: every variant renders and validates, `e2e-fast` included, and the release overlay still differs by its two lines. `kustomize build` over the downloaded 2.21.0 core YAML and `keda_kustomization`'s output names both KEDA images by their pinned digest.
-- Not run here: the harness itself on kind, `just links-audit` and `just hex-audit`.
+- The harness on kind: the `keda-e2e` job of pull request #43's labelled run, above, passed every check. The same push's CI run passed every job, the kind smoke and the fake worker smoke included.
+- Not run: `just links-audit` and `just hex-audit`.
 
 ### Corrections after review
 
@@ -72,7 +79,8 @@ Not changed: one port forward per settle poll and per control request. The settl
 
 ### Residual risks and open questions
 
-- The HPA's scale-down timing and KEDA's behaviour with an inactive cron trigger are confirmed only on the first run. If equal bounds do not hold the replica count, the fallback is to lower `maxReplicaCount` before `minReplicaCount`.
+- The first run settled the HPA's scale-down timing and KEDA's behaviour with an inactive cron trigger. Equal bounds held the replica count, and each round's scale-in finished within 18 s.
+- CI uploads no scrapes, so the committed transcript shows each judge's verdict but not the counts behind (b)'s cleanup.
 - The seeded split is deterministic over the pod names, which are random per run. The baseline's chance of 0 busy kills is about 1 in 20 per round if the ReplicaSet's choice is independent of the load, about 1 in 8000 over three rounds. A void run is rerun with another seed.
 - `t_ready` lags true readiness by up to a second or two, which gives (b) and (c) that much slack.
 

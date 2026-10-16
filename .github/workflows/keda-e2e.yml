@@ -4,7 +4,7 @@ name: KEDA e2e
 # with and without knarr, lifecycle's restart threshold and budget's patch
 # rate, in one `just keda-e2e` run. It runs on native linux/amd64, where the
 # images build; it downloads the KEDA release fixtures/keda_e2e/keda.json
-# pins and runs for about half an hour, an estimate until the first run, so
+# pins and runs for about 11 minutes, 13 with setup and the image builds, so
 # it is never in ci.yml's check job and never required. It runs on
 # workflow_dispatch, whose log is where the committed transcript under
 # .scratch/bootstrap/evidence/33/ is cut from, and on a pull request only

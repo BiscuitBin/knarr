@@ -402,7 +402,7 @@ fake-worker-smoke: cluster-tools
 # Ticket 33's KEDA end-to-end harness: the three §3 success criteria in one run
 # on this worktree's kind cluster, after image-build and fake-worker-image-build.
 # It downloads the KEDA release fixtures/keda_e2e/keda.json pins and runs for
-# about half an hour, so it is outside `check`; the keda-e2e workflow runs it
+# about 11 minutes, so it is outside `check`; the keda-e2e workflow runs it
 # (docs/reference/keda-e2e.md). Its records land under build/keda-e2e/.
 [group('cluster')]
 [doc('Count busy kills under KEDA scale-in with and without knarr, then judge the restart and patch-rate thresholds (needs network)')]
