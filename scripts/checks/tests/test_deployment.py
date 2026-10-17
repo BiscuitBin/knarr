@@ -150,7 +150,7 @@ def test_e2e_fast_variant_only_shortens_the_intervals():
 
 
 def test_voyager_variant_only_adds_distribution_on_loopback():
-    # Ticket 51: opt-in Erlang distribution for Voyager on the local cluster.
+    # Ticket 52: opt-in Erlang distribution for Voyager on the local cluster.
     # Discovery stays on, both listeners bind loopback for kubectl
     # port-forward, and the cookie arrives only through the Secret that
     # cluster.py creates, never as a literal in the manifest.

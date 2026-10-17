@@ -97,14 +97,15 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "kind, kubectl and kustomize join the cluster images: a kind release names the node images it supports, and kubectl talks to the cluster across at most one minor version.",
+      "description": "kind, kubectl, kustomize and helm join the cluster images: a kind release names the node images it supports, kubectl talks to the cluster across at most one minor version, and helm renders the local observability stack (ticket 51).",
       "matchManagers": [
         "pixi"
       ],
       "matchPackageNames": [
         "kubernetes-kind",
         "kubernetes-client",
-        "kustomize"
+        "kustomize",
+        "kubernetes-helm"
       ],
       "groupName": "local cluster",
       "dependencyDashboardApproval": true
@@ -138,6 +139,15 @@
       "matchPackageNames": [
         "ghcr.io/kedacore/keda",
         "ghcr.io/kedacore/keda-metrics-apiserver"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "The local observability stack moves only by hand: fixtures/observability/stack.json pins the prometheus and grafana chart archives by sha256 and the three images their renders name by multi-arch index digest, and all of them move together. No manager reads that file today, and no bot can rehash a chart, so this keeps any later one off it (ticket 51).",
+      "matchPackageNames": [
+        "registry.k8s.io/kube-state-metrics/kube-state-metrics",
+        "quay.io/prometheus/prometheus",
+        "docker.io/grafana/grafana"
       ],
       "enabled": false
     }

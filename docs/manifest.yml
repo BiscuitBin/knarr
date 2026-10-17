@@ -348,6 +348,20 @@
       "requires": []
     },
     {
+      "path": "how-to/local-observability.md",
+      "title": "See the local cluster's metrics in Grafana",
+      "kind": "how-to",
+      "audience": [
+        "contributor",
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "local_observability"
+      ],
+      "requires": []
+    },
+    {
       "path": "how-to/voyager.md",
       "title": "Inspect knarr with Voyager on the local cluster",
       "kind": "how-to",

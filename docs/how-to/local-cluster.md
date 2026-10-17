@@ -105,7 +105,9 @@ The fake worker fixture has its own recipes on the same cluster:
 `just fake-worker-deploy` and `just fake-worker-smoke`. Its
 [reference page](../reference/fake-worker.md) describes them. `just keda-e2e`
 runs [the KEDA end-to-end harness](../reference/keda-e2e.md) on the same cluster
-after both images are built.
+after both images are built. `just observability-up` adds an opt-in Prometheus
+and Grafana to it; [the local observability page](local-observability.md)
+describes the stack and its dashboard.
 
 To inspect the running controller with the Voyager desktop app, deploy the
 opt-in `voyager` variant; [Inspect knarr with Voyager](voyager.md) describes

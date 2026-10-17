@@ -8,7 +8,7 @@ requires: []
 
 # Inspect knarr with Voyager on the local cluster
 
-[Voyager](https://github.com/software-mansion/voyager) is a desktop app from Software Mansion that shows a running BEAM node: its overview, supervision trees and, from 0.2.0-rc.1, its processes and ETS tables. It attaches as a hidden node over standard Erlang distribution, so knarr needs no dependency and no code change. knarr does not run distributed by default. The opt-in `voyager` variant under `deploy/` turns distribution on, for this worktree's kind cluster only ([ticket 51](../../.scratch/bootstrap/issues/51-voyager-viz.md)).
+[Voyager](https://github.com/software-mansion/voyager) is a desktop app from Software Mansion that shows a running BEAM node: its overview, supervision trees and, from 0.2.0-rc.1, its processes and ETS tables. It attaches as a hidden node over standard Erlang distribution, so knarr needs no dependency and no code change. knarr does not run distributed by default. The opt-in `voyager` variant under `deploy/` turns distribution on, for this worktree's kind cluster only ([ticket 52](../../.scratch/bootstrap/issues/52-voyager-viz.md)).
 
 Nothing else uses the variant. The image, `deploy/base/`, `deploy/release/`, `just check` and `just keda-e2e` are unchanged.
 
@@ -37,7 +37,7 @@ To probe by hand while the forward runs, use the repository's OTP: `.pixi/envs/d
 
 ## Troubleshooting
 
-The first three error names come from Voyager's connection guide; ticket 51 reproduced only the port and forward cases.
+The first three error names come from Voyager's connection guide; ticket 52 reproduced only the port and forward cases.
 
 - **`node_not_registered`:** Voyager reached an epmd that does not know `knarr`. Either the forward is down, or a local epmd answered on 4369 instead. Restart `just voyager-forward`.
 - **`bad_cookie`:** the cookie does not match. Copy it again from `.cluster/voyager-cookie`. If that file was deleted, `just voyager-deploy` writes a new cookie into the Secret, but the pod reads the Secret only when it starts. Restart it with `kubectl --kubeconfig .cluster/kubeconfig rollout restart deployment/knarr`.

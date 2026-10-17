@@ -256,7 +256,7 @@ def test_every_rule_and_custom_manager_says_why() -> None:
 
 LOCAL_CLUSTER = [
     {"manager": "pixi", "packageName": name, "packageFile": "pixi.toml", "datasource": "conda"}
-    for name in ("kubernetes-kind", "kubernetes-client", "kustomize")
+    for name in ("kubernetes-kind", "kubernetes-client", "kustomize", "kubernetes-helm")
 ] + [
     {
         "manager": "custom.regex",
@@ -337,6 +337,21 @@ def test_the_kwok_image_moves_only_by_hand() -> None:
     for dependency in LOCAL_CLUSTER:
         off = effective(dependency).get("enabled") is False
         assert off == (dependency["packageName"] == kwok), dependency
+
+
+def test_observability_moves_only_by_hand() -> None:
+    # stack.json pins chart archives by sha256 beside the images their renders
+    # name; no bot can rehash a chart, so no bot moves an image alone.
+    path = "fixtures/observability/stack.json"
+    images = json.loads((REPOSITORY / path).read_text())["images"]
+    assert len(images) == 3
+    for image in images:
+        name = image.split("@")[0].rpartition(":")[0]
+        dependency = {"packageName": name, "packageFile": path, "datasource": "docker"}
+        assert effective(dependency).get("enabled") is False, image
+    assert dependencies(path) == []
+    managers = set(config()["enabledManagers"])
+    assert not managers & {"helm-values", "helmv3", "kustomize"}, managers
 
 
 def test_a_pixi_version_without_a_digest_is_never_given_one() -> None:

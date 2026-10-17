@@ -1,4 +1,4 @@
-# 51: Opt-in Voyager inspection of knarr on the local kind cluster
+# 52: Opt-in Voyager inspection of knarr on the local kind cluster
 
 **Context:** The maintainer uses the Voyager desktop app (Software Mansion) on macOS and wants it to show the knarr controller running on the worktree's kind cluster. Voyager attaches as a hidden node over standard Erlang distribution, so it needs no hex dependency and no Gleam change. The shipment runs `erl … -noshell` with no `-name`, so knarr is not distributed. Using Voyager must be optional and opt-in: the image, `deploy/base/`, `deploy/release/`, `just check` and `just keda-e2e` stay as they are. The maintainer chose to support both Voyager 0.1.0, which was installed, and 0.2.0-rc.1, which adds processes and ETS. They also chose a `deploy/voyager/` overlay with `cluster`-group recipes and a random cookie per worktree, injected through a Secret created imperatively. The record is this ticket and a how-to page: no decision record and no Allium clause.
 

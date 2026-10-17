@@ -1,4 +1,4 @@
-# The voyager variant of the base (ticket 51): opt-in Erlang distribution so
+# The voyager variant of the base (ticket 52): opt-in Erlang distribution so
 # the Voyager desktop app can inspect knarr on this worktree's kind cluster.
 # epmd and the distribution listener bind 127.0.0.1 on fixed ports, reached
 # only through `just voyager-forward`. The cookie arrives in ERL_ZFLAGS from
