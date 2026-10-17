@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -193,15 +194,27 @@ def taken_ports(ports):
 def probe_node(cookie, forward):
     """Ask the node its name through the forward until it answers, for up to
     PROBE_SECONDS: a fresh pod takes a moment to register with its epmd. Each
-    erl_call is bounded too, so a stalled handshake cannot hang the caller."""
+    erl_call is bounded too, so a stalled handshake cannot hang the caller.
+    erl_call reads the cookie from a private HOME's .erlang.cookie, not from
+    -c: another user on the host can read a process's arguments."""
     wanted = f"'{VOYAGER_NODE}'"
-    probe = [str(ERL_CALL), "-name", VOYAGER_NODE, "-c", cookie, "-a", "erlang node"]
+    probe = [str(ERL_CALL), "-name", VOYAGER_NODE, "-a", "erlang node"]
+    home = Path(tempfile.mkdtemp(prefix="voyager-probe-"))
+    try:
+        (home / ".erlang.cookie").write_text(cookie)
+        (home / ".erlang.cookie").chmod(0o400)
+        return probe_until_answered(probe, {**os.environ, "HOME": str(home)}, wanted, forward)
+    finally:
+        shutil.rmtree(home)
+
+
+def probe_until_answered(probe, env, wanted, forward):
     deadline = time.monotonic() + PROBE_SECONDS
     answered = ""
     while forward.poll() is None and (remaining := deadline - time.monotonic()) > 0:
         try:
             result = subprocess.run(
-                probe, check=False, capture_output=True, text=True, timeout=remaining
+                probe, check=False, capture_output=True, text=True, timeout=remaining, env=env
             )
         except subprocess.TimeoutExpired:
             answered = f"no answer in {PROBE_SECONDS}s"
@@ -463,21 +476,18 @@ def environment(action, checkout):
 
 def deploy(name, state, image, variant):
     """Load knarr's image into kind and roll out the base or a deploy/ variant.
-    The voyager variant reads its cookie from a Secret, applied first."""
+    The voyager variant reads its cookie from a Secret, applied first through
+    stdin, so the cookie never appears in a host process's arguments."""
     run("kind", "load", "docker-image", image, "--name", name)
     if variant == "voyager":
-        secret = output(
-            "kubectl",
-            "create",
-            "secret",
-            "generic",
-            "knarr-voyager",
-            f"--from-literal=erl_zflags=-setcookie {voyager_cookie(state)}",
-            "--dry-run=client",
-            "-o",
-            "yaml",
-        )
-        run("kubectl", "apply", "-f", "-", input=secret)
+        secret = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": "knarr-voyager"},
+            "type": "Opaque",
+            "stringData": {"erl_zflags": f"-setcookie {voyager_cookie(state)}"},
+        }
+        run("kubectl", "apply", "-f", "-", input=json.dumps(secret))
     rendered = output("kustomize", "build", str(render(state, image, variant)))
     run("kubectl", "apply", "-f", "-", input=rendered)
     run("kubectl", "rollout", "status", "deployment/knarr", "--timeout=120s")
@@ -612,7 +622,14 @@ def main():
         raise ValueError(f"unknown cluster action: {action}")
 
 
+def exit_on_sigterm():
+    """Make SIGTERM unwind like an exit, so every finally runs and a forward's
+    kubectl child is stopped rather than left holding its ports."""
+    signal.signal(signal.SIGTERM, lambda signum, _frame: sys.exit(128 + signum))
+
+
 if __name__ == "__main__":
+    exit_on_sigterm()
     try:
         main()
     except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as error:

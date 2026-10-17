@@ -28,7 +28,7 @@ Nothing else uses the variant. The image, `deploy/base/`, `deploy/release/`, `ju
 
 The node name's host part is the literal `127.0.0.1`. Voyager's connection guide says its connector parses IP literals, and the distribution handshake checks the name.
 
-To probe by hand while the forward runs, use the repository's OTP: `.pixi/envs/default/lib/erlang/bin/erl_call -name knarr@127.0.0.1 -c "$(cat .cluster/voyager-cookie)" -a 'erlang node'` prints `'knarr@127.0.0.1'`. `erl_call` is not on the recipes' `PATH`. Space repeated probes about a second apart: two started within milliseconds of each other failed, and spaced probes all answered.
+To probe by hand while the forward runs, use the repository's OTP: `.pixi/envs/default/lib/erlang/bin/erl_call -name knarr@127.0.0.1 -c "$(cat .cluster/voyager-cookie)" -a 'erlang node'` prints `'knarr@127.0.0.1'`. `-c` puts the cookie in the host's process list for as long as the probe runs; `just voyager-forward` avoids that by giving `erl_call` a private `HOME` holding `.erlang.cookie`. `erl_call` is not on the recipes' `PATH`. Space repeated probes about a second apart: two started within milliseconds of each other failed, and spaced probes all answered.
 
 ## What each version shows
 
@@ -53,7 +53,7 @@ This variant is for inspecting a local cluster with no other tenants. It breaks 
 - **Fixed ports.** Voyager looks up the node through epmd on 4369 and dials the port epmd returns, so both ports are fixed: 4369 and 9100. This contradicts [Decision 0007](../decisions/0007-local-cluster.md)'s "no port is fixed": two worktrees cannot forward at once.
 - **An RPC surface.** While Voyager is attached, it can run arbitrary code on a node that holds the Role's pod `patch`. knarr.allium's `NoPodEffects` holds only by convention while it is attached. Inspect; do not mutate ([knarr.allium](../specs/knarr.allium), `Lifecycle` `NoPodEffects`).
 - **An unsupervised agent.** On 0.2.0-rc.1, whatever Voyager's agent runs sits outside knarr's supervision tree.
-- **A visible cookie.** The pod's environment carries the cookie in `ERL_ZFLAGS`, and the beam command line carries `-setcookie <cookie>`, so `ps` in the pod shows it. The Secret's own last-applied annotation holds it too.
+- **A visible cookie.** The pod's environment carries the cookie in `ERL_ZFLAGS`, and the beam command line carries `-setcookie <cookie>`, so `ps` in the pod shows it. The Secret's own last-applied annotation holds it too. On the host, the recipes keep it out of process arguments: `just voyager-deploy` sends the Secret to `kubectl` on stdin, and the probe reads it from a private file.
 - **Loopback only.** epmd binds `127.0.0.1` and `::1` in the pod (`ERL_EPMD_ADDRESS`), and the distribution listener binds `127.0.0.1:9100` (`inet_dist_use_interface`). No Service exposes them; `kubectl port-forward`, which dials the pod's `127.0.0.1`, is the path this variant uses.
 
 ## Return to the base

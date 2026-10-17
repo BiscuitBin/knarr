@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -40,7 +42,6 @@ def run_fake(
             f"#!{sys.executable}\n"
             "import json, os, sys\n"
             "if sys.argv[1:3] == ['image', 'inspect']: print('sha256:changed-image')\n"
-            "if sys.argv[1:3] == ['create', 'secret']: print('kind: Secret # ' + sys.argv[5])\n"
             "stdin = sys.stdin.read() if sys.argv[1:] == ['apply', '-f', '-'] else None\n"
             "with open(os.environ['CALL_LOG'], 'a') as f:\n"
             "    f.write(json.dumps([sys.argv, os.environ.get('KUBECONFIG'), os.environ.get('KWOK_WORKDIR'), os.environ.get('KUBERNETES_SERVICE_HOST'), os.environ.get('KUBERNETES_SERVICE_PORT'), stdin]) + '\\n')\n"
@@ -237,23 +238,19 @@ def test_voyager_deploy_applies_the_cookie_secret_before_the_variant(tmp_path: P
     cookie_file = tmp_path / "work tree/.cluster/voyager-cookie"
     assert cookie_file.stat().st_mode & 0o777 == 0o600
     cookie = cookie_file.read_text()
-    arguments = [call[0][1:] for call in calls]
-    create = [
-        "create",
-        "secret",
-        "generic",
-        "knarr-voyager",
-        f"--from-literal=erl_zflags=-setcookie {cookie}",
-        "--dry-run=client",
-        "-o",
-        "yaml",
-    ]
-    assert create in arguments
+    # The cookie reaches kubectl only through stdin: any host user can read argv.
+    assert not any(cookie in argument for call in calls for argument in call[0])
+    applied = next(index for index, call in enumerate(calls) if call[5] and "Secret" in call[5])
+    assert calls[applied][0][1:] == ["apply", "-f", "-"]
+    assert json.loads(calls[applied][5]) == {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": "knarr-voyager"},
+        "type": "Opaque",
+        "stringData": {"erl_zflags": f"-setcookie {cookie}"},
+    }
     build = next(index for index, call in enumerate(calls) if call[0][0].endswith("kustomize"))
-    assert arguments.index(create) < build
-    applied = calls[arguments.index(create) + 1]
-    assert applied[0][1:] == ["apply", "-f", "-"]
-    assert applied[5] == f"kind: Secret # --from-literal=erl_zflags=-setcookie {cookie}"
+    assert applied < build
     assert all(call[1] == str(tmp_path / "work tree/.cluster/kubeconfig") for call in calls)
 
 
@@ -358,8 +355,10 @@ def fake_voyager_tools(tmp_path: Path, env: list) -> tuple[Path, Path]:
     erl_call = binaries / "erl_call"
     erl_call.write_text(
         f"#!{sys.executable}\n"
-        "import json, sys\n"
-        f"open({str(log)!r}, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "import json, os, sys\n"
+        "home = os.environ['HOME'] + '/.erlang.cookie'\n"
+        "cookie = [open(home).read(), oct(os.stat(home).st_mode & 0o777)]\n"
+        f"open({str(log)!r}, 'a').write(json.dumps(sys.argv[1:] + cookie) + '\\n')\n"
         "print(\"'knarr@127.0.0.1'\")\n"
     )
     erl_call.chmod(0o755)
@@ -391,6 +390,9 @@ def test_voyager_forward_maps_the_fixed_ports_probes_and_reports(
     monkeypatch.setattr(cluster, "ERL_CALL", binaries / "erl_call")
     epmd, dist = free_ports(2)
     monkeypatch.setattr(cluster, "VOYAGER_PORTS", (epmd, dist))
+    probe_homes = tmp_path / "tmp"
+    probe_homes.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(probe_homes))
     cookie = cluster.voyager_cookie(tmp_path)
     # The fake forward ends after a second, as a redeploy's Recreate would end it.
     with pytest.raises(RuntimeError, match="port-forward ended"):
@@ -403,7 +405,9 @@ def test_voyager_forward_maps_the_fixed_ports_probes_and_reports(
         f"{epmd}:{epmd}",
         f"{dist}:{dist}",
     ] in calls
-    assert ["-name", "knarr@127.0.0.1", "-c", cookie, "-a", "erlang node"] in calls
+    # erl_call reads the cookie from a private HOME, never from its arguments.
+    assert ["-name", "knarr@127.0.0.1", "-a", "erlang node", cookie, "0o400"] in calls
+    assert not any(probe_homes.iterdir())
     printed = capsys.readouterr().out
     assert "knarr@127.0.0.1" in printed
     assert "long" in printed
@@ -460,3 +464,55 @@ def test_voyager_forward_refuses_a_taken_port(
     assert not log.exists() or not any(
         json.loads(line)[0] == "port-forward" for line in log.read_text().splitlines()
     )
+
+
+def test_voyager_forward_stops_kubectl_on_sigterm(tmp_path: Path) -> None:
+    # SIGTERM must unwind through the forward's cleanup: a kubectl left behind
+    # would keep the distribution ports bound with no one watching.
+    binaries, _ = fake_voyager_tools(tmp_path, VOYAGER_ENV)
+    kubectl = binaries / "kubectl"
+    kubectl.write_text(
+        kubectl.read_text()
+        .replace("import json, sys, time", "import json, os, sys, time")
+        .replace(
+            "    time.sleep(1)\n",
+            f"    open({str(tmp_path / 'kubectl.pid')!r}, 'w').write(str(os.getpid()))\n"
+            "    time.sleep(60)\n",
+        )
+    )
+    state = tmp_path / "state"
+    state.mkdir()
+    script = (
+        "import sys, pathlib\n"
+        f"sys.path.insert(0, {str(Path(cluster.__file__).parent)!r})\n"
+        "import cluster\n"
+        f"cluster.ERL_CALL = pathlib.Path({str(binaries / 'erl_call')!r})\n"
+        f"cluster.VOYAGER_PORTS = {free_ports(2)!r}\n"
+        "cluster.exit_on_sigterm()\n"
+        f"cluster.voyager_cookie(pathlib.Path({str(state)!r}))\n"
+        f"cluster.voyager_forward(pathlib.Path({str(state)!r}))\n"
+    )
+    wrapper = subprocess.Popen(
+        [sys.executable, "-c", script],
+        stdout=subprocess.PIPE,
+        text=True,
+        env={**os.environ, "PATH": f"{binaries}:{os.environ['PATH']}"},
+    )
+    try:
+        assert wrapper.stdout is not None
+        while "Ctrl-C to stop" not in (line := wrapper.stdout.readline()):
+            assert line, "the forward never reported it was holding"
+        pid = int((tmp_path / "kubectl.pid").read_text())
+        wrapper.send_signal(signal.SIGTERM)
+        assert wrapper.wait(timeout=15) == 128 + signal.SIGTERM
+    finally:
+        wrapper.kill()
+        wrapper.wait()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    pytest.fail("kubectl port-forward outlived the wrapper")

@@ -102,6 +102,10 @@ Answers recorded with the trial environment set by `kubectl set env` on the base
    - Ctrl-C before the forward: fixed in `main`, as above.
    - Codex reported no finding on implementation alignment, prior-review accounting, protected paths, gate and KEDA isolation, and the docs contract.
 
+4. **Adversarial review (Codex, `gpt-6-astra`):** two findings, both addressed.
+   - The cookie sat in host process arguments (`erl_call -c` and `kubectl --from-literal`): the Secret now goes to `kubectl apply` on stdin, and the probe gives `erl_call` a private `HOME` holding `.erlang.cookie`. Against a local node, `erl_call` with that `HOME` answered, and without it failed with `can't open cookie file`.
+   - SIGTERM skipped the forward's cleanup and left `kubectl port-forward` holding the ports: `main` now turns SIGTERM into an exit, so the `finally` stops kubectl. A subprocess test signals the wrapper and checks kubectl is gone.
+
 ### What later tickets need
 
 - **Nothing on the critical path.** 0.2.0 is a pre-release, so recheck when 0.2.0 is final: the agent module and its unsupervised processes may change.
