@@ -24,7 +24,7 @@ The recovery comment above the existence guard assumes one push: a run that fail
 
 **MVP critical path:** no.
 
-**Status:** ready-for-agent
+**Status:** done. Pull request [#50](https://github.com/steven-cutting/knarr/pull/50) is open. See [the hand-back notes](#hand-back-notes).
 
 - [x] Prefactor: `test_workflows.py` defines a push as a `--push` line or a `helm push` line, checks every push for its own probe and `case $verdict in`, in order, and still passes on the unchanged `release.yml`. Seeded failures cover a chart push with no probe, a chart push before its guard, and a guard that probes the image's tag in place of the chart's.
 - [x] `release.yml` packages the chart after the image push with the pushed digest and the tag's version, and fails if the packaged `Chart.yaml` disagrees with the tag.

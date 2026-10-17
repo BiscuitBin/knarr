@@ -46,7 +46,7 @@ The maintainer settled these points on 2026-10-16: the chart is published to OCI
 
 **MVP critical path:** no. The MVP installs through 0012's kustomize route.
 
-**Status:** ready-for-agent
+**Status:** done. Pull request [#50](https://github.com/steven-cutting/knarr/pull/50) is open. See [the hand-back notes](#hand-back-notes).
 
 - [x] **Authorization required:** the network, for the fetch. `.scratch/helm-chart/evidence/01/sources.txt` records every source above with its HTTP status, size and sha256, and the phrase each claim rests on, found or not found. It has the shape of ticket 28's [sources.txt](../../bootstrap/evidence/28/sources.txt), with a `sources.sh` beside it.
 - [x] Optional. **Authorization required:** the network, for the `registry:2` image pull. A loopback `registry:2` dry run in `.scratch/helm-chart/evidence/01/` packages a scratch chart with a stamped digest, pushes it, pulls it by digest and templates it, and shows that the rendered image is the stamped reference.

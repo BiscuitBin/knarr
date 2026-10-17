@@ -16,7 +16,7 @@
 
 **MVP critical path:** no.
 
-**Status:** ready-for-agent
+**Status:** done. Pull request [#50](https://github.com/steven-cutting/knarr/pull/50) is open. See [the hand-back notes](#hand-back-notes).
 
 - [x] `just deploy` installs the chart with `helm upgrade --install --wait`. A second run upgrades the release in place, and `just smoke` reports ok for `/healthz`, `/readyz` and `/metrics`.
 - [x] The local image id reaches the pod as the `knarr.dev/local-image-id` annotation through `podAnnotations`, so a reload of the same tag still rolls the pod.

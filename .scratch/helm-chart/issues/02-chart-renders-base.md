@@ -18,7 +18,7 @@ Rendered with local values, the chart matches `kustomize build deploy/base` apar
 
 **MVP critical path:** no.
 
-**Status:** ready-for-agent
+**Status:** done. Pull request [#50](https://github.com/steven-cutting/knarr/pull/50) is open. See [the hand-back notes](#hand-back-notes).
 
 - [x] The chart renders the four resources into `.Release.Namespace`. It has no `replicaCount`, ClusterRole, PDB, Service or ServiceMonitor.
 - [x] The values and schema are 0015's surface, no more and no less. `additionalProperties: false` rejects an unknown key on the objects knarr defines, and a test proves it; another test proves an arbitrary annotation key such as `knarr.dev/local-image-id` renders, as 0015's open maps allow. If 0015 chose ranges, a checker test pins each range to `config.allium` and `config.gleam`.
