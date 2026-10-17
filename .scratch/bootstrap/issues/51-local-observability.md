@@ -23,7 +23,7 @@ Prometheus scrapes knarr's pods in `default` and kube-state-metrics, with RBAC l
 
 **MVP critical path:** no. It is a contributor convenience.
 
-**Status:** done, except the push and the pull request, which need authorization.
+**Status:** done. Pull request [#46](https://github.com/steven-cutting/knarr/pull/46) is open.
 
 - [x] **Authorization required:** Step 0 discovery downloads, which the maintainer authorized on 2026-10-16. The chart homes, versions, sha256s, rendered images, index digests, determinism and RBAC are recorded in [the evidence](../evidence/51/README.md).
 - [x] `fixtures/observability/` holds the pins, both values files, the Namespace, the pod-reader ClusterRole, the dashboard, the exporter inventory and the static kustomization.
@@ -33,11 +33,11 @@ Prometheus scrapes knarr's pods in `default` and kube-state-metrics, with RBAC l
 - [x] The how-to page and its registration, AGENTS.md, Decisions 0003, 0007, 0012 and 0014, `docs/DEFERRED.md` and `CHANGELOG.md` carry the change.
 - [x] **Authorization required:** the live run on this worktree's kind cluster, which the maintainer authorized on 2026-10-16. It covers `observability-up`, `observability-smoke`, the dashboard with live data, `observability-down`, and a cached rerun.
 - [x] `just check` ends with "All checks passed and the worktree is unchanged."
-- [ ] **Authorization required:** a push and a pull request.
+- [x] **Authorization required:** a push and a pull request, which the maintainer authorized on 2026-10-16. The branch is pushed, and [#46](https://github.com/steven-cutting/knarr/pull/46) is open against `main`.
 
 ## Hand-back notes
 
-Done on 2026-10-16. The maintainer authorized three things that day: the network for Step 0 and for the live run, the local branch rename to `51-local-observability`, and the four Codex reviews. Evidence: [evidence/51](../evidence/51/README.md).
+Done on 2026-10-16. The maintainer authorized three things that day: the network for Step 0 and for the live run, the local branch rename to `51-local-observability`, and the four Codex reviews. They later authorized the push and pull request [#46](https://github.com/steven-cutting/knarr/pull/46). Evidence: [evidence/51](../evidence/51/README.md).
 
 ### What changed
 
