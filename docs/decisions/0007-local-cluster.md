@@ -27,7 +27,7 @@ All evidence was gathered on 2026-10-07 on an Apple M5 Pro (Darwin arm64), with 
 
 **kind is the canonical cluster** for the e2e tier, 13's smoke test and S1 (14), locally and in CI. **kwok, through kwokctl's docker runtime, is the fast integration tier.** It has a real apiserver, kube-controller-manager and scheduler, with simulated nodes and pods. It is knarr's "envtest equivalent or substitute". envtest, k3d and OrbStack are not tiers.
 
-Every local cluster belongs to one worktree. Its name comes from the worktree path, and its kubeconfig and state live under the worktree. No host port is fixed.
+Every local cluster belongs to one worktree. Its name comes from the worktree path, and its kubeconfig and state live under the worktree. No host port is fixed. Amended by [ticket 51](../../.scratch/bootstrap/issues/51-local-observability.md): a kind cluster may add an optional observability tier, Prometheus and Grafana in the `observability` namespace, installed by `just observability-up` and never part of `just check` or CI. `just grafana` forwards it to a loopback port the OS chooses, so no host port is fixed there either ([the local observability page](../how-to/local-observability.md)).
 
 ### Tiers
 
@@ -81,6 +81,7 @@ These come from [pins.txt](../../.scratch/bootstrap/evidence/10/pins.txt). Each 
 | Cluster Autoscaler (for 15) | `registry.k8s.io/autoscaling/cluster-autoscaler:v1.35.2@sha256:aac369dc283927a623deb1af54696efcc722ae79255aa07788422e495bab887d`, re-resolved and unchanged from 0003 |
 | kubectl | conda-forge 1.34.3 from the `cluster` environment, one minor behind the 1.35 servers, within kubectl's skew. Amended by [ticket 50](../../.scratch/bootstrap/issues/50-local-arm64-image.md): 1.36.0, one minor ahead, still within the skew, because 1.34.3 has no linux-aarch64 build |
 | KEDA (for 33) | 2.21.0 in `fixtures/keda_e2e/keda.json`: the `keda-2.21.0-core.yaml` release asset by sha256 and the `ghcr.io/kedacore/keda` and `keda-metrics-apiserver` image indexes by digest, resolved on 2026-10-15. 2.21 supports Kubernetes 1.34 to 1.36. [The KEDA harness page](../reference/keda-e2e.md#settings-and-pins) says how it moves |
+| Observability (for 51) | `fixtures/observability/stack.json`: the prometheus 29.34.0 and grafana 13.2.6 chart archives by sha256, and the kube-state-metrics, prometheus and grafana image indexes by digest, each with amd64 and arm64, resolved on 2026-10-16. [The local observability page](../how-to/local-observability.md#bumping-a-pin-by-hand) says how they move |
 
 The kind node image is pinned by digest in the recipe. Ticket 10's experiment resolved kwok component images by tag through `KWOK_KUBE_VERSION`. Ticket 13's implemented recipe supplies all five digest-pinned images explicitly through `--kube-apiserver-image`, `--kube-controller-manager-image`, `--kube-scheduler-image`, `--etcd-image` and `--kwok-controller-image`. The Linux CI kwok readiness job exercised this path. The committed experiment transcripts retain the original tag-based invocation.
 

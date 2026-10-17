@@ -1,0 +1,24 @@
+# The static layer of the local observability stack (ticket 51). observability.py
+# copies it to .cluster/observability/base/ beside the two chart renders, and
+# pins their images in an overlay. No top-level namespace: the charts set every
+# object's own, and the scrape RBAC lives in default.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.json
+  - pod-reader.json
+  - prometheus.yaml
+  - grafana.yaml
+configMapGenerator:
+  - name: knarr-dashboards
+    namespace: observability
+    files:
+      - dashboards/knarr-overview.json
+    options:
+      disableNameSuffixHash: true
+# What observability-down deletes by, outside the namespace.
+labels:
+  - pairs:
+      knarr.dev/stack: observability
+    includeSelectors: false
+    includeTemplates: false

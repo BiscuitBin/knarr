@@ -46,7 +46,7 @@ The evidence was gathered on 2026-10-09 and 2026-10-10 (UTC) on an Apple M5 Pro 
   - **Hex packages,** with `rangeStrategy: update-lockfile`: an in-range update moves `manifest.toml` alone.
   - **GitHub Actions:** the SHAs and their version comments, and the runner labels, in one pull request per update kind, majors apart: Renovate's `separateMajorMinor` puts the runner labels' 24.04 → 26.04 in `renovate/major-github-actions`. The labels' dependency name is `ubuntu`, like the runtime base's, so without this rule they would share its branch.
   - **pixi:** the version in all five places.
-  - **Local cluster:** the kind node, kwok's four control-plane images, and kind, kubectl and kustomize. The Kubernetes images are capped at 1.35, because kubectl 1.34 reaches 1.35 at most and the vendored schemas are 1.35. Amended by [ticket 50](../../.scratch/bootstrap/issues/50-local-arm64-image.md): kubectl is 1.36, which reaches 1.35 to 1.37, so the vendored schemas alone hold the cap. `registry.k8s.io/etcd` is capped at 3.6 beside them, because etcd 3.7 is not what kwok 0.8 and Kubernetes 1.35 were paired with. The kwok controller image, `registry.k8s.io/kwok/kwok`, is switched off in Renovate and moves by hand (below).
+  - **Local cluster:** the kind node, kwok's four control-plane images, and kind, kubectl and kustomize. The Kubernetes images are capped at 1.35, because kubectl 1.34 reaches 1.35 at most and the vendored schemas are 1.35. Amended by [ticket 50](../../.scratch/bootstrap/issues/50-local-arm64-image.md): kubectl is 1.36, which reaches 1.35 to 1.37, so the vendored schemas alone hold the cap. `registry.k8s.io/etcd` is capped at 3.6 beside them, because etcd 3.7 is not what kwok 0.8 and Kubernetes 1.35 were paired with. The kwok controller image, `registry.k8s.io/kwok/kwok`, is switched off in Renovate and moves by hand (below). Amended by [ticket 51](../../.scratch/bootstrap/issues/51-local-observability.md): helm (`kubernetes-helm`) joins the group, because it renders the local observability stack.
 
 ### Every pin, and what covers it
 
@@ -64,6 +64,8 @@ Counted from the files by [inventory.txt](../../.scratch/bootstrap/evidence/27/i
 | Base image digests | the Dockerfile's `FROM` lines | 2 | dockerfile manager and `docker:pinDigests` |
 | Cluster image digests | `scripts/checks/cluster.py` | 5 | regex manager (docker), group local cluster, held |
 | kwok image digest | `scripts/checks/cluster.py` | 1 | **Gap**, manual, with kwokctl's `tools.txt` lines; switched off in Renovate |
+| KEDA core YAML sha256 and image digests | `fixtures/keda_e2e/keda.json` | 3 | **Gap**, manual; switched off in Renovate. Ticket 33's one sha256 and two image index digests, which move together. Amended by [ticket 51](../../.scratch/bootstrap/issues/51-local-observability.md): the row was missing |
+| Observability chart sha256 and image digests | `fixtures/observability/stack.json` | 5 | **Gap**, manual; switched off in Renovate. Amended by [ticket 51](../../.scratch/bootstrap/issues/51-local-observability.md): two chart sha256s and three image index digests, which move together |
 | The pixi version | five places, below | 5 | dockerfile manager for the build stage, regex manager for the other four, group pixi, held |
 | `tools.txt` sha256 | `tools.txt` | 14 | **Gap**, manual (below) |
 | rebar3's `ADD --checksum` | the Dockerfile | 1 | **Gap**, manual, with `tools.txt`'s rebar3 line |
@@ -200,7 +202,7 @@ Each script exits non-zero on an unexpected result and writes only to the work d
 - **`audit.yml` has three jobs, none required:** links, hex advisories and the image scan. The image scan is red until Ubuntu republishes noble with the fixed `libssl3t64` and the `FROM` line moves, through Renovate once ticket 44 activates it or by hand (the manual routine above). While it is red, its table still lists every finding, so a new one is visible in the run. Once it is green, it still says nothing of the runtime environment, which it does not read, until ticket 45 lands. Amended by ticket 45: the image-scan job also runs `just runtime-scan`, and that step runs when the image scan is red.
 - **[Ticket 45](../../.scratch/bootstrap/issues/45-scan-image-runtime-environment.md) scans the runtime environment** the image ships, which the image scan does not read. It also decides perl: pruned from the runtime image with Decision 0003's TLS check rerun, or accepted with a dated, documented grype ignore. Amended by ticket 45: done, and perl is pruned, with the TLS check in `just image-check`.
 - **Ticket 38's arm64 lane** re-locks through the route above. Amended by [ticket 50](../../.scratch/bootstrap/issues/50-local-arm64-image.md): the re-lock is done. It moved kubectl to 1.36.0, because 1.34.3 has no linux-aarch64 build, and added entries without changing any other. Ticket 38 keeps the arm64 build job and the merged index.
-- **The network lists** in `AGENTS.md` and `CONTRIBUTING.md` name `just hex-audit`, `just image-scan` and `just audit-install`. Amended by ticket 45: and `just runtime-scan`.
+- **The network lists** in `AGENTS.md` and `CONTRIBUTING.md` name `just hex-audit`, `just image-scan` and `just audit-install`. Amended by ticket 45: and `just runtime-scan`. Amended by [ticket 51](../../.scratch/bootstrap/issues/51-local-observability.md): and `just observability-up`.
 
 ## What would reopen this
 

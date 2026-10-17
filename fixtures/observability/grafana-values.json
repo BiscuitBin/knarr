@@ -1,0 +1,89 @@
+{
+  "adminPassword": "knarr-local-only",
+  "automountServiceAccountToken": false,
+  "rbac": {
+    "create": false
+  },
+  "testFramework": {
+    "enabled": false
+  },
+  "initChownData": {
+    "enabled": false
+  },
+  "persistence": {
+    "enabled": false
+  },
+  "sidecar": {
+    "alerts": {
+      "enabled": false
+    },
+    "dashboards": {
+      "enabled": false
+    },
+    "datasources": {
+      "enabled": false
+    },
+    "notifiers": {
+      "enabled": false
+    },
+    "plugins": {
+      "enabled": false
+    }
+  },
+  "grafana.ini": {
+    "analytics": {
+      "check_for_updates": false,
+      "check_for_plugin_updates": false,
+      "reporting_enabled": false
+    },
+    "plugins": {
+      "preinstall_disabled": true
+    },
+    "news": {
+      "news_feed_enabled": false
+    },
+    "auth.anonymous": {
+      "enabled": true,
+      "org_role": "Viewer"
+    }
+  },
+  "datasources": {
+    "datasources.yaml": {
+      "apiVersion": 1,
+      "datasources": [
+        {
+          "name": "Prometheus",
+          "uid": "knarr-prometheus",
+          "type": "prometheus",
+          "access": "proxy",
+          "url": "http://prometheus-server.observability.svc:80",
+          "isDefault": true,
+          "jsonData": {
+            "timeInterval": "15s"
+          }
+        }
+      ]
+    }
+  },
+  "dashboardProviders": {
+    "dashboardproviders.yaml": {
+      "apiVersion": 1,
+      "providers": [
+        {
+          "name": "knarr",
+          "orgId": 1,
+          "folder": "knarr",
+          "type": "file",
+          "disableDeletion": true,
+          "editable": false,
+          "options": {
+            "path": "/var/lib/grafana/dashboards/knarr"
+          }
+        }
+      ]
+    }
+  },
+  "dashboardsConfigMaps": {
+    "knarr": "knarr-dashboards"
+  }
+}
