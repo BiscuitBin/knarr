@@ -1,0 +1,18 @@
+# 2026-10-17 01:32 PDT, this worktree's kind cluster, deploy/observer. Session A is just observer-cli in a pty; session B is a second just observer-cli started while A runs. The harness then hung stopping A by a SIGINT to its process group and was killed, so A's stop is in the second run below.
+[01:32:26] start session A
+[01:32:42] A attached, observer_cli screen drawn: True
+[01:32:42] start session B while A runs
+[01:32:42] B exit 1
+B stderr: test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/observer.py observer-cli "<checkout>"
+another observer_cli is attached to knarr@127.0.0.1: ['observer-cli-54931@127.0.0.1']; leave it first
+error: recipe `observer-cli` failed on line 460 with exit code 1
+[01:32:42] A still running after B: True
+[01:32:45] A still drawing: True
+[01:32:45] SIGINT A's process group, as Ctrl-C would
+
+# 01:36 PDT. Session A is just observer-cli in a pty, then Ctrl-C typed at its terminal; session C is a just observer-cli started as soon as A has exited, then q
+[01:36:40] A drawn: True
+[01:36:40] A gone after Ctrl-C: True
+[01:36:55] C refused: False; C drawn: True
+[01:36:55] C left with q: True

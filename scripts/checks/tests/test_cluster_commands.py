@@ -222,4 +222,39 @@ def test_port_forward_yields_the_local_port_and_stops_the_forward(
     # Stopped and reaped: no process has that pid any more.
     with pytest.raises(ProcessLookupError):
         os.kill(pid, 0)
-    assert (tmp_path / "port-forward-pod-w-1-8081.log").read_text().startswith("Forwarding from")
+    (log,) = tmp_path.glob("port-forward-pod-w-1-8081-*.log")
+    assert log.read_text().startswith("Forwarding from")
+
+
+def test_two_forwards_to_one_target_keep_their_own_logs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Two attaches at once forward the same target and port. A shared log would
+    # let one truncate the other's and read the port the other's kubectl picked,
+    # and closing that session would then cut both.
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    count = tmp_path / "count"
+    count.write_text("0")
+    kubectl = binaries / "kubectl"
+    kubectl.write_text(
+        f"#!{sys.executable}\n"
+        "import pathlib, time\n"
+        f"count = pathlib.Path({str(count)!r})\n"
+        "n = int(count.read_text()) + 1\n"
+        "count.write_text(str(n))\n"
+        "print(f'Forwarding from 127.0.0.1:{43210 + n} -> 4370', flush=True)\n"
+        "time.sleep(60)\n"
+    )
+    kubectl.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{binaries}:{os.environ['PATH']}")
+    with (
+        cluster.port_forward(tmp_path, "deployment/knarr", 4370) as first,
+        cluster.port_forward(tmp_path, "deployment/knarr", 4370) as second,
+    ):
+        assert (first, second) == (43211, 43212)
+    logs = sorted(log.read_text() for log in tmp_path.glob("port-forward-*.log"))
+    assert logs == [
+        "Forwarding from 127.0.0.1:43211 -> 4370\n",
+        "Forwarding from 127.0.0.1:43212 -> 4370\n",
+    ]

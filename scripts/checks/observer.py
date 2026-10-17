@@ -53,13 +53,13 @@ def overlay():
 NODE, COOKIE, DIST_PORT = overlay()
 
 
-def host_flags(local_port):
+def host_flags(local_port, role="observer"):
     """A hidden node that never listens and dials the target on `local_port`. knarr
     holds one connection per node name, so each session names itself by its
-    process id, and two at once do not collide."""
+    `role` and process id, and two at once do not collide."""
     return [
         "-name",
-        f"observer-{os.getpid()}@127.0.0.1",
+        f"{role}-{os.getpid()}@127.0.0.1",
         "-hidden",
         "-start_epmd",
         "false",
@@ -89,13 +89,29 @@ def erlang_string(text):
 
 
 # Loads every module in the ebin onto the target, runs observer_cli there, and
-# then removes them. A purge before each load clears what an interrupted session
-# left, since load_binary refuses while old code remains. observer_cli returns
-# quit when the user quits; anything else is a failed rpc or connection.
+# then removes them. knarr has one module table, so a session loads nothing while
+# another observer-cli node is connected: its load would make the other's code
+# old, and its delete and purge would kill the other's processes. Two sessions
+# that connect together both refuse. A purge before each load clears what an
+# interrupted session left, since load_binary refuses while old code remains.
+# observer_cli returns quit when the user quits; anything else is a failed rpc
+# or connection.
 OBSERVER_CLI = """\
 N = '{node}',
 case net_kernel:hidden_connect_node(N) of
     true ->
+        Hidden = rpc:call(N, erlang, nodes, [hidden]),
+        is_list(Hidden) orelse begin
+            io:format(standard_error, "cannot list ~s's nodes: ~p~n", [N, Hidden]),
+            halt(1)
+        end,
+        Peers = [O || O <- Hidden, O =/= node(),
+            lists:prefix("observer-cli-", atom_to_list(O))],
+        Peers =:= [] orelse begin
+            io:format(standard_error,
+                "another observer_cli is attached to ~s: ~p; leave it first~n", [N, Peers]),
+            halt(1)
+        end,
         Ms = [list_to_atom(filename:basename(F, ".beam"))
             || F <- filelib:wildcard("*.beam", {ebin})],
         Result = try
@@ -123,7 +139,15 @@ end."""
 def observer_cli_command(erl, local_port, ebin):
     """observer_cli on knarr, its modules loaded from `ebin` for the session."""
     script = OBSERVER_CLI.format(node=NODE, cookie=COOKIE, ebin=erlang_string(str(ebin)))
-    return [erl, *host_flags(local_port), "-noshell", "-pa", str(ebin), "-eval", script]
+    return [
+        erl,
+        *host_flags(local_port, role="observer-cli"),
+        "-noshell",
+        "-pa",
+        str(ebin),
+        "-eval",
+        script,
+    ]
 
 
 def remsh_command(erl, local_port):

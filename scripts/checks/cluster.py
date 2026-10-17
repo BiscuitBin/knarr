@@ -10,6 +10,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -117,10 +118,15 @@ def smoke(state):
 def port_forward(state, target, port, namespace=None):
     """Forward a loopback port to `port` on `target`, in `namespace` or the
     kubeconfig's, and yield it. kubectl asks the OS to allocate the port,
-    avoiding a probe/bind race. Each forward logs to its own file under .cluster/."""
-    log_path = state / f"port-forward-{re.sub(r'[^A-Za-z0-9.-]', '-', target)}-{port}.log"
+    avoiding a probe/bind race. Each forward logs to its own file under .cluster/,
+    so two at once to one target never read each other's port."""
+    descriptor, log_path = tempfile.mkstemp(
+        prefix=f"port-forward-{re.sub(r'[^A-Za-z0-9.-]', '-', target)}-{port}-",
+        suffix=".log",
+        dir=state,
+    )
     scope = [] if namespace is None else [f"--namespace={namespace}"]
-    with log_path.open("w+") as log:
+    with os.fdopen(descriptor, "w+") as log:
         forward = subprocess.Popen(
             ["kubectl", "port-forward", "--address=127.0.0.1", *scope, target, f":{port}"],
             stdout=log,

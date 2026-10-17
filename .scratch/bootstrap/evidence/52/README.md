@@ -58,6 +58,7 @@ Decision: `just observer-cli-install` downloads the hex tarballs that `fixtures/
 
 - [red-deployment.txt](red-deployment.txt): the overlay's tests before `deploy/observer/` existed, and the shipped-variant guard parametrized once over `deploy/observer` to show it can fail.
 - [red-observer.txt](red-observer.txt): `test_observer.py` against a skeleton whose functions raise `NotImplementedError`, the checker-suite ownership and selection cases before `observer` joined the `cluster` group, and the tests revised after the code review against the pre-review module.
+- [red-copilot.txt](red-copilot.txt): the tests for the two Copilot findings on the pull request against the reviewed module: two forwards to one target shared a log, and a second observer_cli session loaded over the first.
 
 ## Live attach
 
@@ -65,6 +66,7 @@ Decision: `just observer-cli-install` downloads the hex tarballs that `fixtures/
 - [live-observer-cli.txt](live-observer-cli.txt): `just observer-cli` showed knarr's home screen (OTP 29, `knarr@127.0.0.1`, its processes), quit on `q`, and exited with 0.
 - [live-remsh.txt](live-remsh.txt): `just remsh` ran `i()`. `code:is_loaded(observer_cli)` and `code:is_loaded(recon)` were both `false` after the observer_cli session. EOF left the shell, and knarr kept running with 0 restarts. `i()` pages, so a scripted run must answer its `more (y/n)?` prompt. A first scripted run hung there and was killed. The middle of the `i()` listing is elided, because its fixed-width columns truncate names that the typos check reads as misspellings.
 - [live-two-sessions.txt](live-two-sessions.txt): observer_cli and `remsh` attached at once, as `observer-<pid>` nodes knarr lists in `nodes(hidden)`. observer_cli's modules were loaded during its session and gone after it.
+- [live-two-observer-cli.txt](live-two-observer-cli.txt): a second `just observer-cli` refused while one was attached, naming it, and the first kept running. A session started as soon as a Ctrl-C ended another attached, so knarr drops the dead session's node at once.
 - [live-observer.txt](live-observer.txt): `just observer` with no `erl` names the how-to, and with the pixi `erl` it refuses for the missing wx driver. **The GUI window itself is unverified:** no wx-capable OTP 29 was installed on the host during this run.
 - [live-smoke.txt](live-smoke.txt): `just smoke` passes on the observer variant.
 

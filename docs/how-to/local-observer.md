@@ -39,9 +39,11 @@ left as it is. `just smoke` passes on this variant too.
 Each recipe below forwards port 4370 with `kubectl port-forward` to a loopback
 port the OS picks, and starts a local hidden node that dials it. The local
 node listens nowhere and runs no epmd either, so nothing on the host is bound
-to a fixed port. Each local node is named after its process, so several
-sessions can attach at once. Every recipe runs in the foreground until you
-leave it or press Ctrl-C, and the forward ends with it.
+to a fixed port. Each local node is named after its process, and each
+forward logs to its own file, so several sessions can attach at once, with one
+exception: only one `just observer-cli` at a time, as the next section
+explains. Every recipe runs in the foreground until you leave it or press
+Ctrl-C, and the forward ends with it.
 
 ## Open the GUI Observer
 
@@ -90,8 +92,12 @@ observer_cli runs its views on the target node, so `just observer-cli` loads
 its modules into knarr's memory over distribution for the session and purges
 them when you quit with `q`. They never enter the image. Ctrl-C also stops
 the port-forward, so a session ended that way cannot remove them: they stay
-loaded until the pod restarts, and the next session replaces them. If
-observer_cli cannot run on knarr, the recipe prints why and fails.
+loaded until the pod restarts, and the next session replaces them. knarr has
+one module table, so a second `just observer-cli` would replace the first's
+modules and then remove them under it: while one is attached, another prints
+`another observer_cli is attached` and fails. A remote shell or the GUI
+alongside it is fine. If observer_cli cannot run on knarr, the recipe prints
+why and fails.
 
 ## Open a remote shell
 

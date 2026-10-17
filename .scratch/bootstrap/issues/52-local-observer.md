@@ -103,6 +103,13 @@ The `code-review` skill, at high effort, reported nine findings. Each fix below 
 - **`check_erl` crashed on an unexpected answer;** it now names the how-to.
 - **The how-to said four recipes attach;** three do.
 
+### Corrections after the Copilot review
+
+Copilot's review of the pull request reported two findings, both valid. Each fix was seen failing first, as [red-copilot.txt](../evidence/52/red-copilot.txt) records.
+
+- **Two observer_cli sessions shared knarr's module table:** the second's load made the first's code old, and its delete and purge would kill the first's processes. Distinct host node names do not isolate target code. observer_cli's host node is now `observer-cli-<pid>`, and once connected a session lists knarr's hidden nodes and refuses, loading nothing, while another `observer-cli-*` node is among them. Two that connect together both refuse. `remsh` and the GUI load nothing and are not counted, and a session Ctrl-C ended leaves no node, so the next attaches ([live-two-observer-cli.txt](../evidence/52/live-two-observer-cli.txt)).
+- **Two attaches at once shared a port-forward log:** `cluster.port_forward` opened `port-forward-<target>-<port>.log` with `w+`, so one start could truncate the other's log and dial the port the other's kubectl picked, and closing that session cut both. Each forward now logs to its own `mkstemp` file under `.cluster/`. `test_two_forwards_to_one_target_keep_their_own_logs` pins it; the change reaches every caller of the helper.
+
 ### Verified
 
 - Focused: `test_deployment.py`, `test_observer.py`, `test_checker_suite.py`, `test_dependency_pins.py`, `test_observability.py` and `test_cluster_commands.py` pass. So do `just deployment-check`, `just docs-check` and `just agents-check`.

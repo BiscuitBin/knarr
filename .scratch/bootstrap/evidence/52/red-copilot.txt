@@ -1,0 +1,14 @@
+# 2026-10-17 01:28 PDT, after the Copilot review of PR #49: the new and revised tests against the reviewed module, before the fix
+$ python -m pytest -q scripts/checks/tests/test_observer.py scripts/checks/tests/test_cluster_commands.py
+FAILED scripts/checks/tests/test_observer.py::test_observer_cli_loads_its_modules_onto_knarr_and_removes_them_after
+FAILED scripts/checks/tests/test_observer.py::test_observer_cli_refuses_while_another_observer_cli_is_attached
+FAILED scripts/checks/tests/test_observer.py::test_only_observer_cli_names_its_node_observer_cli
+FAILED scripts/checks/tests/test_cluster_commands.py::test_port_forward_yields_the_local_port_and_stops_the_forward
+FAILED scripts/checks/tests/test_cluster_commands.py::test_two_forwards_to_one_target_keep_their_own_logs
+5 failed, 41 passed in 3.50s
+$ python -m pytest -q scripts/checks/tests/test_cluster_commands.py -k two_forwards   # the shared log: one file, the first forward's line overwritten
+E       At index 0 diff: 'Forwarding from 127.0.0.1:43212 -> 4370
+' != 'Forwarding from 127.0.0.1:43211 -> 4370
+'
+E         Right contains one more item: 'Forwarding from 127.0.0.1:43212 -> 4370
+'

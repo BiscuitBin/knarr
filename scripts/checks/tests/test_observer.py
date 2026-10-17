@@ -42,6 +42,9 @@ HOST = [
     "-setcookie",
     "knarr-dev-only",
 ]
+# observer_cli's host node carries its own prefix, so a second one can tell it
+# apart from a remote shell or the GUI.
+CLI_HOST = [f"observer-cli-{os.getpid()}@127.0.0.1" if flag == HOST[1] else flag for flag in HOST]
 
 
 def test_the_node_cookie_and_port_are_the_overlays() -> None:
@@ -73,8 +76,15 @@ def test_observer_opens_the_gui_on_knarr_and_halts_when_it_closes() -> None:
 def test_observer_cli_loads_its_modules_onto_knarr_and_removes_them_after() -> None:
     ebin = Path("/work/.cluster/observer/ebin")
     command = observer.observer_cli_command("erl", 54321, ebin)
-    assert command[: 1 + len(HOST) + 4] == ["erl", *HOST, "-noshell", "-pa", str(ebin), "-eval"]
-    (script,) = command[1 + len(HOST) + 4 :]
+    assert command[: 1 + len(CLI_HOST) + 4] == [
+        "erl",
+        *CLI_HOST,
+        "-noshell",
+        "-pa",
+        str(ebin),
+        "-eval",
+    ]
+    (script,) = command[1 + len(CLI_HOST) + 4 :]
     assert 'filelib:wildcard("*.beam", "/work/.cluster/observer/ebin")' in script
     assert "rpc:call(N, code, load_binary, [M, F, B])" in script
     assert "observer_cli:start(N, 'knarr-dev-only')" in script
@@ -87,6 +97,28 @@ def test_observer_cli_loads_its_modules_onto_knarr_and_removes_them_after() -> N
     assert "quit -> halt();" in script
     assert "halt(1)" in script[script.index("quit -> halt();") :]
     assert script.endswith("end.")
+
+
+def test_observer_cli_refuses_while_another_observer_cli_is_attached() -> None:
+    # knarr has one module table: a second session's load would make the first's
+    # code old, and its delete and purge would kill the first's processes. So a
+    # session lists knarr's hidden nodes once it is connected, and loads nothing
+    # while another observer-cli node is among them. Two that connect together
+    # both refuse; neither loads over the other. A remote shell or the GUI loads
+    # nothing, so they do not count, and a session Ctrl-C ended has no node left.
+    script = observer.observer_cli_command("erl", 54321, Path("/ebin"))[-1]
+    lists = script.index("rpc:call(N, erlang, nodes, [hidden])")
+    assert script.index("hidden_connect_node") < lists < script.index("code, purge")
+    assert 'lists:prefix("observer-cli-", atom_to_list(O))' in script
+    assert "O =/= node()" in script
+    refusal = script.index("another observer_cli is attached")
+    assert "halt(1)" in script[refusal : script.index("end", refusal)]
+
+
+def test_only_observer_cli_names_its_node_observer_cli() -> None:
+    assert observer.host_flags(54321)[1].startswith("observer-")
+    assert not observer.host_flags(54321)[1].startswith("observer-cli-")
+    assert observer.host_flags(54321, role="observer-cli") == CLI_HOST
 
 
 def test_an_ebin_path_is_a_literal_erlang_string_not_a_pattern() -> None:
