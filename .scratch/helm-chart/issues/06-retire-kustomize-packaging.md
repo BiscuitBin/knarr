@@ -5,13 +5,13 @@
 **What to build:** Remove the kustomize packaging and move its remaining guarantees onto the chart:
 
 - `deploy/release` goes, with the `release-pin` recipe and its comment block, `scripts/release/pin-digest.sh` and `test_release_pin.py`. `release.yml`'s recovery comment loses its `just release-pin` step: the chart that release published already carries the digest.
-- `lifecycle.allium` `Uninstall` `Procedure` and the operations page drop the `kubectl delete -k` route that 05 kept for kustomize installs. This goes through the `spec-change` skill.
+- `lifecycle.allium` `Uninstall` `Procedure` and the operations page drop the `kubectl delete -k` route that 05 kept for kustomize installs. The `helm uninstall` route and the saved-render `kubectl delete -f` route for kubectl-only installs stay. This goes through the `spec-change` skill.
 - `deploy/base` and the `e2e-fast` variant go. Their content now lives in the chart and its values files.
 - The wrong-ca patch from 03 moves out of `deploy/` to `fixtures/`, beside the other test-only inputs. Bootstrap ticket 14's `wrong-ca.sh` and the `reconcile-proof.yml` path filter follow it, and `deploy/` is deleted.
 - `deployment.py` loses `RELEASE_VALUES`, the `--render` variants and the `deployment-check` recipe. kubeconform validates the chart's render and the fake worker's resources.
 - `test_deployment.py`'s invariants are tested on the chart only, and the drift check from 02 goes.
 - Every path filter that names `deploy/**` loses it: `checker_suite.py` `CLUSTERS` and the `deploy/base/**` and `deploy/wrong-ca/**` lines in `reconcile-proof.yml`.
-- The handbook drops the kustomize route. It has `helm template` guidance for kubectl-only users. `configuration.md` stops pointing at `deploy/base/resources.json` for the packaged `ERL_FLAGS`, and points at the chart's values.
+- The handbook drops the kustomize route. It has `helm template` guidance for kubectl-only users, including keeping the render to remove the install with `kubectl delete -f`. `configuration.md` stops pointing at `deploy/base/resources.json` for the packaged `ERL_FLAGS`, and points at the chart's values.
 
 **Non-goals:** Changing the chart's values surface. Changing what the wrong-ca patch does: it only moves. Rewriting historical tickets or evidence that mention `deploy/`, apart from the one live script, `wrong-ca.sh`.
 

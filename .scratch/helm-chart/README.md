@@ -16,7 +16,6 @@ flowchart TD
     H08["08 Artifact Hub listing"]:::human
     REL["Next release after 04<br/>(bootstrap 40 or a patch)"]:::human
     B38["Bootstrap 38: attestations<br/>(external)"]:::human
-    REL08["Next release after 08's annotations"]:::human
 
     H01 --> H02
     H02 --> H03
@@ -28,7 +27,6 @@ flowchart TD
     H04 --> H07
     B38 --> H07
     H05 --> H08
-    REL08 --> H08
 
     classDef human stroke:#d97706,stroke-width:2px,stroke-dasharray:5 5
     classDef offpath stroke:#9e9e9e,stroke-dasharray:2 2,color:#757575
@@ -40,7 +38,7 @@ Each ticket is worked on its own branch, in its own git worktree, as the root [R
 
 ## Execution waves
 
-A wave is the earliest point a ticket can start if every lane runs in parallel: one step after its latest blocker. `needs-human` tickets also wait for a maintainer session, and 05 and 08 also each wait for a release.
+A wave is the earliest point a ticket can start if every lane runs in parallel: one step after its latest blocker. `needs-human` tickets also wait for a maintainer session, and 05 also waits for a release before it starts. 08 cuts its own release before it completes, so that release is a checkbox, not a blocker.
 
 | Wave | Tickets |
 | --- | --- |
