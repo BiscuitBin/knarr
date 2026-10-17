@@ -1,0 +1,16 @@
+{
+  "packages": [
+    {
+      "name": "recon",
+      "version": "2.5.6",
+      "url": "https://repo.hex.pm/tarballs/recon-2.5.6.tar",
+      "sha256": "96c6799792d735cc0f0fd0f86267e9d351e63339cbe03df9d162010cefc26bb0"
+    },
+    {
+      "name": "observer_cli",
+      "version": "2.0.0",
+      "url": "https://repo.hex.pm/tarballs/observer_cli-2.0.0.tar",
+      "sha256": "581cda47c9707cd6ebb994763f5a7683c0a86b549a1731648b32ce1d0e8cd229"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+FAILED scripts/checks/tests/test_observer.py::test_the_node_cookie_and_port_are_the_overlays
+FAILED scripts/checks/tests/test_observer.py::test_the_host_node_is_hidden_listens_nowhere_and_dials_the_forward
+FAILED scripts/checks/tests/test_observer.py::test_observer_opens_the_gui_on_knarr_and_halts_when_it_closes
+FAILED scripts/checks/tests/test_observer.py::test_observer_cli_loads_its_modules_onto_knarr_and_removes_them_after
+FAILED scripts/checks/tests/test_observer.py::test_an_ebin_path_is_quoted_as_an_erlang_string
+FAILED scripts/checks/tests/test_observer.py::test_remsh_opens_a_shell_on_knarr
+FAILED scripts/checks/tests/test_observer.py::test_check_erl_accepts_the_pods_major_with_a_wx_driver
+FAILED scripts/checks/tests/test_observer.py::test_check_erl_refuses_another_major_or_a_gui_without_wx[28 true\n-True-OTP 28, not the pod's 29]
+FAILED scripts/checks/tests/test_observer.py::test_check_erl_refuses_another_major_or_a_gui_without_wx[28 false\n-False-OTP 28, not the pod's 29]
+FAILED scripts/checks/tests/test_observer.py::test_check_erl_refuses_another_major_or_a_gui_without_wx[29 false\n-True-no wx driver]
+FAILED scripts/checks/tests/test_observer.py::test_check_erl_takes_the_terminal_side_without_wx
+FAILED scripts/checks/tests/test_observer.py::test_install_compiles_each_package_into_one_ebin
+FAILED scripts/checks/tests/test_observer.py::test_install_refuses_a_package_whose_hash_is_not_the_pin
+FAILED scripts/checks/tests/test_observer.py::test_install_refuses_a_member_outside_its_directory[../escape.erl]
+FAILED scripts/checks/tests/test_observer.py::test_install_refuses_a_member_outside_its_directory[/absolute.erl]
+FAILED scripts/checks/tests/test_observer.py::test_a_cached_package_is_reused_only_while_its_hash_matches
+FAILED scripts/checks/tests/test_observer.py::test_every_action_refuses_kwok[observer]
+FAILED scripts/checks/tests/test_observer.py::test_every_action_refuses_kwok[observer-cli]
+FAILED scripts/checks/tests/test_observer.py::test_every_action_refuses_kwok[observer-cli-install]
+FAILED scripts/checks/tests/test_observer.py::test_every_action_refuses_kwok[remsh]
+FAILED scripts/checks/tests/test_observer.py::test_remsh_forwards_the_distribution_port_and_dials_the_port_kubectl_picked
+FAILED scripts/checks/tests/test_observer.py::test_observer_uses_the_erl_it_is_given_and_checks_it_for_wx
+FAILED scripts/checks/tests/test_observer.py::test_observer_without_an_erl_names_the_how_to
+FAILED scripts/checks/tests/test_observer.py::test_observer_cli_needs_the_install_first
+FAILED scripts/checks/tests/test_observer.py::test_ctrl_c_is_a_clean_stop
+FAILED scripts/checks/tests/test_observer.py::test_an_unknown_action_is_refused
+26 failed, 1 passed in 0.20s
+FAILED scripts/checks/tests/test_checker_suite.py::test_every_module_has_exactly_one_owner
+FAILED scripts/checks/tests/test_checker_suite.py::test_selection[paths6-regressions6-runtime6-clusters6]
+FAILED scripts/checks/tests/test_checker_suite.py::test_selection[paths7-regressions7-runtime7-clusters7]
+3 failed, 29 passed in 0.07s
+
+# After the code review: the revised test_observer.py against the pre-review observer.py (with only ATTACH added so it collects).
+FAILED scripts/checks/tests/test_observer.py::test_the_host_node_is_hidden_listens_nowhere_and_dials_the_forward
+FAILED scripts/checks/tests/test_observer.py::test_observer_opens_the_gui_on_knarr_and_halts_when_it_closes
+FAILED scripts/checks/tests/test_observer.py::test_observer_cli_loads_its_modules_onto_knarr_and_removes_them_after
+FAILED scripts/checks/tests/test_observer.py::test_an_ebin_path_is_a_literal_erlang_string_not_a_pattern
+FAILED scripts/checks/tests/test_observer.py::test_remsh_opens_a_shell_on_knarr
+FAILED scripts/checks/tests/test_observer.py::test_check_erl_refuses_another_major_or_a_gui_without_wx[-False-answered no OTP release]
+FAILED scripts/checks/tests/test_observer.py::test_check_erl_refuses_another_major_or_a_gui_without_wx[a banner\n-False-answered no OTP release]
+FAILED scripts/checks/tests/test_observer.py::test_check_erl_reads_the_probes_line_after_a_banner
+8 failed, 20 passed in 0.21s
+# test_ctrl_c_is_a_clean_stop[the forward's wait] raised KeyboardInterrupt out of main, which aborted the pytest session at that test:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Run alone, test_the_install_needs_no_cluster:
+E           ValueError: observer-cli-install requires kind; kwok pods do not run containers
+FAILED scripts/checks/tests/test_observer.py::test_the_install_needs_no_cluster

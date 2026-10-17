@@ -1,0 +1,6 @@
+# 2026-10-17 00:26 PDT, this worktree's kind cluster, deploy/observer
+$ just smoke
+ok /healthz
+ok /readyz
+ok /metrics
+exit 0

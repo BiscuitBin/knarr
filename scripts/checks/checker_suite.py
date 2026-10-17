@@ -72,16 +72,18 @@ GROUPS = {
         ),
     ),
     "cluster": (
-        "cluster_commands cluster_name fake_worker_cluster keda_e2e observability",
+        "cluster_commands cluster_name fake_worker_cluster keda_e2e observability observer",
         (
             "scripts/checks/cluster.py",
             "scripts/checks/keda_e2e.py",
             "scripts/checks/observability.py",
+            "scripts/checks/observer.py",
             "scripts/cluster-name.sh",
             "deploy/**",
             "fixtures/fake_worker/deploy/**",
             "fixtures/keda_e2e/**",
             "fixtures/observability/**",
+            "fixtures/observer/**",
             # The dashboard's queries are checked against these metric catalogues.
             "docs/specs/observability.allium",
             "src/knarr/metrics_ffi.erl",

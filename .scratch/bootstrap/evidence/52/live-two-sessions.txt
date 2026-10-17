@@ -1,0 +1,15 @@
+# 2026-10-17 00:37 PDT, this worktree's kind cluster, deploy/observer. Two sessions at once: just observer-cli (q after 15 s) in the background, and just remsh started 5 s in; stdin as shown, then EOF
+$ just remsh   # stdin: nodes(hidden). is_tuple(code:is_loaded(observer_cli)). then, after observer-cli quits: code:is_loaded(observer_cli). code:is_loaded(recon).
+Erlang/OTP 29 [erts-17.1] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Eshell V17.1 (press Ctrl+G to abort, type help(). for help)
+(knarr@127.0.0.1)1> ['observer-68715@127.0.0.1','observer-68939@127.0.0.1']
+(knarr@127.0.0.1)2> true
+(knarr@127.0.0.1)3> false
+(knarr@127.0.0.1)4> false
+(knarr@127.0.0.1)5> *** Shell process terminated! Read EOF ***
+remsh exit 0
+$ tail -1 of the background just observer-cli
+observer-cli exit 0
+$ kubectl get pods (restart count)
+knarr-5c7575c685-v6hcf Running restarts=0

@@ -1,0 +1,57 @@
+$ docker run --rm --entrypoint cat knarr:using-erlangs-built-ino-a2fd8871 /opt/knarr/shipment/entrypoint.sh
+#!/bin/sh
+
+set -eu
+
+PACKAGE=knarr
+BASE=$(dirname "$0")
+COMMAND="${1-default}"
+
+run() {
+  exec erl \
+    -pa "$BASE"/*/ebin \
+    -eval "$PACKAGE@@main:run($PACKAGE)" \
+    -noshell \
+    -extra "$@"
+}
+
+shell() {
+  erl -pa "$BASE"/*/ebin
+}
+
+case "$COMMAND" in
+run)
+  shift
+  run "$@"
+  ;;
+
+shell)
+  shell
+  ;;
+
+*)
+  echo "usage:" >&2
+  echo "  entrypoint.sh \$COMMAND" >&2
+  echo "" >&2
+  echo "commands:" >&2
+  echo "  run    Run the project main function" >&2
+  echo "  shell  Run an Erlang shell" >&2
+  exit 1
+  ;;
+esac
+
+$ sed -n 20,31p Dockerfile
+FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55 AS runtime
+WORKDIR /opt/knarr
+COPY --from=build /opt/knarr/.pixi/envs/runtime /opt/knarr/.pixi/envs/runtime
+COPY --from=build /opt/knarr/build/erlang-shipment /opt/knarr/shipment
+COPY --from=build /opt/build-otp /opt/build-otp
+COPY --chmod=0755 scripts/container-entrypoint.sh /opt/knarr/container-entrypoint.sh
+ENV PATH="/opt/knarr/.pixi/envs/runtime/bin:${PATH}" \
+    ERL_CRASH_DUMP=/tmp/erl_crash.dump
+USER 10001:10001
+EXPOSE 8080
+ENTRYPOINT ["/opt/knarr/container-entrypoint.sh", "/opt/knarr/shipment/entrypoint.sh"]
+CMD ["run"]
+
+# gleam export erlang-shipment fails on this host (rebar3 is not on the default environment's PATH), so the entrypoint is read from the built image.

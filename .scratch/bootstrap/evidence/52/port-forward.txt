@@ -1,0 +1,17 @@
+# 2026-10-17 00:17 PDT, this worktree's kind cluster, image knarr:using-erlangs-built-ino-a2fd8871, just deploy <image> observer
+$ kubectl port-forward --address=127.0.0.1 deployment/knarr :4370
+Forwarding from 127.0.0.1:59391 -> 4370
+$ pgrep -l epmd
+(none)
+$ erl -noshell -name observer@127.0.0.1 -hidden -start_epmd false -dist_listen false -erl_epmd_port 59391 -setcookie knarr-dev-only -eval <...>
+ping pong
+otp "29"
+observer_backend "/opt/knarr/.pixi/envs/runtime/lib/erlang/lib/runtime_tools-2.5/ebin/observer_backend.beam"
+applications [knarr,prometheus,ddskerl,mist,hpack,gramps,gleam_crypto,glisten,
+              ssl,public_key,asn1,crypto,logging,exception,inets,gleam_otp,
+              gleam_json,gleam_http,gleam_erlang,gleam_stdlib,stdlib,kernel]
+processes 120
+$ pgrep -l epmd
+(none)
+$ kubectl get pods -l app.kubernetes.io/name=knarr   # restart count
+knarr-76fcfcfd5-59brb restarts=0

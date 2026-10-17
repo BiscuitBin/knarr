@@ -1,0 +1,25 @@
+# Local two-node spike, 2026-10-17 00:16 PDT, Darwin arm64, .pixi/envs/default OTP 29
+# No cluster: both nodes on loopback, the 'pod' node with the overlay's flags.
+$ pgrep -l epmd   # before
+(none)
+$ erl -noshell -name knarr@127.0.0.1 -setcookie knarr-dev-only -start_epmd false -erl_epmd_port 4370 -kernel inet_dist_listen_min 4370 inet_dist_listen_max 4370 inet_dist_use_interface {127,0,0,1} -eval 'timer:sleep(30000), halt().' &
+$ lsof -nP -iTCP:4370 -sTCP:LISTEN
+COMMAND NODE NAME 
+beam.smp TCP 127.0.0.1:4370 (LISTEN)
+$ erl -noshell -name observer@127.0.0.1 -hidden -start_epmd false -dist_listen false -erl_epmd_port 4370 -setcookie knarr-dev-only -eval <ping, nodes(hidden), which observer_backend on target>
+ping pong
+nodes(hidden) ['knarr@127.0.0.1']
+target observer_backend "<checkout>/.pixi/envs/default/lib/erlang/lib/runtime_tools-2.5/ebin/observer_backend.beam"
+$ erl -noshell <host flags with -setcookie wrong> -eval <ping>
+ping pang
+$ erl -name observer@127.0.0.1 -hidden -start_epmd false -dist_listen false -erl_epmd_port 4370 -setcookie knarr-dev-only -remsh knarr@127.0.0.1   # stdin: node().
+Erlang/OTP 29 [erts-17.1] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Eshell V17.1 (press Ctrl+G to abort, type help(). for help)
+(knarr@127.0.0.1)1> 'knarr@127.0.0.1'
+(knarr@127.0.0.1)2> *** Shell process terminated! Read EOF ***
+
+$ pgrep -l epmd   # after: no epmd was started
+(none)
+$ erl -noshell -eval <observer exports named start_and_wait>
+[{start_and_wait,0},{start_and_wait,1}]

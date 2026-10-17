@@ -28,6 +28,7 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 - [Decisions](decisions/README.md): accepted architectural and tooling choices.
 - [Run the walking skeleton locally](how-to/local-cluster.md): build, deploy and check the local skeleton.
 - [See the local cluster's metrics in Grafana](how-to/local-observability.md): an opt-in Prometheus and Grafana on the kind cluster, with an example dashboard.
+- [Inspect knarr on the local cluster with Observer](how-to/local-observer.md): the GUI Observer, observer_cli or a remote shell on knarr, through the dev-only `observer` variant on kind.
 - [Decision 0010: Prometheus metrics](decisions/0010-metrics.md): the skeleton's metrics choice.
 - [Decision 0012: Release and packaging](decisions/0012-release-and-packaging.md): how a release is versioned, published and installed.
 - [Decision 0013: In-cluster Kubernetes client](decisions/0013-in-cluster-client.md): verified TLS, token reload and the Role's verbs.

@@ -41,7 +41,7 @@ Tracked bootstrap tickets and evidence belong in `.scratch/bootstrap/`. Temporar
 
 [AGENTS.md](AGENTS.md#invariants) requires explicit authorization for each action that leaves the worktree. Approval for one action does not authorize the next. In particular, obtain authorization before:
 
-- Network access, including `git fetch`, `git pull`, `just initialize`, `gleam deps download`, `just links-audit`, `just hex-audit`, `just image-scan`, `just runtime-scan`, `just audit-install`, `just observability-up` and image or tool downloads.
+- Network access, including `git fetch`, `git pull`, `just initialize`, `gleam deps download`, `just links-audit`, `just hex-audit`, `just image-scan`, `just runtime-scan`, `just audit-install`, `just observability-up`, `just observer-cli-install` and image or tool downloads.
 - Pushing a branch or tag, or running any `gh` command, including reads.
 - Registry operations or operations against a non-local cluster.
 - Opening, updating or merging a pull request, or changing repository settings.

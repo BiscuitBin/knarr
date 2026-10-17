@@ -1,0 +1,9 @@
+# 2026-10-17 00:29 PDT, local two-node, flags as in dist-spike.txt; the 'pod' node would halt by itself after 30 s
+$ erl -noshell <pod flags> -eval 'timer:sleep(30000), halt().' &
+$ erl <host flags> -remsh knarr@127.0.0.1   # stdin: q().
+Eshell V17.1 (press Ctrl+G to abort, type help(). for help)
+(knarr@127.0.0.1)1> *** ERROR: Shell process terminated! (^G to start new job) ***
+$ pgrep -f 'name knarr@127.0.0.1'   # 5 s after q(), 10 s into the pod node's 30
+(none: q() stopped the remote node)
+$ pgrep -f 'remsh knarr@127.0.0.1'
+(the local remsh node is still running, its shell gone; killed by hand)

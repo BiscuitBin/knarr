@@ -1,0 +1,13 @@
+# The observer variant of the base (ticket 52), for this worktree's kind cluster
+# only: `just observer`, `just observer-cli` and `just remsh` attach to it. It
+# turns Erlang distribution on, bound to the pod's loopback on one port with no
+# epmd, so it is reachable only through a `kubectl port-forward`. The cookie is
+# a literal because it is dev-only: whoever holds a cookie can run any code on
+# the node, so distribution never enters deploy/base, deploy/release, the image
+# or a chart (Decision 0012). ERL_ZFLAGS leaves the base's ERL_FLAGS whole.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+patches:
+  - path: patch.json

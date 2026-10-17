@@ -150,6 +150,14 @@
         "docker.io/grafana/grafana"
       ],
       "enabled": false
+    },
+    {
+      "description": "observer_cli and recon move only by hand: fixtures/observer/packages.json pins their hex tarballs by sha256, and observer_cli names the recon it needs, so both move together. Neither is in gleam.toml, no manager reads that file today, and no bot can rehash a tarball, so this keeps any later one off it (ticket 52).",
+      "matchPackageNames": [
+        "observer_cli",
+        "recon"
+      ],
+      "enabled": false
     }
   ],
   "customManagers": [

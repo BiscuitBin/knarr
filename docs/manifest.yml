@@ -362,6 +362,20 @@
       "requires": []
     },
     {
+      "path": "how-to/local-observer.md",
+      "title": "Inspect knarr on the local cluster with Observer",
+      "kind": "how-to",
+      "audience": [
+        "contributor",
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "local_observer"
+      ],
+      "requires": []
+    },
+    {
       "path": "decisions/0011-coverage.md",
       "title": "Decision 0011: Report-only source coverage",
       "kind": "decision",
