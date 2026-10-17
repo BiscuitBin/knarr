@@ -6,10 +6,12 @@ import contextlib
 import json
 import os
 import re
+import secrets
 import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -37,6 +39,7 @@ KIND_ONLY = {
     "fake-worker-deploy",
     "fake-worker-smoke",
     "keda-e2e",
+    "voyager-forward",
 }
 # What the smoke sets on four workers through control, and what each one's status
 # endpoint must then answer, byte for byte (worker_contract.allium). Every body
@@ -54,6 +57,14 @@ ANSWER_SECONDS = 15
 WORKER_SECONDS = 120
 # Loopback only: a proxy in the environment never sees the smoke's requests.
 LOOPBACK = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+# The voyager variant (ticket 51): Voyager finds the node through epmd and
+# dials its distribution port, so both are fixed, on host and pod loopback.
+# The node's host part is the literal address Voyager parses and dials.
+VOYAGER_PORTS = (4369, 9100)
+VOYAGER_NODE = "knarr@127.0.0.1"
+ERL_CALL = ROOT / ".pixi/envs/default/lib/erlang/bin/erl_call"
+# How long the node probe retries; a fresh pod takes a moment to register.
+PROBE_SECONDS = 30
 
 
 def run(*args, **kwargs):
@@ -132,6 +143,140 @@ def port_forward(state, target, port):
             if local is None:
                 raise RuntimeError(f"port-forward to {target} failed; see {log_path}")
             yield local
+        finally:
+            forward.terminate()
+            try:
+                forward.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                forward.kill()
+                forward.wait()
+
+
+def voyager_cookie(state):
+    """This worktree's distribution cookie, created once, readable only by its
+    owner. Hex, so it never begins with "-" and reads as another erl flag. It
+    is written whole to a private file and then linked into place, so a
+    concurrent or interrupted caller never sees a partial cookie, and a cookie
+    another caller published first is kept."""
+    path = state / "voyager-cookie"
+    if not path.is_symlink() and not path.exists():
+        descriptor, temporary = tempfile.mkstemp(dir=state, prefix=".voyager-cookie-")
+        try:
+            with os.fdopen(descriptor, "w") as cookie:
+                cookie.write(secrets.token_hex(32))
+            with contextlib.suppress(FileExistsError):
+                os.link(temporary, path)
+        finally:
+            Path(temporary).unlink()
+    if path.is_symlink() or not path.is_file() or path.stat().st_mode & 0o077:
+        raise ValueError(f"{path} must be a regular file only its owner can read; remove it")
+    cookie = path.read_text().strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", cookie):
+        raise ValueError(f"{path} does not hold a 64-digit hex cookie; remove it")
+    return cookie
+
+
+def taken_ports(ports):
+    """The loopback ports in `ports` something on this host already listens on.
+    It connects rather than binds: on macOS a bind fails while the last
+    forward's connections sit in TIME_WAIT, though kubectl's own bind, with
+    SO_REUSEADDR, succeeds."""
+    taken = []
+    for port in ports:
+        with socket.socket() as sock:
+            sock.settimeout(1)
+            if sock.connect_ex(("127.0.0.1", port)) == 0:
+                taken.append(port)
+    return taken
+
+
+def probe_node(cookie, forward):
+    """Ask the node its name through the forward until it answers, for up to
+    PROBE_SECONDS: a fresh pod takes a moment to register with its epmd. Each
+    erl_call is bounded too, so a stalled handshake cannot hang the caller."""
+    wanted = f"'{VOYAGER_NODE}'"
+    probe = [str(ERL_CALL), "-name", VOYAGER_NODE, "-c", cookie, "-a", "erlang node"]
+    deadline = time.monotonic() + PROBE_SECONDS
+    answered = ""
+    while forward.poll() is None and (remaining := deadline - time.monotonic()) > 0:
+        try:
+            result = subprocess.run(
+                probe, check=False, capture_output=True, text=True, timeout=remaining
+            )
+        except subprocess.TimeoutExpired:
+            answered = f"no answer in {PROBE_SECONDS}s"
+            break
+        answered = (result.stdout + result.stderr).strip()
+        if result.stdout.strip() == wanted:
+            return wanted
+        time.sleep(1)
+    raise RuntimeError(f"{VOYAGER_NODE} did not answer erl_call: {answered}")
+
+
+def voyager_forward(state):
+    """Forward the fixed epmd and distribution ports to the voyager variant,
+    prove the node answers, print what Voyager's Connect form needs, and hold
+    the forward until Ctrl-C. Under strategy Recreate, a rollout that replaces
+    the pod ends the forward at its next connection; run this again after one."""
+    if not (state / "voyager-cookie").is_file():
+        raise ValueError("no voyager cookie; run just voyager-deploy first")
+    cookie = voyager_cookie(state)
+    deployment = json.loads(output("kubectl", "get", "deployment", "knarr", "-o", "json"))
+    container = next(
+        item
+        for item in deployment["spec"]["template"]["spec"]["containers"]
+        if item["name"] == "knarr"
+    )
+    env = {item["name"]: item for item in container.get("env", [])}
+    if f"-name {VOYAGER_NODE}" not in env.get("ERL_FLAGS", {}).get("value", "") or (
+        "ERL_ZFLAGS" not in env
+    ):
+        raise ValueError("knarr runs without distribution; run just voyager-deploy first")
+    taken = taken_ports(VOYAGER_PORTS)
+    if taken:
+        held = ", ".join(f"127.0.0.1:{port}" for port in taken)
+        raise ValueError(
+            f"something already listens on {held}; on 4369 it is usually a local"
+            " epmd, left by erl -sname or -name: stop it with epmd -kill"
+        )
+    log_path = state / "port-forward-voyager.log"
+    with log_path.open("w+") as log:
+        forward = subprocess.Popen(
+            [
+                "kubectl",
+                "port-forward",
+                "--address=127.0.0.1",
+                "deployment/knarr",
+                *(f"{port}:{port}" for port in VOYAGER_PORTS),
+            ],
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 30
+            forwarding = False
+            while not forwarding and time.monotonic() < deadline and forward.poll() is None:
+                log.seek(0)
+                text = log.read()
+                forwarding = all(
+                    f"Forwarding from 127.0.0.1:{port} -> {port}" in text for port in VOYAGER_PORTS
+                )
+                if not forwarding:
+                    time.sleep(0.1)
+            if not forwarding:
+                raise RuntimeError(f"port-forward to deployment/knarr failed; see {log_path}")
+            answered = probe_node(cookie, forward)
+            print(f"ok erl_call: {answered}")
+            print(f"node:      {VOYAGER_NODE}")
+            print("name type: long")
+            print(f"cookie:    {cookie}")
+            held = " and ".join(f"127.0.0.1:{port}" for port in VOYAGER_PORTS)
+            print(f"Forwarding {held}; Ctrl-C to stop.", flush=True)
+            code = forward.wait()
+            raise RuntimeError(f"port-forward ended ({code}); see {log_path}")
+        except KeyboardInterrupt:
+            return
         finally:
             forward.terminate()
             try:
@@ -317,8 +462,22 @@ def environment(action, checkout):
 
 
 def deploy(name, state, image, variant):
-    """Load knarr's image into kind and roll out the base or a deploy/ variant."""
+    """Load knarr's image into kind and roll out the base or a deploy/ variant.
+    The voyager variant reads its cookie from a Secret, applied first."""
     run("kind", "load", "docker-image", image, "--name", name)
+    if variant == "voyager":
+        secret = output(
+            "kubectl",
+            "create",
+            "secret",
+            "generic",
+            "knarr-voyager",
+            f"--from-literal=erl_zflags=-setcookie {voyager_cookie(state)}",
+            "--dry-run=client",
+            "-o",
+            "yaml",
+        )
+        run("kubectl", "apply", "-f", "-", input=secret)
     rendered = output("kustomize", "build", str(render(state, image, variant)))
     run("kubectl", "apply", "-f", "-", input=rendered)
     run("kubectl", "rollout", "status", "deployment/knarr", "--timeout=120s")
@@ -433,6 +592,8 @@ def main():
         smoke(state)
     elif action == "fake-worker-deploy":
         fake_worker_deploy(name, state, image)
+    elif action == "voyager-forward":
+        voyager_forward(state)
     elif action == "fake-worker-smoke":
         fake_worker_smoke(state)
     elif action == "diagnostics":
@@ -457,3 +618,5 @@ if __name__ == "__main__":
     except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as error:
         print(f"cluster: {error}", file=sys.stderr)
         sys.exit(1)
+    except KeyboardInterrupt:
+        sys.exit(130)

@@ -348,6 +348,20 @@
       "requires": []
     },
     {
+      "path": "how-to/voyager.md",
+      "title": "Inspect knarr with Voyager on the local cluster",
+      "kind": "how-to",
+      "audience": [
+        "contributor",
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "voyager_inspection"
+      ],
+      "requires": []
+    },
+    {
       "path": "decisions/0011-coverage.md",
       "title": "Decision 0011: Report-only source coverage",
       "kind": "decision",
