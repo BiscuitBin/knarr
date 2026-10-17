@@ -101,10 +101,8 @@ def environment(job: list[str]) -> str | None:
     )
 
 
-def guard_arms(text: str) -> list[tuple[str, str]]:
-    """The existence guard's `case $verdict in` arms, as (pattern, body)."""
-    lines = text.splitlines()
-    start = next(i for i, line in enumerate(lines) if line.strip() == "case $verdict in")
+def arms_after(lines: list[str], start: int) -> list[tuple[str, str]]:
+    """The arms of the `case $verdict in` at lines[start], as (pattern, body)."""
     arms: list[tuple[str, str]] = []
     for line in lines[start + 1 :]:
         if line.strip() == "esac":
@@ -113,6 +111,22 @@ def guard_arms(text: str) -> list[tuple[str, str]]:
         arms.append((pattern, body))
     msg = "no esac after case $verdict in"
     raise ValueError(msg)
+
+
+def guards(text: str) -> list[list[tuple[str, str]]]:
+    """Every existence guard's `case $verdict in` arms, in order."""
+    lines = text.splitlines()
+    return [
+        arms_after(lines, i) for i, line in enumerate(lines) if line.strip() == "case $verdict in"
+    ]
+
+
+def guard_arms(text: str) -> list[tuple[str, str]]:
+    """The first existence guard's arms, as (pattern, body)."""
+    lines = text.splitlines()
+    return arms_after(
+        lines, next(i for i, line in enumerate(lines) if line.strip() == "case $verdict in")
+    )
 
 
 def proceeds_only_on_absent(arms: list[tuple[str, str]]) -> bool:
@@ -223,42 +237,87 @@ def test_the_guard_rule_refuses_any_other_way_through(arms: str) -> None:
     assert not proceeds_only_on_absent(guard_arms(case))
 
 
+def push_target(line: str) -> str | None:
+    """The repository variable a push line's guard must probe: the image's buildx
+    `--push` probes "$repo", a `helm push` of the chart probes "$chart_repo"."""
+    if "--push" in line:
+        return '"$repo"'
+    if re.search(r"\bhelm push\b", line):
+        return '"$chart_repo"'
+    return None
+
+
 def probes_before_it_pushes(lines: list[str]) -> bool:
-    """The existence guard probes $VERSION and reads the verdict before the one push."""
+    """Every push has its own guard: a probe of its own repository at $VERSION, then
+    `case $verdict in`, then the push, and the next guard only after it. So an earlier
+    guard that refuses stops the job before any later push."""
     steps = [line.strip() for line in lines]
-    probe = [
-        i
-        for i, line in enumerate(steps)
-        if line.startswith('probe_tag https://ghcr.io "$repo" "$VERSION" ')
+    events = [
+        line
+        for line in steps
+        if line.startswith("probe_tag ") or line == "case $verdict in" or push_target(line)
     ]
-    guard = [i for i, line in enumerate(steps) if line == "case $verdict in"]
-    push = [i for i, line in enumerate(steps) if "--push" in line]
-    return len(probe) == len(guard) == len(push) == 1 and probe[0] < guard[0] < push[0]
+    if not events or len(events) % 3:
+        return False
+    for probe, guard, push in zip(events[::3], events[1::3], events[2::3], strict=True):
+        target = push_target(push)
+        if (
+            target is None
+            or guard != "case $verdict in"
+            or not probe.startswith(f'probe_tag https://ghcr.io {target} "$VERSION" ')
+        ):
+            return False
+    return True
+
+
+IMAGE_GUARD = [
+    'probe_tag https://ghcr.io "$repo" "$VERSION" -H x',
+    "case $verdict in",
+    "docker buildx build --push .",
+]
+CHART_GUARD = [
+    'probe_tag https://ghcr.io "$chart_repo" "$VERSION" -H x',
+    "case $verdict in",
+    'out=$(helm push "$package" oci://ghcr.io/steven-cutting/charts 2>&1)',
+]
 
 
 @pytest.mark.parametrize(
     "steps",
     [
-        [
-            "docker buildx build --push .",
-            'probe_tag https://ghcr.io "$repo" "$VERSION" -H x',
-            "case $verdict in",
-        ],
-        [
-            'probe_tag https://ghcr.io "$repo" 0.1.0 -H x',
-            "case $verdict in",
-            "docker buildx build --push .",
-        ],
-        [
-            "case $verdict in",
-            'probe_tag https://ghcr.io "$repo" "$VERSION" -H x',
-            "docker buildx build --push .",
-        ],
+        [IMAGE_GUARD[2], *IMAGE_GUARD[:2]],
+        ['probe_tag https://ghcr.io "$repo" 0.1.0 -H x', *IMAGE_GUARD[1:]],
+        [IMAGE_GUARD[1], IMAGE_GUARD[0], IMAGE_GUARD[2]],
+        [],
+        [*IMAGE_GUARD, CHART_GUARD[2]],
+        [*IMAGE_GUARD, CHART_GUARD[2], *CHART_GUARD[:2]],
+        [*IMAGE_GUARD, 'probe_tag https://ghcr.io "$repo" "$VERSION" -H x', *CHART_GUARD[1:]],
+        [*IMAGE_GUARD, CHART_GUARD[0], *CHART_GUARD[2:]],
+        [*IMAGE_GUARD[:2], CHART_GUARD[2], IMAGE_GUARD[2], *CHART_GUARD[:2]],
+        [*CHART_GUARD[:2], IMAGE_GUARD[2]],
     ],
-    ids=["push first", "a fixed tag", "verdict before the probe"],
+    ids=[
+        "push first",
+        "a fixed tag",
+        "verdict before the probe",
+        "no push at all",
+        "a chart push with no probe",
+        "a chart push before its guard",
+        "a chart guard that probes the image",
+        "a chart push with no verdict",
+        "a chart push before the image is pushed",
+        "an image guard that probes the chart",
+    ],
 )
 def test_the_order_rule_refuses_a_guard_that_does_not_guard(steps: list[str]) -> None:
     assert not probes_before_it_pushes(steps)
+
+
+@pytest.mark.parametrize(
+    "steps", [IMAGE_GUARD, [*IMAGE_GUARD, *CHART_GUARD]], ids=["the image", "the image and chart"]
+)
+def test_the_order_rule_accepts_each_push_behind_its_own_guard(steps: list[str]) -> None:
+    assert probes_before_it_pushes(steps)
 
 
 def test_release_probes_the_version_before_it_pushes() -> None:
@@ -266,9 +325,84 @@ def test_release_probes_the_version_before_it_pushes() -> None:
 
 
 def test_release_pushes_only_when_the_tag_is_absent() -> None:
-    arms = guard_arms(RELEASE.read_text())
-    assert [pattern for pattern, _ in arms] == ["absent", "present", "*"]
-    assert proceeds_only_on_absent(arms)
+    for arms in guards(RELEASE.read_text()):
+        assert [pattern for pattern, _ in arms] == ["absent", "present", "*"]
+        assert proceeds_only_on_absent(arms)
+
+
+def test_release_pushes_the_image_and_then_the_chart() -> None:
+    publish = [line.strip() for line in jobs(RELEASE.read_text())["publish"]]
+    targets = [target for line in publish if (target := push_target(line))]
+    assert targets == ['"$repo"', '"$chart_repo"']
+    assert len(guards(RELEASE.read_text())) == 2
+
+
+def stops_at_the_image_guard(lines: list[str]) -> bool:
+    """A rerun of a run that pushed the image and not the chart meets `present` at the
+    image's guard, whose present arm exits 1, before any chart push; and no step of
+    the job runs on after a failure (no `continue-on-error`, no `if:` at all)."""
+    steps = [line.strip() for line in lines]
+    if not probes_before_it_pushes(steps):
+        return False
+    if any(re.match(r"(- )?(continue-on-error|if):", line) for line in steps):
+        return False
+    probe = next(
+        i for i, line in enumerate(steps) if line.startswith('probe_tag https://ghcr.io "$repo" ')
+    )
+    image_guard = steps.index("case $verdict in", probe)
+    arms = arms_after(steps, image_guard)
+    charts = [i for i, line in enumerate(steps) if push_target(line) == '"$chart_repo"']
+    return (
+        bool(charts)
+        and image_guard < charts[0]
+        and re.search(r"\bexit 1\b", dict(arms).get("present", "")) is not None
+    )
+
+
+IMAGE_ARMS = ["absent) echo pushing ;;", "present) exit 1 ;;", "*) exit 1 ;;", "esac"]
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        [
+            *IMAGE_GUARD[:2],
+            "absent) echo pushing ;;",
+            "present) echo published ;;",
+            "*) exit 1 ;;",
+            "esac",
+            IMAGE_GUARD[2],
+            *CHART_GUARD,
+        ],
+        ["continue-on-error: true", *IMAGE_GUARD[:2], *IMAGE_ARMS, IMAGE_GUARD[2], *CHART_GUARD],
+        [*IMAGE_GUARD[:2], *IMAGE_ARMS, IMAGE_GUARD[2], "- if: always()", *CHART_GUARD],
+        [*CHART_GUARD, *IMAGE_GUARD[:2], *IMAGE_ARMS, IMAGE_GUARD[2]],
+    ],
+    ids=[
+        "present does not stop",
+        "the guard's failure is ignored",
+        "the chart runs after a failure",
+        "the chart first",
+    ],
+)
+def test_the_rerun_rule_refuses_a_job_that_would_push_the_chart(steps: list[str]) -> None:
+    assert not stops_at_the_image_guard(steps)
+
+
+def test_a_rerun_after_a_partial_publish_stops_at_the_image_guard() -> None:
+    # Decision 0015: the image present and the chart absent is recovered by a
+    # version bump, never by a chart-only push of an existing version.
+    assert stops_at_the_image_guard(
+        [
+            *IMAGE_GUARD[:2],
+            *IMAGE_ARMS,
+            IMAGE_GUARD[2],
+            *CHART_GUARD[:2],
+            *IMAGE_ARMS,
+            CHART_GUARD[2],
+        ]
+    )
+    assert stops_at_the_image_guard(jobs(RELEASE.read_text())["publish"])
 
 
 def test_verify_hands_publish_the_commit_it_checked() -> None:
@@ -294,10 +428,10 @@ MOVED_TAG_GUARD = [
 
 def refuses_a_moved_tag_before_it_pushes(lines: list[str]) -> bool:
     """The tag, fetched again, and HEAD are both compared with verify's commit, and a
-    difference stops the job, before the one push."""
+    difference stops the job, before the first push."""
     steps = [line.strip() for line in lines]
-    push = [i for i, line in enumerate(steps) if "--push" in line]
-    if len(push) != 1 or not all(line in steps for line in MOVED_TAG_GUARD):
+    push = [i for i, line in enumerate(steps) if push_target(line)]
+    if not push or not all(line in steps for line in MOVED_TAG_GUARD):
         return False
     at = [steps.index(line) for line in MOVED_TAG_GUARD]
     stops = at[-1] + 1 < len(steps) and re.search(r"\bexit 1\b", steps[at[-1] + 1])

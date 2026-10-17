@@ -1,0 +1,28 @@
+date: 2026-10-17T07:27Z
+helm v4.3.0+conda-forge, docker 29.4.0, github.com/docker/buildx v0.33.0
+gleam.toml version: 0.1.0; charts/knarr/Chart.yaml: version: 0.1.0 appVersion: "0.1.0"
+registry:2 sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373 on http://127.0.0.1:32782 (loopback only)
+-- 1. a stand-in image, pushed as release.yml pushes it
+image digest (--metadata-file): sha256:f7612c4569b075e1e60704b080ead3e5cd84ea28f80cdcbaa4a35c7abf5a2484
+the registry serves knarr:0.1.0 at that digest
+-- 2. stamp and package
+a tag of v9.9.9 against this chart: exit 1: stamp-chart: Chart.yaml version is '0.1.0', not the release's 9.9.9
+packaged knarr-0.1.0.tgz, sha256 2be9948d2e3b84fda54ec20be78b2529bb992bb2ea8bb02f9aa93f4433d24df6
+stamped values: repository: ghcr.io/steven-cutting/knarr tag: "0.1.0" digest: sha256:f7612c4569b075e1e60704b080ead3e5cd84ea28f80cdcbaa4a35c7abf5a2484 pullPolicy: IfNotPresent
+annotation: image: ghcr.io/steven-cutting/knarr@sha256:f7612c4569b075e1e60704b080ead3e5cd84ea28f80cdcbaa4a35c7abf5a2484
+-- 3. the chart guard before the push
+HEAD charts/knarr:0.1.0: absent (exit 0, http 404): the workflow would push
+-- 4. helm push
+  Pushed: 127.0.0.1:32782/charts/knarr:0.1.0
+  Digest: sha256:833a2462481a5df8d19824a5b27410417c1ceb5b57fff451702ea8e354a1c8a6
+chart digest (digest_of_inspect on that output): sha256:833a2462481a5df8d19824a5b27410417c1ceb5b57fff451702ea8e354a1c8a6
+-- 5. the chart guard after the push
+HEAD charts/knarr:0.1.0: present (exit 1, http 200): a rerun would refuse
+Docker-Content-Digest: sha256:833a2462481a5df8d19824a5b27410417c1ceb5b57fff451702ea8e354a1c8a6
+config and layer media types: application/vnd.cncf.helm.config.v1+json application/vnd.cncf.helm.chart.content.v1.tar+gzip
+-- 6. pull by digest and template
+pulled knarr@sha256-833a2462481a5df8d19824a5b27410417c1ceb5b57fff451702ea8e354a1c8a6.tgz by digest, sha256 2be9948d2e3b84fda54ec20be78b2529bb992bb2ea8bb02f9aa93f4433d24df6
+  image: ghcr.io/steven-cutting/knarr@sha256:f7612c4569b075e1e60704b080ead3e5cd84ea28f80cdcbaa4a35c7abf5a2484
+  imagePullPolicy: IfNotPresent
+the rendered image is ghcr.io/steven-cutting/knarr@sha256:f7612c4569b075e1e60704b080ead3e5cd84ea28f80cdcbaa4a35c7abf5a2484, the stand-in's digest, with IfNotPresent
+chart=oci://127.0.0.1:32782/charts/knarr@sha256:833a2462481a5df8d19824a5b27410417c1ceb5b57fff451702ea8e354a1c8a6

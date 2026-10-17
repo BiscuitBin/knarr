@@ -100,7 +100,8 @@ GROUPS = {
     ),
     "release": (
         "release_lib release_pin",
-        ("scripts/release/**", "deploy/release/**", ".github/workflows/release.yml"),
+        # stamp-chart_test.sh stamps and packages the tracked chart.
+        ("scripts/release/**", "deploy/release/**", ".github/workflows/release.yml", "charts/**"),
     ),
     "audit": (
         "hex_audit runtime_scan ripsecrets_redacted",

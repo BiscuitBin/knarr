@@ -11,8 +11,13 @@
 # request that bumps gleam.toml and CHANGELOG.md, tags the merge commit
 # vX.Y.Z and pushes the tag. This workflow verifies the tag, waits for the
 # maintainer's approval through the release environment, and pushes the image
-# tags X.Y.Z, X.Y and sha-<7> (and X for a major above 0; never latest). It
-# refuses to push over a tag that exists, so a release is published once.
+# tags X.Y.Z, X.Y and sha-<7> (and X for a major above 0; never latest), then
+# the chart ghcr.io/steven-cutting/charts/knarr:X.Y.Z with that push's digest
+# stamped into it (Decision 0015; scripts/release/stamp-chart.sh, tested by
+# stamp-chart_test.sh beside it). It refuses to push over an image tag or a
+# chart version that exists, so a release is published once. Helm chart ticket
+# 04 added the chart's publish steps and dry-ran them against a throwaway
+# registry (.scratch/helm-chart/evidence/04/).
 name: Release
 
 on:
@@ -37,6 +42,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/steven-cutting/knarr
+  CHART: ghcr.io/steven-cutting/charts/knarr
 
 jobs:
   verify:
@@ -118,22 +124,41 @@ jobs:
           if [ "$tagged" != "$COMMIT" ] || [ "$head" != "$COMMIT" ]; then
             echo "::error::tag $TAG names $tagged and the checkout is $head, not $COMMIT, the commit verify checked: not building"; exit 1
           fi
+      # helm, for the chart after the image push. Installed before anything is
+      # pushed, so a failure here leaves nothing published.
+      - uses: ./.github/actions/setup
+      # The chart is stamped again after the image push with the real digest;
+      # this first stamp, with a placeholder digest, refuses a chart that
+      # disagrees with the tag or does not package before the image is pushed.
+      - name: Check the chart packages for this version
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          placeholder=sha256:0000000000000000000000000000000000000000000000000000000000000000
+          sh scripts/release/stamp-chart.sh charts/knarr "$VERSION" "$IMAGE" "$placeholder" "$RUNNER_TEMP/chart-check"
       - name: Log in to ghcr.io
         env:
           ACTOR: ${{ github.actor }}
           TOKEN: ${{ github.token }}
         run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
-      # A re-run of a run that failed after its push meets `present` here and
-      # stops, as Decision 0012 decides: the release is published and only its
-      # digest is missing. Recover it by hand:
+      # A re-run of a run that failed after the image push meets `present` here
+      # and stops, before the chart is stamped or pushed: a release is published
+      # once (Decisions 0012 and 0015). Which push the failed run reached
+      # decides the recovery; helm show chart oci://ghcr.io/steven-cutting/charts/knarr --version X.Y.Z
+      # tells whether the chart exists.
+      # - The image and the chart were both pushed, and only the summary is
+      #   missing. Recover the digest by hand:
       #   1. Read the digest from the Digest: line of
       #      docker buildx imagetools inspect ghcr.io/steven-cutting/knarr:X.Y.Z
       #      (digest_of_inspect in lib.sh parses it).
       #   2. Pull ghcr.io/steven-cutting/knarr@<digest>.
       #   3. Check that the tagged commit is what
       #      docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' ghcr.io/steven-cutting/knarr@<digest>
-      #      prints.
+      #      prints, and that helm show values of the chart names that digest.
       #   4. Run just release-pin <digest>.
+      # - The image was pushed and the chart was not. Bump the version and
+      #   release again, as Decision 0015 decides; never push a chart by hand
+      #   for a version whose run failed. X.Y.Z stays an image with no chart.
       - name: Refuse to push over an existing tag
         env:
           ACTOR: ${{ github.actor }}
@@ -192,3 +217,57 @@ jobs:
       #       subject-digest: ${{ env.DIGEST }}
       #       push-to-registry: true
       # and verifies with: gh attestation verify oci://ghcr.io/steven-cutting/knarr@<digest> --repo steven-cutting/knarr
+      # When 38 pins the index digest, DIGEST is that digest, so the chart below
+      # stamps it in the same step (helm chart ticket 04).
+      # Decision 0015: the chart's version and appVersion are the release's,
+      # and the copy that is packaged carries the published repository,
+      # IfNotPresent and the digest just pushed. The tracked chart is not
+      # changed. stamp-chart.sh fails if Chart.yaml disagrees with the tag.
+      - name: Stamp and package the chart
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          package=$(sh scripts/release/stamp-chart.sh charts/knarr "$VERSION" "$IMAGE" "$DIGEST" "$RUNNER_TEMP/chart")
+          echo "PACKAGE=$package" >> "$GITHUB_ENV"
+          echo "packaged $package with $IMAGE@$DIGEST"
+      # The chart's own existence guard, the image's with the chart's
+      # repository: only absent pushes.
+      - name: Refuse to push over an existing chart version
+        env:
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          # shellcheck source=/dev/null
+          . scripts/release/lib.sh
+          chart_repo=${CHART#ghcr.io/}
+          bearer=$(curl -sSf -u "$ACTOR:$TOKEN" "https://ghcr.io/token?scope=repository:$chart_repo:pull,push&service=ghcr.io" |
+            perl -ne 'print $1 if /"token":"([^"]+)"/')
+          probe_tag https://ghcr.io "$chart_repo" "$VERSION" -H "Authorization: Bearer $bearer"
+          case $verdict in
+            absent) echo "$CHART:$VERSION is absent (http $code): pushing" ;;
+            present) echo "::error::$CHART:$VERSION exists (http $code): a release is published once; bump the version"; exit 1 ;;
+            *) echo "::error::cannot tell whether $CHART:$VERSION exists (http $code, curl $curl_rc): not pushing"; exit 1 ;;
+          esac
+      - name: Push the chart
+        env:
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          # shellcheck source=/dev/null
+          . scripts/release/lib.sh
+          printf '%s' "$TOKEN" | helm registry login ghcr.io -u "$ACTOR" --password-stdin
+          out=$(helm push "$PACKAGE" "oci://${CHART%/*}" 2>&1) || { printf '%s\n' "$out"; exit 1; }
+          printf '%s\n' "$out"
+          chart_digest=$(printf '%s\n' "$out" | digest_of_inspect) || {
+            echo "::error::the chart was pushed but its output has no Digest: line"; exit 1
+          }
+          {
+            echo "## Published $CHART"
+            echo
+            echo "Chart \`$CHART:$VERSION\` by digest: \`oci://$CHART@$chart_digest\`, with image \`$IMAGE@$DIGEST\` stamped in"
+            echo
+            echo "Install: \`helm install knarr oci://$CHART --version $VERSION --namespace <worker-namespace>\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "chart_digest=$chart_digest"

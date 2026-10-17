@@ -49,8 +49,8 @@ The maintainer settled these points on 2026-10-16: the chart is published to OCI
 **Status:** ready-for-agent
 
 - [x] **Authorization required:** the network, for the fetch. `.scratch/helm-chart/evidence/01/sources.txt` records every source above with its HTTP status, size and sha256, and the phrase each claim rests on, found or not found. It has the shape of ticket 28's [sources.txt](../../bootstrap/evidence/28/sources.txt), with a `sources.sh` beside it.
-- [ ] Optional. **Authorization required:** the network, for the `registry:2` image pull. A loopback `registry:2` dry run in `.scratch/helm-chart/evidence/01/` packages a scratch chart with a stamped digest, pushes it, pulls it by digest and templates it, and shows that the rendered image is the stamped reference.
-  Not done here: Decision 0015's Findings hand it to ticket 04's loopback dry run, where the real stamping script exists to run it.
+- [x] Optional. **Authorization required:** the network, for the `registry:2` image pull. A loopback `registry:2` dry run in `.scratch/helm-chart/evidence/01/` packages a scratch chart with a stamped digest, pushes it, pulls it by digest and templates it, and shows that the rendered image is the stamped reference.
+  Done by ticket 04's loopback dry run rather than here, as Decision 0015's Findings hand it on, because the real stamping script exists there: [registry.txt](../evidence/04/registry.txt), run on 2026-10-17 (UTC).
 - [x] Decision 0015 records each decision above with its evidence, and says plainly that 0012's reasoning was sound for its goal and that the goal has changed.
 - [x] 0012, DEFERRED §8, OVERVIEW §9.15 and its status-table row point to 0015. Nothing they say contradicts it.
 - [x] The record names the tickets that carry it out: 02 to 08 in this directory, and bootstrap ticket 38 for the index digest.

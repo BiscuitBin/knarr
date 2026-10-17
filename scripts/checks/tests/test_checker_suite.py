@@ -23,7 +23,7 @@ def test_every_module_has_exactly_one_owner():
             [],
             ["kind", "kwok"],
         ),
-        (["charts/knarr/templates/deployment.yaml"], ["chart"], [], []),
+        (["charts/knarr/templates/deployment.yaml"], ["chart", "release"], [], []),
     ],
 )
 def test_selection(paths, regressions, runtime, clusters):
@@ -106,6 +106,8 @@ def test_unowned_test_module_fails(tmp_path, monkeypatch, unowned):
         ("deploy/release/README.md", "release"),
         ("deploy/base/resources.json", "chart"),
         ("charts/knarr/values.schema.json", "chart"),
+        # stamp-chart_test.sh stamps and packages the tracked chart.
+        ("charts/knarr/values.yaml", "release"),
         ("src/knarr/application_ffi.erl", "chart"),
         ("scripts/checks/deployment.py", "chart"),
         ("deploy/base/resources.json", "cluster"),
