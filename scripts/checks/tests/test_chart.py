@@ -329,6 +329,44 @@ def test_a_non_default_namespace_holds_every_resource_and_the_subject():
     assert "subjects:\n- kind: ServiceAccount\n  name: knarr\n  namespace: other\n" in rendered
 
 
+def rendered_values(rendered, key):
+    """Each value of `key` in helm's own render, read as JSON: a quoted string
+    reads back as that string, a bare 123, true or null as a number, a boolean or
+    None."""
+    return [
+        json.loads(value)
+        for value in re.findall(rf"^\s*{re.escape(key)}: (.*)$", rendered, re.MULTILINE)
+    ]
+
+
+# Valid release names and namespaces, and a valid class name, that YAML reads as
+# a number, a boolean (YAML 1.1's yes) or null unless the template quotes them.
+UNTYPED = ["123", "true", "yes", "null"]
+
+
+@pytest.mark.parametrize("name", UNTYPED)
+def test_a_release_name_yaml_would_retype_stays_a_string_label(name):
+    rendered = chart.render(release=name)
+    chart.validate(rendered)
+    # Four resources' metadata and the pod template, after its fromYaml round trip.
+    assert rendered_values(rendered, "app.kubernetes.io/instance") == [name] * 5
+
+
+@pytest.mark.parametrize("name", UNTYPED)
+def test_a_namespace_yaml_would_retype_stays_a_string(name):
+    rendered = chart.render(namespace=name)
+    chart.validate(rendered)
+    # Each resource's metadata and the RoleBinding's subject.
+    assert rendered_values(rendered, "namespace") == [name] * 5
+
+
+@pytest.mark.parametrize("name", UNTYPED)
+def test_a_priority_class_name_yaml_would_retype_stays_a_string(name):
+    rendered = chart.render("--set-string", f"priorityClassName={name}")
+    chart.validate(rendered)
+    assert rendered_values(rendered, "priorityClassName") == [name]
+
+
 def test_the_labels_are_helms_recommended_set(default):
     assert (
         "metadata:\n  labels:\n    app.kubernetes.io/instance: knarr\n"

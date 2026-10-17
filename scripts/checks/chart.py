@@ -37,11 +37,12 @@ def values_files():
     return sorted((CHART / "ci").glob("*.yaml"))
 
 
-def render(*arguments, namespace="default"):
-    """`helm template` of the chart as release knarr; raises CalledProcessError
-    with helm's stderr, for instance when the values fail the schema."""
+def render(*arguments, namespace="default", release=RELEASE):
+    """`helm template` of the chart, as release knarr unless told otherwise;
+    raises CalledProcessError with helm's stderr, for instance when the values
+    fail the schema."""
     return subprocess.run(
-        ["helm", "template", RELEASE, str(CHART), "--namespace", namespace, *arguments],
+        ["helm", "template", release, str(CHART), "--namespace", namespace, *arguments],
         capture_output=True,
         text=True,
         check=True,
