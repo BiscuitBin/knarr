@@ -9,10 +9,13 @@ the dashboard queries only metrics something actually exports.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import io
 import json
 import re
+import urllib.parse
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Self
 
@@ -430,6 +433,62 @@ def test_up_applies_nothing_when_the_build_names_an_unpinned_image(
     with pytest.raises(ValueError, match="not pinned"):
         observability.up(tmp_path)
     assert commands == []
+
+
+UP = '{"status":"success","data":{"result":[{"value":[1,"1"]}]}}'
+
+
+def fake_smoke(monkeypatch: pytest.MonkeyPatch, answers: dict[str, str]) -> list[str]:
+    """Run smoke() with no wait, each forward on a port named for its target,
+    and each GET answered 200 with the first body whose path prefix it starts
+    with, or 404. Returns the paths asked, in order."""
+    asked: list[str] = []
+    ports = {"deployment/prometheus-server": 9090, "deployment/grafana": 3000}
+
+    @contextlib.contextmanager
+    def port_forward(_state: Path, target: str, _port: int, namespace: str) -> Iterator[int]:
+        assert namespace == "observability"
+        yield ports[target]
+
+    def http(method: str, url: str) -> tuple[int, str]:
+        assert method == "GET"
+        path = url.removeprefix("http://127.0.0.1:")
+        asked.append(path)
+        return next(
+            ((200, body) for prefix, body in answers.items() if path.startswith(prefix)), (404, "")
+        )
+
+    monkeypatch.setattr(observability, "SMOKE", 0)
+    monkeypatch.setattr(cluster, "port_forward", port_forward)
+    monkeypatch.setattr(cluster, "http", http)
+    return asked
+
+
+HEALTHY_GRAFANA = {
+    "9090/api/v1/query?": UP,
+    "3000/api/health": '{"database":"ok"}',
+    "3000/api/search?": '[{"uid":"knarr-overview"}]',
+}
+THROUGH_GRAFANA = "3000/api/datasources/proxy/uid/knarr-prometheus/api/v1/query?"
+
+
+def test_the_smoke_reads_knarr_through_grafanas_provisioned_datasource(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    asked = fake_smoke(monkeypatch, {**HEALTHY_GRAFANA, THROUGH_GRAFANA: UP})
+    observability.smoke(tmp_path)
+    query = "query=" + urllib.parse.quote_plus('up{job="knarr"}')
+    assert asked[-1] == THROUGH_GRAFANA + query
+
+
+def test_the_smoke_fails_when_grafana_cannot_reach_prometheus_through_its_datasource(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Prometheus answers on its own pod and Grafana is healthy with the
+    # dashboard, but the Service the datasource names does not route.
+    fake_smoke(monkeypatch, HEALTHY_GRAFANA)
+    with pytest.raises(RuntimeError, match="knarr-prometheus datasource"):
+        observability.smoke(tmp_path)
 
 
 def test_grafana_forwards_from_loopback_on_the_port_asked_or_one_the_os_picks() -> None:

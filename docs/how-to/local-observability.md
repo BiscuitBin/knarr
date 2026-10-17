@@ -33,9 +33,10 @@ Then run, in order:
    need explicit authorization for it. A rerun uses the cached archives while
    their hashes still match.
 2. `just observability-smoke` checks that Prometheus reads `up == 1` for both
-   scrape jobs, that Grafana's `/api/health` reports its database ok, and that
-   Grafana serves the `knarr-overview` dashboard. Each check waits up to
-   120 s. It needs knarr deployed, or the `knarr` job never comes up.
+   scrape jobs, that Grafana's `/api/health` reports its database ok, that
+   Grafana serves the `knarr-overview` dashboard, and that Grafana reads
+   `up{job="knarr"} == 1` through its provisioned `knarr-prometheus`
+   datasource, the path every panel takes. Each check waits up to 120 s. It needs knarr deployed, or the `knarr` job never comes up.
 3. `just grafana` forwards Grafana to a loopback port and prints
    `http://127.0.0.1:<port>/d/knarr-overview`. It runs in the foreground
    until Ctrl-C. By default the OS chooses the port, because worktree

@@ -51,7 +51,7 @@ Done on 2026-10-16. The maintainer authorized three things that day: the network
   - `up` downloads or reuses each archive, refused on a hash mismatch and written atomically. It renders each chart with `helm template --no-hooks --namespace observability --kube-version v1.35.8`; for Prometheus it adds a values-hash pod annotation, since the server runs without its reloader.
   - It lays out `.cluster/observability/base/` and the `keda_kustomization` overlay, refuses any build that names an image that is not a pinned digest, applies server-side, and waits for each Deployment's rollout to finish.
   - `down` deletes the labelled RBAC in `default`, then the labelled cluster-scoped objects, then the namespace.
-  - `smoke` polls `up` for both jobs, Grafana health and the dashboard.
+  - `smoke` polls `up` for both jobs, Grafana health, the dashboard, and knarr's `up` read through Grafana's data proxy to the `knarr-prometheus` datasource, so a broken `prometheus-server` Service fails it (Codex adversarial review, 2026-10-16).
   - `grafana` forwards to 127.0.0.1 on an OS-chosen port by default, prints the URL, and exits 0 on Ctrl-C.
 - **`cluster.py`:**
   - The four actions join `KIND_ONLY`.
@@ -113,7 +113,7 @@ The four Codex reviews ran on gpt-6-astra, statically and without sockets.
 ### What was verified
 
 - **Offline tests:**
-  - `test_observability.py`: 51 passed. The tests over code failed against a stub module, and the tests over fixtures failed under a mutation of each fixture they guard. Each later regression test failed before its fix.
+  - `test_observability.py`: 53 passed, the last two added after the Codex review; both failed before the datasource check. The tests over code failed against a stub module, and the tests over fixtures failed under a mutation of each fixture they guard. Each later regression test failed before its fix.
   - `test_dependency_pins.py`: passed. Its new assertions fail when the Renovate rule or the helm grouping is removed.
   - `checker_suite.py selected cluster`: 122 passed before review 3's additions.
 - **The gate:** `git add -A`, then `just check` ended with "All checks passed and the worktree is unchanged."
@@ -131,6 +131,7 @@ The four Codex reviews ran on gpt-6-astra, statically and without sockets.
   - Nobody viewed the dashboard in a browser: the Chrome extension was not connected. The panels were checked through `/api/ds/query` instead.
   - No outbound request was blocked: the run only showed that nothing was logged. Egress was not denied.
   - The panel split and the All change from review 3 were checked offline only, and through a re-apply. See the evidence.
+  - The smoke's datasource-proxy check from the Codex review is tested offline only; no live `observability-smoke` has run with it.
 
 ### What later tickets need
 

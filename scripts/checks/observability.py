@@ -219,6 +219,11 @@ def has_dashboard(body):
     )
 
 
+def up_query(job):
+    """The query string of an instant query for `job`'s up series."""
+    return urllib.parse.urlencode({"query": f'up{{job="{job}"}}'})
+
+
 def answered(url, judge):
     """Whether a loopback GET answers 200 with a body `judge` accepts."""
     status, body = cluster.http("GET", url)
@@ -235,14 +240,14 @@ def poll(what, check):
 
 
 def smoke(state):
-    """Both scrape jobs up in Prometheus, Grafana healthy, and the example
-    dashboard provisioned. knarr must be deployed: `just deploy`."""
+    """Both scrape jobs up in Prometheus, Grafana healthy, the example
+    dashboard provisioned, and knarr's series read through Grafana's
+    provisioned datasource. knarr must be deployed: `just deploy`."""
     with cluster.port_forward(
         state, "deployment/prometheus-server", 9090, namespace=NAMESPACE
     ) as port:
         for job in ("knarr", "kube-state-metrics"):
-            query = urllib.parse.urlencode({"query": f'up{{job="{job}"}}'})
-            url = f"http://127.0.0.1:{port}/api/v1/query?{query}"
+            url = f"http://127.0.0.1:{port}/api/v1/query?{up_query(job)}"
             poll(
                 f'Prometheus reads up{{job="{job}"}} == 1',
                 lambda url=url: answered(url, answered_one),
@@ -259,6 +264,16 @@ def smoke(state):
         poll(
             f"Grafana serves the {DASHBOARD} dashboard",
             lambda: answered(search, has_dashboard),
+        )
+        # Through Grafana's data proxy to the Service its datasource names: the
+        # path every panel takes, which the forward to the Prometheus pod skips.
+        proxied = (
+            f"http://127.0.0.1:{port}/api/datasources/proxy/uid/{DATASOURCE}"
+            f"/api/v1/query?{up_query('knarr')}"
+        )
+        poll(
+            f'Grafana reads up{{job="knarr"}} == 1 through the {DATASOURCE} datasource',
+            lambda: answered(proxied, answered_one),
         )
 
 
