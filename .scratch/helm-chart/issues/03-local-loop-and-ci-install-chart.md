@@ -21,16 +21,16 @@
 - [x] `just deploy` installs the chart with `helm upgrade --install --wait`. A second run upgrades the release in place, and `just smoke` reports ok for `/healthz`, `/readyz` and `/metrics`.
 - [x] The local image id reaches the pod as the `knarr.dev/local-image-id` annotation through `podAnnotations`, so a reload of the same tag still rolls the pod.
 - [x] The e2e-fast values file sets the same intervals as `deploy/e2e-fast`, and `just keda-e2e` passes with it.
-- [ ] The wrong-ca case applies its patch to the `helm template` output. Its rollout never completes by design, because readiness never latches, so this path does not use `--wait`. Bootstrap ticket 14's `wrong-ca.sh`, which runs `just deploy "$image" wrong-ca`, keeps working unchanged or is updated with it. The reconcile-proof workflow's negative TLS case still fails closed in the same way. *Open: the local half is done (evidence transcripts 05 and 06); the reconcile-proof half needs CI, run URLs recorded by the orchestrator after push.*
+- [x] The wrong-ca case applies its patch to the `helm template` output. Its rollout never completes by design, because readiness never latches, so this path does not use `--wait`. Bootstrap ticket 14's `wrong-ca.sh`, which runs `just deploy "$image" wrong-ca`, keeps working unchanged or is updated with it. The reconcile-proof workflow's negative TLS case still fails closed in the same way. Local: evidence transcripts 05 and 06. CI: `wrong-ca.sh` passed in [reconcile-proof run 39019074015](https://github.com/steven-cutting/knarr/actions/runs/39019074015).
 - [x] The path filters cover the chart. `checker_suite.py` `CLUSTERS` adds it to both the `kind` and `kwok` tuples, beside `deploy/**`. `reconcile-proof.yml` adds it beside `deploy/base/**` and `deploy/wrong-ca/**`. Each workflow that deploys knarr triggers on a chart-only change, and `test_checker_suite.py` asserts that.
-- [ ] **Authorization required:** a push, so that cluster-smoke, keda-e2e and reconcile-proof each show a green run against the chart. The hand-back records the run URLs. *Open: run URLs recorded by the orchestrator after push.*
+- [x] **Authorization required:** a push, so that cluster-smoke, keda-e2e and reconcile-proof each show a green run against the chart. The hand-back records the run URLs. Green on `f976f3f`: [CI 39019073381](https://github.com/steven-cutting/knarr/actions/runs/39019073381) (Kind smoke, Kind fake worker smoke, Kwok readiness, gate), [KEDA e2e 39019072375](https://github.com/steven-cutting/knarr/actions/runs/39019072375), [Reconcile proof 39019074015](https://github.com/steven-cutting/knarr/actions/runs/39019074015).
 - [x] The [local-cluster how-to](../../../docs/how-to/local-cluster.md) and the [KEDA harness reference](../../../docs/reference/keda-e2e.md) describe the chart-based loop. `CHANGELOG.md` records the change.
 - [x] `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes
 
-Settled locally on 2026-10-17 (UTC). The CI half is still open: the Authorization box, and the
-reconcile-proof half of the wrong-ca box, wait on the orchestrator's push and runs.
+Settled locally on 2026-10-17 (UTC), and on CI the same day after the branch was pushed with
+the review fixes (`f976f3f`, pull request #50).
 
 ### What changed
 
@@ -91,8 +91,14 @@ blanks trimmed. `state.sh` printed the state after each step.
   paths.
 - `just check` ends with "All checks passed and the worktree is unchanged.", with every change
   staged, after these notes.
-- Not done yet: the CI runs (cluster-smoke, keda-e2e, reconcile-proof's negative TLS case on
-  linux/amd64). Their URLs go here after the orchestrator's push.
+- CI on linux/amd64, all green at `f976f3f`:
+  - [CI 39019073381](https://github.com/steven-cutting/knarr/actions/runs/39019073381): the
+    gate, Kind smoke, Kind fake worker smoke, Kwok readiness and the selected checker
+    regressions.
+  - [KEDA e2e 39019072375](https://github.com/steven-cutting/knarr/actions/runs/39019072375),
+    dispatched: `keda-e2e.yml` has no path filter.
+  - [Reconcile proof 39019074015](https://github.com/steven-cutting/knarr/actions/runs/39019074015),
+    dispatched: the TLS check, reconcile and cleanup on kind, and `wrong-ca.sh` failing closed.
 
 ### Review
 
