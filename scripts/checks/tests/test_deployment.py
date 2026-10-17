@@ -125,7 +125,7 @@ def test_wrong_ca_variant_only_redirects_the_ca_file():
         {"name": "wrong-ca", "mountPath": "/etc/knarr/wrong-ca", "readOnly": True}
     ]
     assert pod["volumes"] == [{"name": "wrong-ca", "configMap": {"name": "knarr-wrong-ca"}}]
-    assert deployment.variants() == ["base", "e2e-fast", "release", "wrong-ca"]
+    assert deployment.variants() == ["base", "e2e-fast", "release", "voyager", "wrong-ca"]
 
 
 def test_e2e_fast_variant_only_shortens_the_intervals():
@@ -147,6 +147,62 @@ def test_e2e_fast_variant_only_shortens_the_intervals():
             }
         ]
     }
+
+
+def test_voyager_variant_only_adds_distribution_on_loopback():
+    # Ticket 52: opt-in Erlang distribution for Voyager on the local cluster.
+    # Discovery stays on, both listeners bind loopback for kubectl
+    # port-forward, and the cookie arrives only through the Secret that
+    # cluster.py creates, never as a literal in the manifest.
+    patch = json.loads((ROOT / "deploy/voyager/patch.json").read_text())
+    assert set(patch) == {"apiVersion", "kind", "metadata", "spec"}
+    assert patch["metadata"] == {"name": "knarr"}
+    assert set(patch["spec"]) == {"template"}
+    assert set(patch["spec"]["template"]) == {"spec"}
+    pod = patch["spec"]["template"]["spec"]
+    assert pod == {
+        "containers": [
+            {
+                "name": "knarr",
+                "env": [
+                    {
+                        "name": "ERL_FLAGS",
+                        "value": "-knarr discovery true -name knarr@127.0.0.1"
+                        " -kernel inet_dist_listen_min 9100 -kernel inet_dist_listen_max 9100"
+                        " -kernel inet_dist_use_interface {127,0,0,1}",
+                    },
+                    {
+                        "name": "ERL_ZFLAGS",
+                        "valueFrom": {
+                            "secretKeyRef": {"name": "knarr-voyager", "key": "erl_zflags"}
+                        },
+                    },
+                    {"name": "ERL_EPMD_ADDRESS", "value": "127.0.0.1"},
+                    {"name": "HOME", "value": "/tmp"},
+                ],
+                "ports": [
+                    {"name": "epmd", "containerPort": 4369},
+                    {"name": "dist", "containerPort": 9100},
+                ],
+            }
+        ]
+    }
+    assert "setcookie" not in (ROOT / "deploy/voyager/patch.json").read_text()
+    # No Secret schema is vendored, so the overlay renders no Secret: only the
+    # base and the patch.
+    kustomization = [
+        line
+        for line in (ROOT / "deploy/voyager/kustomization.yaml").read_text().splitlines()
+        if not line.startswith("#")
+    ]
+    assert kustomization == [
+        "apiVersion: kustomize.config.k8s.io/v1beta1",
+        "kind: Kustomization",
+        "resources:",
+        "  - ../base",
+        "patches:",
+        "  - path: patch.json",
+    ]
 
 
 def test_unknown_variant_is_refused():
@@ -475,6 +531,7 @@ def test_render_builds_and_validates_every_variant_and_checks_the_difference(tmp
         ["build", str(ROOT / "deploy/base")],
         ["build", str(ROOT / "deploy/e2e-fast")],
         ["build", str(ROOT / "deploy/release")],
+        ["build", str(ROOT / "deploy/voyager")],
         ["build", str(ROOT / "deploy/wrong-ca")],
     ]
     validated = [(arguments, stdin) for tool, arguments, stdin in calls if tool == "kubeconform"]
@@ -482,6 +539,7 @@ def test_render_builds_and_validates_every_variant_and_checks_the_difference(tmp
         BASE_RENDER,
         BASE_RENDER,
         RELEASE_RENDER,
+        BASE_RENDER,
         BASE_RENDER,
     ]
     assert all("-strict" in arguments for arguments, _ in validated)
@@ -495,4 +553,4 @@ def test_render_fails_when_the_overlay_changes_anything_else(tmp_path):
     assert result.returncode != 0
     assert "replicas" in result.stderr
     # The difference is checked after every variant is validated.
-    assert [tool for tool, _, _ in calls] == ["kustomize", "kubeconform"] * 4
+    assert [tool for tool, _, _ in calls] == ["kustomize", "kubeconform"] * 5

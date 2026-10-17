@@ -354,6 +354,18 @@ deploy image=cluster_image variant="base": cluster-tools
 smoke: cluster-tools
     python3 scripts/checks/cluster.py smoke "{{ justfile_directory() }}"
 
+# Opt-in Erlang distribution for the Voyager desktop app (ticket 52); see
+# docs/how-to/voyager.md. Neither recipe runs from any other.
+[group('cluster')]
+[doc('Deploy the voyager variant, distribution on loopback with a per-worktree cookie')]
+voyager-deploy image=cluster_image: cluster-tools
+    python3 scripts/checks/cluster.py deploy "{{ justfile_directory() }}" "$1" voyager
+
+[group('cluster')]
+[doc('Forward the voyager variant epmd and distribution ports and print the Connect details')]
+voyager-forward: cluster-tools
+    python3 scripts/checks/cluster.py voyager-forward "{{ justfile_directory() }}"
+
 [group('cluster')]
 [doc('Print this worktree cluster pods, events and application logs')]
 cluster-diagnostics: cluster-tools
