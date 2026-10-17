@@ -82,6 +82,9 @@ GROUPS = {
             "fixtures/fake_worker/deploy/**",
             "fixtures/keda_e2e/**",
             "fixtures/observability/**",
+            # The dashboard's queries are checked against these metric catalogues.
+            "docs/specs/observability.allium",
+            "src/knarr/metrics_ffi.erl",
         ),
     ),
     "release": (

@@ -101,6 +101,8 @@ def test_unowned_test_module_fails(tmp_path, monkeypatch, unowned):
         ("deploy/base/resources.json", "cluster"),
         ("deploy/wrong-ca/kustomization.yaml", "cluster"),
         ("fixtures/fake_worker/deploy/resources.json", "cluster"),
+        ("docs/specs/observability.allium", "cluster"),
+        ("src/knarr/metrics_ffi.erl", "cluster"),
     ],
 )
 def test_changes_select_regressions_that_read_the_changed_file(path, required):

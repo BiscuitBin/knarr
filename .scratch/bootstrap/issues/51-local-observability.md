@@ -109,6 +109,7 @@ The four Codex reviews ran on gpt-6-astra, statically and without sockets.
 - **Review 4 (whole branch):** Accepted:
   - `up` waited on `condition=Available`, which an old replica satisfies while its replacement fails, so it now runs `kubectl rollout status` per Deployment, with a test for a failed rollout;
   - `answered_one` still raised on a `data` that is not an object, so it now returns false, with three more cases.
+- **Copilot's review of #46:** Accepted: the dashboard-integrity test reads `docs/specs/observability.allium` and `src/knarr/metrics_ffi.erl`, but neither selected the `cluster` checker group in CI, so a change to either alone skipped the check. Both are now inputs of that group, with two selection cases that failed before the fix.
 
 ### What was verified
 
