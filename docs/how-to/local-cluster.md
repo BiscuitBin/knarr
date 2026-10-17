@@ -25,7 +25,8 @@ worktree path, so separate worktrees do not overwrite each other's image.
 `charts/knarr` as release `knarr` in the `default` namespace, with
 `helm upgrade --install --wait`: the first run installs it, and each later run
 upgrades it in place and waits for the pod to become ready. The image's
-repository and tag go in through `--set`, and its image ID through
+repository and tag go in through `--set-string`, since `--set` would read a
+tag such as `20261017` as a number, and its image ID through
 `podAnnotations` as the pod's `knarr.dev/local-image-id` annotation, so
 rebuilding the same local tag triggers a fresh rollout. Each run resets the
 values to the chart's defaults plus the variant's. `just smoke` checks health, readiness and metrics over
@@ -109,7 +110,9 @@ swap disabled and verifies the descriptor cap. The printed memory reading is
 informational, not a peak measurement or a capacity guarantee for future work.
 
 The offline gate validates image lint, base resources against local Kubernetes
-schemas, and static security settings. `just deployment-check`, with the
+schemas, and static security settings. `just chart-check` lints the chart,
+validates its render, and holds it to `deploy/base` and to `gleam.toml`'s
+version (Decision 0015). `just deployment-check`, with the
 optional cluster tools installed, renders every variant under `deploy/`
 (`base`, `e2e-fast`, `release` and `wrong-ca`) with kustomize and validates each. It fails
 unless the release overlay changes exactly two lines of the base's render: the

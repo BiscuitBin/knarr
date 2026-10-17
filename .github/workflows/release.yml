@@ -8,10 +8,11 @@
 # (.scratch/bootstrap/evidence/28/).
 #
 # The release model (Decision 0012): the maintainer merges a release pull
-# request that bumps gleam.toml and CHANGELOG.md, tags the merge commit
-# vX.Y.Z and pushes the tag. This workflow verifies the tag, waits for the
-# maintainer's approval through the release environment, and pushes the image
-# tags X.Y.Z, X.Y and sha-<7> (and X for a major above 0; never latest), then
+# request that bumps gleam.toml, charts/knarr/Chart.yaml (version and
+# appVersion) and CHANGELOG.md, tags the merge commit vX.Y.Z and pushes the
+# tag. This workflow verifies the tag, waits for the maintainer's approval
+# through the release environment, and pushes the image tags X.Y.Z, X.Y and
+# sha-<7> (and X for a major above 0; never latest), then
 # the chart ghcr.io/steven-cutting/charts/knarr:X.Y.Z with that push's digest
 # stamped into it (Decision 0015; scripts/release/stamp-chart.sh, tested by
 # stamp-chart_test.sh beside it). It refuses to push over an image tag or a
@@ -159,6 +160,8 @@ jobs:
       # - The image was pushed and the chart was not. Bump the version and
       #   release again, as Decision 0015 decides; never push a chart by hand
       #   for a version whose run failed. X.Y.Z stays an image with no chart.
+      # - The chart's first guard, after this one, refused. Nothing was pushed:
+      #   fix the cause and re-run.
       - name: Refuse to push over an existing tag
         env:
           ACTOR: ${{ github.actor }}
@@ -179,6 +182,27 @@ jobs:
             absent) echo "$IMAGE:$VERSION is absent (http $code): pushing" ;;
             present) echo "::error::$IMAGE:$VERSION exists (http $code): a release is published once; bump the version"; exit 1 ;;
             *) echo "::error::cannot tell whether $IMAGE:$VERSION exists (http $code, curl $curl_rc): not pushing"; exit 1 ;;
+          esac
+      # The chart's existence guard, run first before the image push too, so a
+      # chart version that exists or cannot be probed (the first release's
+      # charts/knarr package among them) stops the job with nothing published.
+      # It runs again once the chart is stamped.
+      - name: Refuse a chart version that exists before anything is pushed
+        env:
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          # shellcheck source=/dev/null
+          . scripts/release/lib.sh
+          chart_repo=${CHART#ghcr.io/}
+          bearer=$(curl -sSf -u "$ACTOR:$TOKEN" "https://ghcr.io/token?scope=repository:$chart_repo:pull,push&service=ghcr.io" |
+            perl -ne 'print $1 if /"token":"([^"]+)"/')
+          probe_tag https://ghcr.io "$chart_repo" "$VERSION" -H "Authorization: Bearer $bearer"
+          case $verdict in
+            absent) echo "$CHART:$VERSION is absent (http $code): pushing the image" ;;
+            present) echo "::error::$CHART:$VERSION exists (http $code): a release is published once; bump the version"; exit 1 ;;
+            *) echo "::error::cannot tell whether $CHART:$VERSION exists (http $code, curl $curl_rc): not pushing"; exit 1 ;;
           esac
       - name: Build and push linux/amd64
         env:
@@ -231,7 +255,8 @@ jobs:
           echo "PACKAGE=$package" >> "$GITHUB_ENV"
           echo "packaged $package with $IMAGE@$DIGEST"
       # The chart's own existence guard, the image's with the chart's
-      # repository: only absent pushes.
+      # repository: only absent pushes. The guard before the image push already
+      # read absent; this one refuses a chart pushed since.
       - name: Refuse to push over an existing chart version
         env:
           ACTOR: ${{ github.actor }}

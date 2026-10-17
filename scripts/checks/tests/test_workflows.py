@@ -249,25 +249,30 @@ def push_target(line: str) -> str | None:
 
 def probes_before_it_pushes(lines: list[str]) -> bool:
     """Every push has its own guard: a probe of its own repository at $VERSION, then
-    `case $verdict in`, then the push, and the next guard only after it. So an earlier
-    guard that refuses stops the job before any later push."""
+    `case $verdict in`, both after the previous push and before this one. Other
+    complete guards may stand between, as the chart's first guard stands before the
+    image push. So an earlier guard that refuses stops the job before any later push."""
     steps = [line.strip() for line in lines]
-    events = [
-        line
-        for line in steps
-        if line.startswith("probe_tag ") or line == "case $verdict in" or push_target(line)
-    ]
-    if not events or len(events) % 3:
-        return False
-    for probe, guard, push in zip(events[::3], events[1::3], events[2::3], strict=True):
-        target = push_target(push)
-        if (
-            target is None
-            or guard != "case $verdict in"
-            or not probe.startswith(f'probe_tag https://ghcr.io {target} "$VERSION" ')
-        ):
-            return False
-    return True
+    probe: str | None = None
+    guarded: list[str] = []
+    pushes = 0
+    for line in steps:
+        if line.startswith("probe_tag "):
+            if probe is not None:
+                return False
+            probe = line
+        elif line == "case $verdict in":
+            if probe is None:
+                return False
+            guarded.append(probe)
+            probe = None
+        elif target := push_target(line):
+            own = f'probe_tag https://ghcr.io {target} "$VERSION" '
+            if probe is not None or not any(g.startswith(own) for g in guarded):
+                return False
+            guarded = []
+            pushes += 1
+    return pushes > 0 and probe is None
 
 
 IMAGE_GUARD = [
@@ -295,6 +300,7 @@ CHART_GUARD = [
         [*IMAGE_GUARD, CHART_GUARD[0], *CHART_GUARD[2:]],
         [*IMAGE_GUARD[:2], CHART_GUARD[2], IMAGE_GUARD[2], *CHART_GUARD[:2]],
         [*CHART_GUARD[:2], IMAGE_GUARD[2]],
+        [*IMAGE_GUARD[:2], *CHART_GUARD[:2], IMAGE_GUARD[2], CHART_GUARD[2]],
     ],
     ids=[
         "push first",
@@ -307,6 +313,7 @@ CHART_GUARD = [
         "a chart push with no verdict",
         "a chart push before the image is pushed",
         "an image guard that probes the chart",
+        "a chart push guarded only before the image push",
     ],
 )
 def test_the_order_rule_refuses_a_guard_that_does_not_guard(steps: list[str]) -> None:
@@ -314,7 +321,19 @@ def test_the_order_rule_refuses_a_guard_that_does_not_guard(steps: list[str]) ->
 
 
 @pytest.mark.parametrize(
-    "steps", [IMAGE_GUARD, [*IMAGE_GUARD, *CHART_GUARD]], ids=["the image", "the image and chart"]
+    "steps",
+    [
+        IMAGE_GUARD,
+        [*IMAGE_GUARD, *CHART_GUARD],
+        [*CHART_GUARD[:2], *IMAGE_GUARD, *CHART_GUARD],
+        [*IMAGE_GUARD[:2], *CHART_GUARD[:2], IMAGE_GUARD[2], *CHART_GUARD],
+    ],
+    ids=[
+        "the image",
+        "the image and chart",
+        "the chart probed first",
+        "the chart probed after the image's guard",
+    ],
 )
 def test_the_order_rule_accepts_each_push_behind_its_own_guard(steps: list[str]) -> None:
     assert probes_before_it_pushes(steps)
@@ -322,6 +341,46 @@ def test_the_order_rule_accepts_each_push_behind_its_own_guard(steps: list[str])
 
 def test_release_probes_the_version_before_it_pushes() -> None:
     assert probes_before_it_pushes(jobs(RELEASE.read_text())["publish"])
+
+
+def probes_the_chart_before_any_push(lines: list[str]) -> bool:
+    """The chart's version is probed, and its verdict read, before the first push of
+    any kind, so a chart that exists or cannot be probed stops the job with nothing
+    published (Decision 0015)."""
+    steps = [line.strip() for line in lines]
+    pushes = [i for i, line in enumerate(steps) if push_target(line)]
+    probes = [
+        i
+        for i, line in enumerate(steps)
+        if line.startswith('probe_tag https://ghcr.io "$chart_repo" "$VERSION" ')
+    ]
+    if not pushes or not probes or probes[0] > pushes[0]:
+        return False
+    after = [
+        line
+        for line in steps[probes[0] + 1 : pushes[0]]
+        if line.startswith("probe_tag ") or line == "case $verdict in"
+    ]
+    return bool(after) and after[0] == "case $verdict in"
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        [*IMAGE_GUARD, *CHART_GUARD],
+        [CHART_GUARD[0], *IMAGE_GUARD, *CHART_GUARD],
+        [*CHART_GUARD[:2]],
+    ],
+    ids=["the chart probed only after the image push", "no verdict on the chart", "no push"],
+)
+def test_the_chart_first_rule_refuses_a_chart_probed_late(steps: list[str]) -> None:
+    assert not probes_the_chart_before_any_push(steps)
+
+
+def test_release_probes_the_chart_before_the_image_push() -> None:
+    publish = jobs(RELEASE.read_text())["publish"]
+    assert probes_the_chart_before_any_push([*CHART_GUARD[:2], *IMAGE_GUARD, *CHART_GUARD])
+    assert probes_the_chart_before_any_push(publish)
 
 
 def test_release_pushes_only_when_the_tag_is_absent() -> None:
@@ -334,7 +393,8 @@ def test_release_pushes_the_image_and_then_the_chart() -> None:
     publish = [line.strip() for line in jobs(RELEASE.read_text())["publish"]]
     targets = [target for line in publish if (target := push_target(line))]
     assert targets == ['"$repo"', '"$chart_repo"']
-    assert len(guards(RELEASE.read_text())) == 2
+    # The chart's first guard, the image's, and the chart's again before its push.
+    assert len(guards(RELEASE.read_text())) == 3
 
 
 def stops_at_the_image_guard(lines: list[str]) -> bool:
