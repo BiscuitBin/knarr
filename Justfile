@@ -414,6 +414,32 @@ fake-worker-smoke: cluster-tools
 keda-e2e rounds="3" seed="33": cluster-tools
     python3 scripts/checks/keda_e2e.py "{{ justfile_directory() }}" "$1" "$2"
 
+# Ticket 51's opt-in local Prometheus and Grafana, in the observability
+# namespace of this worktree's kind cluster. It renders the charts
+# fixtures/observability/stack.json pins, caching them under
+# .cluster/observability/, and is never part of `check`
+# (docs/how-to/local-observability.md).
+[group('cluster')]
+[doc('Install the local Prometheus and Grafana, with their images pinned by digest (needs network)')]
+observability-up: cluster-tools
+    python3 scripts/checks/observability.py observability-up "{{ justfile_directory() }}"
+
+[group('cluster')]
+[doc('Delete the local Prometheus and Grafana and the scrape RBAC they put in default')]
+observability-down: cluster-tools
+    python3 scripts/checks/observability.py observability-down "{{ justfile_directory() }}"
+
+[group('cluster')]
+[doc('Check that Prometheus scrapes knarr and kube-state-metrics and that Grafana serves the dashboard')]
+observability-smoke: cluster-tools
+    python3 scripts/checks/observability.py observability-smoke "{{ justfile_directory() }}"
+
+# Port 0 lets the OS choose, since worktree clusters run side by side.
+[group('cluster')]
+[doc('Forward Grafana to a loopback port and print its URL, until Ctrl-C')]
+grafana port="0": cluster-tools
+    python3 scripts/checks/observability.py grafana "{{ justfile_directory() }}" "$1"
+
 [group('cluster')]
 [doc('Render and validate every deploy/ variant, and hold the release overlay to its two-line difference')]
 deployment-check: cluster-tools

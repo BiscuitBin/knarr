@@ -1,0 +1,374 @@
+{
+  "uid": "knarr-overview",
+  "title": "knarr overview",
+  "description": "The example dashboard of the local observability stack (ticket 51).",
+  "tags": [
+    "knarr"
+  ],
+  "editable": true,
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "deployment",
+        "label": "Deployment",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "knarr-prometheus"
+        },
+        "query": {
+          "query": "label_values(knarr_pods, deployment)",
+          "refId": "deployment"
+        },
+        "definition": "label_values(knarr_pods, deployment)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Discovery age",
+      "description": "Seconds since the last discovery cycle in which every LIST succeeded. Red above 180 s, three default cadences (docs/operations/controller.md).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "time() - knarr_last_discovery_timestamp_seconds",
+          "legendFormat": "age",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 180
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Targets",
+      "description": "Opted-in Deployments and their pods, as the last LIST shows them.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 18,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "knarr_targets",
+          "legendFormat": "{{kind}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Pods by tier",
+      "description": "Pods by the tier of their applied pod-deletion-cost: drained, or how many thresholds lie at or below the value.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "knarr_pods{deployment=~\"$deployment\"}",
+          "legendFormat": "{{deployment}} tier {{tier}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Poll rate by reading",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "sum by (reading) (rate(knarr_polls_total{deployment=~\"$deployment\"}[$__rate_interval]))",
+          "legendFormat": "{{reading}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Patch rate",
+      "description": "Patches sent per second, by purpose and result.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "sum by (purpose, result) (rate(knarr_patches_total{deployment=~\"$deployment\"}[$__rate_interval]))",
+          "legendFormat": "{{purpose}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Patches pending",
+      "description": "Changes still pending for the selected Deployments' pods.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 16,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "sum(knarr_patches_pending{deployment=~\"$deployment\"})",
+          "legendFormat": "pending",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Poll duration p95",
+      "description": "Across every Deployment: the histogram carries no labels.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(knarr_poll_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Replicas, desired and available",
+      "description": "From kube-state-metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "kube_deployment_spec_replicas{namespace=\"default\",deployment=~\"$deployment\"}",
+          "legendFormat": "{{deployment}} desired",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "kube_deployment_status_replicas_available{namespace=\"default\",deployment=~\"$deployment\"}",
+          "legendFormat": "{{deployment}} available",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "BEAM memory",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "knarr-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "knarr-prometheus"
+          },
+          "expr": "sum by (kind) (erlang_vm_memory_bytes)",
+          "legendFormat": "{{kind}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

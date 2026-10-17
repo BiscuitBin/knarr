@@ -1,0 +1,23 @@
+{
+  "charts": [
+    {
+      "release": "prometheus",
+      "version": "29.34.0",
+      "url": "https://github.com/prometheus-community/helm-charts/releases/download/prometheus-29.34.0/prometheus-29.34.0.tgz",
+      "sha256": "e0dc3d372c6db2f055578594eb78c96646671fec4b4e5d3613aa6f66556b4955",
+      "values": "prometheus-values.json"
+    },
+    {
+      "release": "grafana",
+      "version": "13.2.6",
+      "url": "https://github.com/grafana-community/helm-charts/releases/download/grafana-13.2.6/grafana-13.2.6.tgz",
+      "sha256": "051e7f9787d70a144e41f4b53e5dcc57e682b1305ca21b54abc81521b1a37201",
+      "values": "grafana-values.json"
+    }
+  ],
+  "images": [
+    "registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0@sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b",
+    "quay.io/prometheus/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e",
+    "docker.io/grafana/grafana:13.2.2-distroless@sha256:69a5d2d957ca0bba434c160dcd4f2d07de9d6c756a0ba10ae7f52b72ced1e4cc"
+  ]
+}

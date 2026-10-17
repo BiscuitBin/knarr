@@ -102,7 +102,7 @@ Each version is conda-forge's newest on both platforms on that date ([search.txt
 
 Two corrections to the ticket's premise:
 
-- `helm` is on conda-forge as `kubernetes-helm` (`helm version` prints `v4.3.0+conda-forge`), so it moves into the manifest.
+- `helm` is on conda-forge as `kubernetes-helm` (`helm version` prints `v4.3.0+conda-forge`), so it moves into the manifest. Amended by [ticket 51](../../.scratch/bootstrap/issues/51-local-observability.md): helm now renders third-party stacks for the local cluster. `just observability-up` runs `helm template` on the prometheus and grafana chart archives, pinned by sha256, with no repository, dependency build or release; it still packages nothing of knarr's.
 - conda-forge's `k3d` 3.2.0 is a noarch Python package that depends on `anywidget`, `ipywidgets` and `numpy`. It is not k3d.io's k3d, and the manifest must never name it.
 
 ### Escape hatch: checksum-pinned downloads into `.tools/bin`

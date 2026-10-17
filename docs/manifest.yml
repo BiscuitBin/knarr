@@ -348,6 +348,20 @@
       "requires": []
     },
     {
+      "path": "how-to/local-observability.md",
+      "title": "See the local cluster's metrics in Grafana",
+      "kind": "how-to",
+      "audience": [
+        "contributor",
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "local_observability"
+      ],
+      "requires": []
+    },
+    {
       "path": "decisions/0011-coverage.md",
       "title": "Decision 0011: Report-only source coverage",
       "kind": "decision",
