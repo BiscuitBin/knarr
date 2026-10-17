@@ -297,7 +297,8 @@ def main():
         "erlang"
     ]
     expected = pin.removeprefix("==").split(".")[0]
-    config = json.loads(output("docker", "image", "inspect", image))[0]["Config"]
+    inspected = json.loads(output("docker", "image", "inspect", image))[0]
+    config = inspected["Config"]
     if config["User"] != "10001:10001":
         raise RuntimeError("image must declare USER 10001:10001")
     if config.get("Entrypoint") != profile.entrypoint:
@@ -318,7 +319,9 @@ def main():
         "docker",
         "run",
         "--pull=never",
-        "--platform=linux/amd64",
+        # The image's own architecture: amd64 in CI, arm64 when built on an
+        # Apple-silicon host.
+        f"--platform=linux/{inspected['Architecture']}",
         "--read-only",
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges",

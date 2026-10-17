@@ -14,12 +14,12 @@ The harness is `scripts/checks/keda_e2e.py`. Its judges are pure functions over 
 
 ## When to run it
 
-It needs the network, because it downloads the pinned KEDA release, and it needs linux/amd64 images, so it runs in CI. It is never part of `just check`. Run it:
+It needs the network, because it downloads the pinned KEDA release. It runs in CI on linux/amd64, and locally on an Apple-silicon host, where both images build as linux/arm64 and the pinned KEDA images have arm64 builds ([ticket 50's run](../../.scratch/bootstrap/evidence/50/README.md)). It is never part of `just check`. Run it:
 
 - before a release ([ticket 40](../../.scratch/bootstrap/issues/40-mvp-release.md));
 - on a change to the reconciler, the patcher, the budget, the cost mapping, or the fake worker fixture.
 
-Start it with the `keda-e2e` label on a pull request, which runs it again on each push while the label stays, or with a dispatch of the `keda-e2e` workflow, whose `rounds` and `seed` inputs default to 3 and 33. Locally, on a host that runs amd64 images, it runs after `just cluster-up`, `just image-build` and `just fake-worker-image-build`. `just keda-e2e 5 34` runs five rounds with seed 34; the defaults are three rounds and seed 33.
+Start it with the `keda-e2e` label on a pull request, which runs it again on each push while the label stays, or with a dispatch of the `keda-e2e` workflow, whose `rounds` and `seed` inputs default to 3 and 33. Locally it runs after `just cluster-up`, `just image-build` and `just fake-worker-image-build`. `just keda-e2e 5 34` runs five rounds with seed 34; the defaults are three rounds and seed 33.
 
 ## Phases
 

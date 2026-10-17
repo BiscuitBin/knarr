@@ -33,7 +33,7 @@ kubectl config current-context
 kubectl kustomize deploy/release
 ```
 
-`just release-pin` changes the local overlay and checks its render with the cluster environment's standalone kustomize. `kubectl apply -k` uses kubectl's bundled kustomize; the recorded tools are 5.8.2 and 5.7.1 respectively. Both rendered the same pinned image in ticket 37's evidence. Keep the checkout and digest for later removal. Before applying, inspect the context and rendered resources above: the image must be exactly the chosen `ghcr.io/steven-cutting/knarr@sha256:` reference. Stop if the context or image is wrong; printing them does not enforce a match ([Decision 0012](../decisions/0012-release-and-packaging.md), release-overlay amendment; [install-at-tag evidence](../../.scratch/bootstrap/evidence/37/install-at-tag.txt)):
+`just release-pin` changes the local overlay and checks its render with the cluster environment's standalone kustomize. `kubectl apply -k` uses kubectl's bundled kustomize; ticket 37 recorded 5.8.2 and 5.7.1 respectively, and both rendered the same pinned image in its evidence. The cluster environment's kubectl is now 1.36.0, which bundles kustomize 5.8.1. Keep the checkout and digest for later removal. Before applying, inspect the context and rendered resources above: the image must be exactly the chosen `ghcr.io/steven-cutting/knarr@sha256:` reference. Stop if the context or image is wrong; printing them does not enforce a match ([Decision 0012](../decisions/0012-release-and-packaging.md), release-overlay amendment; [install-at-tag evidence](../../.scratch/bootstrap/evidence/37/install-at-tag.txt)):
 
 ```sh
 kubectl -n "$worker_namespace" apply -k deploy/release

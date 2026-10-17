@@ -110,7 +110,7 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Kubernetes 1.35 until kubectl and the vendored schemas move: kubectl 1.34 reaches 1.35 at most, and scripts/schemas/kubernetes is 1.35.",
+      "description": "Kubernetes 1.35 until the vendored schemas move: scripts/schemas/kubernetes is 1.35. kubectl 1.36 reaches 1.35 to 1.37.",
       "matchPackageNames": [
         "kindest/node",
         "registry.k8s.io/kube-apiserver",
