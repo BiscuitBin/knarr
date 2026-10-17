@@ -38,6 +38,7 @@ Done on 2026-10-16. The maintainer authorized the network for `pixi lock`, `pixi
 - `just image-build` built an image whose `docker image inspect` reports `arm64`. `just image-check` reported OTP 29 (erts 17.1), OpenSSL 3.6.5 and all 6 TLS cases, then "OTP 29, numeric user and read-only runtime verified". This is the native arm64 BEAM run that ticket 13 left unverified.
 - `just deploy` rolled out, and `just smoke` reported ok for `/healthz`, `/readyz` and `/metrics`. In `just cluster-diagnostics` the knarr pod was Running with 0 restarts.
 - `just fake-worker-image-build`, `fake-worker-image-check`, `fake-worker-deploy` and `fake-worker-smoke` passed: the idle, busy, draining and absent states, the drain after SIGTERM, and both kill records.
+- `just keda-e2e` (three rounds, seed 33) passed on the arm64 kind node in 626 s: busy kills were 4 of 9 for the baseline and 0 of 9 with knarr, and the restart criteria (a), (b) and (c) and the patch-rate bound held. Both pinned KEDA digests carry a linux/arm64 manifest ([evidence](../evidence/50/README.md)). The harness page and the fake-worker reference no longer say amd64 only.
 
 ### What later tickets need
 

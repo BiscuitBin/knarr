@@ -1,0 +1,92 @@
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/keda_e2e.py "<worktree>" "$1" "$2"
+deployment.apps/keda-operator condition met
+deployment.apps/keda-metrics-apiserver condition met
+apiservice.apiregistration.k8s.io/v1beta1.external.metrics.k8s.io condition met
+ok   KEDA 2.21.0 installed from https://github.com/kedacore/keda/releases/download/v2.21.0/keda-2.21.0-core.yaml, images pinned by digest
+deployment.apps "knarr" deleted from default namespace
+deployment.apps "fake-worker" deleted from default namespace
+Image: "fake-worker:<name>" with ID "sha256:d0faa4a703c4c6e6cc2cb7a2e25e0333b145a083af9e41fdbdcc6e5445ead30e" not yet present on node "<name>-control-plane", loading...
+service/fake-worker-collector unchanged
+deployment.apps/fake-worker created
+deployment.apps/fake-worker-collector unchanged
+scaledobject.keda.sh/fake-worker created
+deployment "coredns" successfully rolled out
+deployment "fake-worker-collector" successfully rolled out
+Waiting for deployment "fake-worker" rollout to finish: 0 of 4 updated replicas are available...
+Waiting for deployment spec update to be observed...
+Waiting for deployment "fake-worker" rollout to finish: 4 out of 6 new replicas have been updated...
+Waiting for deployment "fake-worker" rollout to finish: 4 out of 6 new replicas have been updated...
+Waiting for deployment "fake-worker" rollout to finish: 0 of 6 updated replicas are available...
+Waiting for deployment "fake-worker" rollout to finish: 1 of 6 updated replicas are available...
+Waiting for deployment "fake-worker" rollout to finish: 2 of 6 updated replicas are available...
+Waiting for deployment "fake-worker" rollout to finish: 3 of 6 updated replicas are available...
+Waiting for deployment "fake-worker" rollout to finish: 4 of 6 updated replicas are available...
+Waiting for deployment "fake-worker" rollout to finish: 5 of 6 updated replicas are available...
+deployment "fake-worker" successfully rolled out
+scaledobject.keda.sh/fake-worker condition met
+scaledobject.keda.sh/fake-worker patched (no change)
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 1: 1 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 2: 2 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 3: 1 of 3 victims busy
+Image: "knarr:<name>" with ID "sha256:8e1e5277d5b90cfb5a2ee1d33629020a88f88f2a74dc18abe296c3212b8b13d4" not yet present on node "<name>-control-plane", loading...
+serviceaccount/knarr unchanged
+role.rbac.authorization.k8s.io/knarr unchanged
+rolebinding.rbac.authorization.k8s.io/knarr unchanged
+deployment.apps/knarr created
+Waiting for deployment "knarr" rollout to finish: 0 of 1 updated replicas are available...
+deployment "knarr" successfully rolled out
+deployment.apps/fake-worker labeled
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 1: 0 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 2: 0 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 3: 0 of 3 victims busy
+ok   one knarr process through the comparison scrapes: pod knarr-57b9d95494-tw424, restarts 0
+busy kills: baseline 4 of 9 victims over 3 rounds, knarr 0 of 9; threshold knarr 0 per round and baseline >= 1: PASS
+ok   coverage, deploy/e2e-fast: 51 of 51 scrapes answered, longest gap 1.0 s of 30 s
+ok   patch rate, deploy/e2e-fast: 51 scrapes, worst window 1 patches in 1.0 s of 20 allowed, peak 60-s count 13 of 310, 0 windows over 5·W + 10
+scaledobject.keda.sh "fake-worker" deleted from default namespace
+deployment.apps "fake-worker" deleted from default namespace
+Image: "knarr:<name>" with ID "sha256:8e1e5277d5b90cfb5a2ee1d33629020a88f88f2a74dc18abe296c3212b8b13d4" not yet present on node "<name>-control-plane", loading...
+serviceaccount/knarr unchanged
+role.rbac.authorization.k8s.io/knarr unchanged
+rolebinding.rbac.authorization.k8s.io/knarr unchanged
+deployment.apps/knarr configured
+Waiting for deployment "knarr" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "knarr" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "knarr" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "knarr" rollout to finish: 0 of 1 updated replicas are available...
+deployment "knarr" successfully rolled out
+deployment.apps/fake-worker-untouched created
+deployment.apps/fake-worker-changed created
+deployment.apps/fake-worker-optout created
+Waiting for deployment "fake-worker-untouched" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "fake-worker-untouched" rollout to finish: 1 of 2 updated replicas are available...
+deployment "fake-worker-untouched" successfully rolled out
+deployment "fake-worker-changed" successfully rolled out
+deployment "fake-worker-optout" successfully rolled out
+ok   settled: each Deployment's busy worker at 1800 with the marker, nothing pending
+deployment.apps/knarr scaled
+deployment.apps/fake-worker-optout unlabeled
+ok   downtime: fake-worker-changed-9f5977ccd-flljv set to 1800, fake-worker-optout opted out
+deployment.apps/knarr scaled
+ok   /readyz 200 after the restart
+ok   one knarr process through the restart scrapes: pod knarr-5fc5958fdf-fbm58, restarts 0
+ok   (a) untouched: knarr_patches_total 0 for 300 s after readiness, 297 scrapes
+ok   (b) opt-out: annotation and marker gone 0.1 s after readiness, bound 120 s
+ok   (c) changed: pod-deletion-cost=1800 26.6 s after readiness, bound 93 s
+ok   preconditions: no throttled result and knarr_paused 0 in 298 scrapes
+ok   coverage, after the restart: 298 of 298 scrapes answered, longest gap 1.0 s of 30 s
+ok   patch rate, after the restart: 298 scrapes, worst window 1 patches in 1.0 s of 20 allowed, peak 60-s count 1 of 310, 0 windows over 5·W + 10
+summary: KEDA 2.21.0, kind v0.33.0, node v1.35.8; KEDA 30 s, fixture 9 s, comparison 196 s, restart 391 s; total 626 s
+keda-e2e: all checks passed
