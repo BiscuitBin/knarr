@@ -31,9 +31,18 @@ trap restore EXIT
 
 sh "$here/../01/tls/gen-certs.sh" "$work/certs" > /dev/null
 kubectl create configmap knarr-wrong-ca --from-file=ca.crt="$work/certs/ca-b.pem" --dry-run=client -o yaml | kubectl apply -f -
-# just deploy waits on kubectl rollout status under check=True, and the wrong-CA pod never latches readiness, so the rollout never completes; the restore trap redeploys the base.
-just deploy "$image" wrong-ca || echo 'deploy: the rollout never completes by design (readiness never latches)'
-pod=$(kubectl get pod -l app.kubernetes.io/name=knarr --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
+# The wrong-CA pod never latches readiness, so the rollout never completes and
+# just deploy applies this variant without waiting (helm-chart ticket 03). Wait
+# here for the running pod that carries the wrong CA; the restore trap
+# redeploys the base.
+just deploy "$image" wrong-ca
+deadline=$(( $(date +%s) + 120 ))
+while :; do
+  pod=$(kubectl get pod -l app.kubernetes.io/name=knarr -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.metadata.name} {.spec.containers[0].env[*].name}{"\n"}{end}' | awk '/KNARR_CA_FILE/ { print $1 }' | tail -n 1)
+  [ -z "$pod" ] || break
+  [ "$(date +%s)" -lt "$deadline" ] || { echo 'FAIL no running wrong-CA pod within 120 s'; exit 1; }
+  sleep 2
+done
 echo "pod $pod"
 # The variable expands inside the pod, on purpose.
 # shellcheck disable=SC2016

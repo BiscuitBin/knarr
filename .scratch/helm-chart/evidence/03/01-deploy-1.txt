@@ -1,0 +1,15 @@
+## just deploy (1: install)
+2026-10-17T07:57:32Z
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
+exit=0
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	1       	2026-10-17 00:57:34.073786 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+deployment env: ERL_FLAGS
+deployment volumes: tmp kube-api-access
+deployment annotations: {"deployment.kubernetes.io/revision":"1","meta.helm.sh/release-name":"knarr","meta.helm.sh/release-namespace":"default"}
+pod-template local-image-id: sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4
+managers: helm/Apply, kube-controller-manager/Update
+pod knarr-7cb48d9b97-crqc2 uid 1926c8e4-b604-49e7-98bc-c0430c3a0af6 phase Running ready True env ERL_FLAGS volumes tmp kube-api-access

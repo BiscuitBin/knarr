@@ -1,0 +1,112 @@
+## just fake-worker-image-build
+2026-10-17T08:00:01Z
+exit=0
+## just keda-e2e
+2026-10-17T08:00:04Z
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/keda_e2e.py "<worktree>" "$1" "$2"
+deployment.apps/keda-operator condition met
+deployment.apps/keda-metrics-apiserver condition met
+apiservice.apiregistration.k8s.io/v1beta1.external.metrics.k8s.io condition met
+ok   KEDA 2.21.0 installed from https://github.com/kedacore/keda/releases/download/v2.21.0/keda-2.21.0-core.yaml, images pinned by digest
+deployment.apps "knarr" deleted from default namespace
+Image: "fake-worker:helm-tickets-1-4-493b5b78" with ID "sha256:a8b34c545fc802891c41eeb1b2120567945be5998c3e850f77e49736abb7c35b" not yet present on node "helm-tickets-1-4-493b5b78-control-plane", loading...
+service/fake-worker-collector created
+deployment.apps/fake-worker created
+deployment.apps/fake-worker-collector created
+scaledobject.keda.sh/fake-worker created
+deployment "coredns" successfully rolled out
+Waiting for deployment "fake-worker-collector" rollout to finish: 0 of 1 updated replicas are available...
+deployment "fake-worker-collector" successfully rolled out
+deployment "fake-worker" successfully rolled out
+scaledobject.keda.sh/fake-worker condition met
+scaledobject.keda.sh/fake-worker patched (no change)
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 1: 2 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 2: 2 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   baseline round 3: 1 of 3 victims busy
+Image: "knarr:helm-tickets-1-4-493b5b78" with ID "sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4" not yet present on node "helm-tickets-1-4-493b5b78-control-plane", loading...
+Release "knarr" has been upgraded. Happy Helming!
+NAME: knarr
+LAST DEPLOYED: Sat Oct 17 01:03:05 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
+deployment.apps/fake-worker labeled
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 1: 0 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 2: 0 of 3 victims busy
+scaledobject.keda.sh/fake-worker patched
+scaledobject.keda.sh/fake-worker patched
+ok   knarr round 3: 0 of 3 victims busy
+ok   one knarr process through the comparison scrapes: pod knarr-7c698847bb-jmcx5, restarts 0
+busy kills: baseline 5 of 9 victims over 3 rounds, knarr 0 of 9; threshold knarr 0 per round and baseline >= 1: PASS
+ok   coverage, deploy/e2e-fast: 52 of 52 scrapes answered, longest gap 1.0 s of 30 s
+ok   patch rate, deploy/e2e-fast: 52 scrapes, worst window 1 patches in 1.0 s of 20 allowed, peak 60-s count 13 of 310, 0 windows over 5·W + 10
+scaledobject.keda.sh "fake-worker" deleted from default namespace
+deployment.apps "fake-worker" deleted from default namespace
+Image: "knarr:helm-tickets-1-4-493b5b78" with ID "sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4" not yet present on node "helm-tickets-1-4-493b5b78-control-plane", loading...
+Release "knarr" has been upgraded. Happy Helming!
+NAME: knarr
+LAST DEPLOYED: Sat Oct 17 01:04:02 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 3
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
+deployment.apps/fake-worker-untouched created
+deployment.apps/fake-worker-changed created
+deployment.apps/fake-worker-optout created
+Waiting for deployment "fake-worker-untouched" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "fake-worker-untouched" rollout to finish: 1 of 2 updated replicas are available...
+deployment "fake-worker-untouched" successfully rolled out
+Waiting for deployment "fake-worker-changed" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "fake-worker-changed" rollout to finish: 1 of 2 updated replicas are available...
+deployment "fake-worker-changed" successfully rolled out
+deployment "fake-worker-optout" successfully rolled out
+ok   settled: each Deployment's busy worker at 1800 with the marker, nothing pending
+deployment.apps/knarr scaled
+deployment.apps/fake-worker-optout unlabeled
+ok   downtime: fake-worker-changed-65c9684bbb-xk5qh set to 1800, fake-worker-optout opted out
+deployment.apps/knarr scaled
+ok   /readyz 200 after the restart
+ok   one knarr process through the restart scrapes: pod knarr-7cb48d9b97-g8mjg, restarts 0
+ok   (a) untouched: knarr_patches_total 0 for 300 s after readiness, 296 scrapes
+ok   (b) opt-out: annotation and marker gone 0.1 s after readiness, bound 120 s
+ok   (c) changed: pod-deletion-cost=1800 17.0 s after readiness, bound 93 s
+ok   preconditions: no throttled result and knarr_paused 0 in 296 scrapes
+ok   coverage, after the restart: 296 of 296 scrapes answered, longest gap 1.0 s of 30 s
+ok   patch rate, after the restart: 296 scrapes, worst window 1 patches in 1.0 s of 20 allowed, peak 60-s count 1 of 310, 0 windows over 5·W + 10
+summary: KEDA 2.21.0, kind v0.33.0, node v1.35.8; KEDA 34 s, fixture 5 s, comparison 196 s, restart 380 s; total 615 s
+keda-e2e: all checks passed
+exit=0
+2026-10-17T08:10:19Z

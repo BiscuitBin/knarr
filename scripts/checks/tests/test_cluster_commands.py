@@ -32,7 +32,7 @@ def run_fake(
     binaries = tmp_path / "bin"
     binaries.mkdir()
     log = tmp_path / "calls.jsonl"
-    for tool in ["kind", "kwokctl", "kubectl", "docker", "kustomize"]:
+    for tool in ["kind", "kwokctl", "kubectl", "docker", "kustomize", "helm"]:
         executable = binaries / tool
         executable.write_text(
             f"#!{sys.executable}\n"
@@ -40,6 +40,8 @@ def run_fake(
             "if sys.argv[1:3] == ['image', 'inspect']: print('sha256:changed-image')\n"
             "with open(os.environ['CALL_LOG'], 'a') as f:\n"
             "    f.write(json.dumps([sys.argv, os.environ.get('KUBECONFIG'), os.environ.get('KWOK_WORKDIR'), os.environ.get('KUBERNETES_SERVICE_HOST'), os.environ.get('KUBERNETES_SERVICE_PORT')]) + '\\n')\n"
+            # A test names one fake that then refuses, after recording its call.
+            f"if os.environ.get('FAKE_REFUSES') == {tool!r}: sys.exit({tool!r} + ' refused: values do not match')\n"
         )
         executable.chmod(0o755)
     env = {
@@ -129,38 +131,108 @@ def test_changing_runner_refuses_to_overwrite_state(tmp_path: Path) -> None:
     assert (state / "runner").read_text() == "kind"
 
 
-def test_deploy_records_image_identity_for_rollout(tmp_path: Path) -> None:
-    result, calls = run_fake(tmp_path, "kind", "deploy", configured=True)
+def helm_install(image_tag: str, *extra: str) -> list[str]:
+    return [
+        "upgrade",
+        "--install",
+        "knarr",
+        str(cluster.chart.CHART),
+        "--namespace",
+        "default",
+        "--server-side=true",
+        "--reset-values",
+        "--wait",
+        "--timeout",
+        "120s",
+        "--set-string",
+        "image.repository=knarr",
+        "--set-string",
+        f"image.tag={image_tag}",
+        "--set-string",
+        "podAnnotations.knarr\\.dev/local-image-id=sha256:changed-image",
+        *extra,
+    ]
+
+
+def test_deploy_installs_the_chart_with_the_image_identity(tmp_path: Path) -> None:
+    result, calls = run_fake(tmp_path, "kind", "deploy", configured=True, extra=("knarr:probe",))
     assert result.returncode == 0, result.stderr
-    render = tmp_path / "work tree/.cluster/render/base"
-    data = json.loads((render / "resources.json").read_text())
-    deployment = next(item for item in data["items"] if item["kind"] == "Deployment")
-    template = deployment["spec"]["template"]
-    assert (
-        template["metadata"]["annotations"]["knarr.dev/local-image-id"] == "sha256:changed-image"
-    )
-    assert template["spec"]["containers"][0]["image"].startswith("knarr:work-tree-")
     assert all(call[1] == str(tmp_path / "work tree/.cluster/kubeconfig") for call in calls)
-    build = next(call[0] for call in calls if call[0][0].endswith("kustomize"))
-    assert build[1:] == ["build", str(render)]
+    commands = [(Path(call[0][0]).name, call[0][1:]) for call in calls]
+    assert commands[0][0] == "kind"
+    assert commands[0][1][:2] == ["load", "docker-image"]
+    # --wait replaces the rollout wait; the image ID rolls a rebuilt tag.
+    assert commands[-1] == ("helm", helm_install("probe"))
+    assert not any(tool == "kubectl" for tool, _ in commands)
 
 
-def test_deploy_variant_layers_on_the_rendered_base(tmp_path: Path) -> None:
+def test_deploy_e2e_fast_adds_its_values_file(tmp_path: Path) -> None:
+    result, calls = run_fake(
+        tmp_path, "kind", "deploy", configured=True, extra=("knarr:probe", "e2e-fast")
+    )
+    assert result.returncode == 0, result.stderr
+    values = str(cluster.ROOT / "fixtures/chart-values/e2e-fast.yaml")
+    assert calls[-1][0][1:] == helm_install("probe", "--values", values)
+
+
+def test_deploy_wrong_ca_applies_the_patched_render_as_helm_without_waiting(
+    tmp_path: Path,
+) -> None:
     result, calls = run_fake(
         tmp_path, "kind", "deploy", configured=True, extra=("knarr:probe", "wrong-ca")
     )
     assert result.returncode == 0, result.stderr
-    render = tmp_path / "work tree/.cluster/render/wrong-ca"
-    assert (render / "kustomization.yaml").read_text() == (
-        Path(SCRIPT).parents[2] / "deploy/wrong-ca/kustomization.yaml"
-    ).read_text()
-    assert (render / "patch.json").is_file()
-    # The variant's kustomization names ../base, so the patched base sits beside it.
-    data = json.loads((render / "../base/resources.json").read_text())
-    deployment = next(item for item in data["items"] if item["kind"] == "Deployment")
-    assert deployment["spec"]["template"]["spec"]["containers"][0]["image"] == "knarr:probe"
-    build = next(call[0] for call in calls if call[0][0].endswith("kustomize"))
-    assert build[1:] == ["build", str(render)]
+    commands = [(Path(call[0][0]).name, call[0][1:]) for call in calls]
+    tools = [tool for tool, _ in commands]
+    assert tools == ["kind", "docker", "helm", "kustomize", "kubectl"]
+    assert commands[2][1][:3] == ["template", "knarr", str(cluster.chart.CHART)]
+    assert "--namespace" in commands[2][1]
+    assert "podAnnotations.knarr\\.dev/local-image-id=sha256:changed-image" in commands[2][1]
+    # Helm 4 installs by server-side apply as field manager helm, so the next
+    # `just deploy` owns, and removes, what this apply adds.
+    assert commands[-1][1] == [
+        "apply",
+        "--server-side",
+        "--field-manager=helm",
+        "-f",
+        str(tmp_path / "work tree/.cluster/render/wrong-ca.yaml"),
+    ]
+    assert not any(tool == "helm" and "upgrade" in arguments for tool, arguments in commands)
+
+
+def test_deploy_wrong_ca_shows_why_the_render_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FAKE_REFUSES", "helm")
+    result, calls = run_fake(
+        tmp_path, "kind", "deploy", configured=True, extra=("knarr:probe", "wrong-ca")
+    )
+    assert result.returncode != 0
+    assert "helm refused: values do not match" in result.stderr
+    assert not any(Path(call[0][0]).name == "kubectl" for call in calls)
+
+
+def test_the_wrong_ca_render_is_the_patched_chart_owned_by_the_release() -> None:
+    rendered = cluster.wrong_ca(cluster.chart_values("knarr:probe", "sha256:probe"))
+    assert rendered.count("    meta.helm.sh/release-name: knarr\n") == 4
+    assert rendered.count("    meta.helm.sh/release-namespace: default\n") == 4
+    assert "        - name: KNARR_CA_FILE\n" in rendered
+    assert "        name: wrong-ca\n" in rendered
+    assert "        image: knarr:probe\n" in rendered
+    assert "        knarr.dev/local-image-id: sha256:probe\n" in rendered
+
+
+@pytest.mark.parametrize("tag", ["20261017", "true", "null"])
+def test_a_tag_helm_would_coerce_still_names_the_image(tag: str) -> None:
+    # --set would read these as a number, a boolean or null; the schema wants a string.
+    rendered = cluster.wrong_ca(cluster.chart_values(f"knarr:{tag}", "sha256:probe"))
+    assert f"        image: knarr:{tag}\n" in rendered
+
+
+@pytest.mark.parametrize("image", ["knarr", "localhost:5000/knarr"])
+def test_deploy_refuses_an_image_without_a_tag(image: str) -> None:
+    with pytest.raises(ValueError, match="repository:tag"):
+        cluster.chart_values(image, "sha256:probe")
 
 
 def test_deploy_refuses_an_unknown_variant(tmp_path: Path) -> None:

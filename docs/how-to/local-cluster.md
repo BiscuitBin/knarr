@@ -21,10 +21,21 @@ a native linux/arm64 image for the arm64 kind node;
 [Image and checks](#image-and-checks) says what differs from the release.
 The default runner is kind. The default image tag is derived from the physical
 worktree path, so separate worktrees do not overwrite each other's image.
-`just deploy` loads that image, renders its tag into the deployment, applies it
-and waits for rollout. The pod template includes the image ID, so rebuilding
-the same local tag triggers a fresh rollout. `just smoke` checks health, readiness and metrics over
+`just deploy` loads that image into kind and installs the Helm chart under
+`charts/knarr` as release `knarr` in the `default` namespace, with
+`helm upgrade --install --wait`: the first run installs it, and each later run
+upgrades it in place and waits for the pod to become ready. The image's
+repository and tag go in through `--set`, and its image ID through
+`podAnnotations` as the pod's `knarr.dev/local-image-id` annotation, so
+rebuilding the same local tag triggers a fresh rollout. Each run resets the
+values to the chart's defaults plus the variant's. `just smoke` checks health, readiness and metrics over
 a temporary loopback port forward, then stops the forwarding process.
+
+A kind cluster that still holds an install from before the chart, applied with
+kustomize, refuses the chart: Helm will not take over resources that lack its
+release label and annotations. Recreate the cluster with `just cluster-down`
+and `just cluster-up`. Moving a real install over is
+[migration by adoption](../decisions/0015-helm-chart.md#migration-by-adoption).
 
 The application listens on port 8080. GET `/healthz` returns 200 while the
 listener is available; GET `/readyz` returns 200 after startup completes.
@@ -77,10 +88,17 @@ ServiceAccount by a RoleBinding; token automount stays disabled, and a projected
 600-second token, the cluster CA and the namespace to the reconciler
 ([Decision 0013](../decisions/0013-in-cluster-client.md)). The Deployment
 turns discovery on with `ERL_FLAGS=-knarr discovery true`; the gate's test
-runs leave it off, so they make no API call. `just deploy <image> wrong-ca`
-deploys the negative-TLS variant from `deploy/wrong-ca/`, which needs a
+runs leave it off, so they make no API call. `just deploy <image> e2e-fast`
+adds the values file `fixtures/chart-values/e2e-fast.yaml`, the short
+intervals of [the KEDA harness](../reference/keda-e2e.md).
+`just deploy <image> wrong-ca` deploys the negative-TLS case: it applies the
+test-only patch `deploy/wrong-ca/patch.json` to the chart's `helm template`
+output with kustomize, since Helm 4's post-renderers are plugins, and needs a
 `knarr-wrong-ca` ConfigMap holding an unrelated `ca.crt`; the ticket 14
-evidence script creates one from a throwaway certificate.
+evidence script creates one from a throwaway certificate. Its pod never
+becomes ready, by design, so this case does not wait. It applies server-side
+as Helm's field manager, `helm`, and marks each resource as the release's, so
+the next `just deploy` takes the CA file and its volume away again.
 
 Before starting Erlang, the container entrypoint caps the soft file-descriptor
 limit at 65,536, preserving any lower inherited limit. kind's containerd can

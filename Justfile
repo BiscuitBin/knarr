@@ -342,10 +342,12 @@ image-build image=cluster_image platform=image_platform:
 image-load image=cluster_image: cluster-tools
     python3 scripts/checks/cluster.py image-load "{{ justfile_directory() }}" "$1"
 
-# The variant is a directory under deploy/ with a kustomization: `base`, or
-# `wrong-ca` for the negative TLS case (ticket 14).
+# Installs charts/knarr as release knarr with `helm upgrade --install --wait`.
+# The variant is `base`; `e2e-fast`, which adds fixtures/chart-values/e2e-fast.yaml
+# (ticket 33); or `wrong-ca`, the negative TLS case (ticket 14), which patches
+# the chart's render and applies it without waiting (helm-chart ticket 03).
 [group('cluster')]
-[doc('Load and deploy the base, or a deploy/ variant, to this worktree kind cluster')]
+[doc('Load the knarr image and install the chart, or a variant, on this worktree kind cluster')]
 deploy image=cluster_image variant="base": cluster-tools
     python3 scripts/checks/cluster.py deploy "{{ justfile_directory() }}" "$1" "$2"
 

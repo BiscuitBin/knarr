@@ -1,0 +1,8 @@
+## just smoke
+2026-10-17T07:58:21Z
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "<worktree>"
+ok /healthz
+ok /readyz
+ok /metrics
+exit=0

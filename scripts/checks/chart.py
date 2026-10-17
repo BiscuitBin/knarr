@@ -13,6 +13,7 @@ appVersion equal gleam.toml's. With no argument, all four run.
 from __future__ import annotations
 
 import difflib
+import json
 import re
 import subprocess
 import sys
@@ -47,9 +48,15 @@ def render(*arguments, namespace="default"):
     ).stdout
 
 
-def canonical(rendered, patches=()):
+def canonical(rendered, patches=(), annotations=None):
     """`kustomize build` of a temporary kustomization holding the render and
-    the given patch files: the same key order and layout as the base's build."""
+    the given patch files: the same key order and layout as the base's build.
+
+    A JSON patch file targets its own kind and name, so it lands in whatever
+    namespace the render is in. `annotations` join the metadata of every
+    resource, never a pod template's (03's wrong-ca install marks the release's
+    resources this way).
+    """
     with tempfile.TemporaryDirectory() as directory:
         work = Path(directory)
         (work / "rendered.yaml").write_text(rendered)
@@ -59,12 +66,27 @@ def canonical(rendered, patches=()):
             "resources:",
             "  - rendered.yaml",
         ]
-        if patches:
+        if patches or annotations:
             lines.append("patches:")
         for index, patch in enumerate(patches):
             name = f"patch-{index}{Path(patch).suffix}"
-            (work / name).write_text(Path(patch).read_text())
+            text = Path(patch).read_text()
+            (work / name).write_text(text)
             lines.append(f"  - path: {name}")
+            if Path(patch).suffix == ".json":
+                target = json.loads(text)
+                lines += [
+                    "    target:",
+                    f"      kind: {json.dumps(target['kind'])}",
+                    f"      name: {json.dumps(target['metadata']['name'])}",
+                ]
+        if annotations:
+            # A strategic merge patch with a target takes the target's kind and
+            # name, so its own are placeholders; `.*` matches every resource.
+            marks = {"metadata": {"name": "any", "annotations": annotations}}
+            patch = {"apiVersion": "v1", "kind": "Any", **marks}
+            (work / "annotations.json").write_text(json.dumps(patch))
+            lines += ["  - path: annotations.json", "    target:", '      name: ".*"']
         (work / "kustomization.yaml").write_text("\n".join(lines) + "\n")
         return subprocess.check_output(["kustomize", "build", str(work)], text=True)
 

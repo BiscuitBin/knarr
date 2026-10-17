@@ -1,0 +1,30 @@
+## edge: wrong-ca with no release, then base
+2026-10-17T07:59:49Z
+release "knarr" uninstalled
+Image: "knarr:helm-tickets-1-4-493b5b78" with ID "sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4" not yet present on node "helm-tickets-1-4-493b5b78-control-plane", loading...
+serviceaccount/knarr serverside-applied
+role.rbac.authorization.k8s.io/knarr serverside-applied
+rolebinding.rbac.authorization.k8s.io/knarr serverside-applied
+deployment.apps/knarr serverside-applied
+NAME	NAMESPACE	REVISION	UPDATED	STATUS	CHART	APP VERSION
+deployment env: KNARR_CA_FILE ERL_FLAGS
+deployment volumes: wrong-ca tmp kube-api-access
+deployment annotations: {"deployment.kubernetes.io/revision":"1","meta.helm.sh/release-name":"knarr","meta.helm.sh/release-namespace":"default"}
+pod-template local-image-id: sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4
+managers: helm/Apply, kube-controller-manager/Update
+pod knarr-754967fffd-6ljmc uid ac714ca8-e900-4d82-91b8-869637b36549 phase Pending ready False env KNARR_CA_FILE ERL_FLAGS volumes wrong-ca tmp kube-api-access
+deploy base exit=0
+Release "knarr" does not exist. Installing it now.
+STATUS: deployed
+REVISION: 1
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	1       	2026-10-17 00:59:53.038134 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+deployment env: ERL_FLAGS
+deployment volumes: tmp kube-api-access
+deployment annotations: {"deployment.kubernetes.io/revision":"2","meta.helm.sh/release-name":"knarr","meta.helm.sh/release-namespace":"default"}
+pod-template local-image-id: sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4
+managers: helm/Apply, kube-controller-manager/Update
+pod knarr-7cb48d9b97-hqhhr uid 87c2ce39-edf9-4eda-940e-edb97ef83723 phase Running ready True env ERL_FLAGS volumes tmp kube-api-access
+ok /healthz
+ok /readyz
+ok /metrics

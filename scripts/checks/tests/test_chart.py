@@ -465,3 +465,48 @@ def test_the_checker_runs_every_check():
     assert result.returncode == 0, result.stdout + result.stderr
     for check in ("lint", "render", "drift", "version"):
         assert f"chart {check}: ok" in result.stdout
+
+
+def settings(erl_flags):
+    """The `-knarr <key> <value>` pairs of an ERL_FLAGS value, by key."""
+    words = erl_flags.split()
+    pairs = [tuple(words[index + 1 : index + 3]) for index in range(0, len(words), 3)]
+    assert all(words[index] == "-knarr" for index in range(0, len(words), 3)), erl_flags
+    assert len(dict(pairs)) == len(pairs), erl_flags
+    return dict(pairs)
+
+
+def test_the_e2e_fast_values_set_the_intervals_of_deploy_e2e_fast():
+    # The KEDA harness's comparison phase (ticket 33) installs the chart with these
+    # values (helm-chart ticket 03); deploy/e2e-fast keeps them until ticket 06.
+    patch = json.loads((ROOT / "deploy/e2e-fast/patch.json").read_text())
+    container = patch["spec"]["template"]["spec"]["containers"][0]
+    wanted = next(item["value"] for item in container["env"] if item["name"] == "ERL_FLAGS")
+    got = erl_flags(chart.render("--values", str(ROOT / "fixtures/chart-values/e2e-fast.yaml")))
+    assert got.startswith("-knarr discovery true ")
+    assert settings(got) == settings(wanted)
+
+
+def test_a_patch_applies_in_any_namespace():
+    # A patch file names no namespace; it still lands on its kind and name.
+    rendered = chart.canonical(
+        chart.render(namespace="other"), patches=[ROOT / "deploy/wrong-ca/patch.json"]
+    )
+    assert (
+        "        - name: KNARR_CA_FILE\n          value: /etc/knarr/wrong-ca/ca.crt\n" in rendered
+    )
+    assert (
+        "      - configMap:\n          name: knarr-wrong-ca\n        name: wrong-ca\n" in rendered
+    )
+    assert re.findall(r"^\s*namespace: (\S+)$", rendered, re.MULTILINE) == ["other"] * 5
+
+
+def test_annotations_mark_each_resource_and_never_the_pod_template():
+    marks = {"meta.helm.sh/release-name": "knarr", "meta.helm.sh/release-namespace": "other"}
+    rendered = chart.canonical(chart.render(namespace="other"), annotations=marks)
+    block = (
+        "metadata:\n  annotations:\n    meta.helm.sh/release-name: knarr\n"
+        "    meta.helm.sh/release-namespace: other\n"
+    )
+    assert [document.count(block) for document in documents(rendered)] == [1, 1, 1, 1]
+    assert rendered.count("meta.helm.sh/") == 8

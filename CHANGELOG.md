@@ -19,6 +19,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ### Changed
 
+- The local loop and the kind workflows install the chart: `just deploy` runs `helm upgrade --install --wait` with `charts/knarr`, the local image through `--set` and its image ID through `podAnnotations`, in place of the kustomize base and its rollout wait. The KEDA harness's short intervals are the values file `fixtures/chart-values/e2e-fast.yaml`, held to `deploy/e2e-fast` by a test. The wrong-CA case applies `deploy/wrong-ca/patch.json` to the chart's `helm template` output with kustomize, server-side as Helm's field manager and without a wait, so the next `just deploy` removes it. A chart-only change selects the kind and kwok jobs and runs the reconcile proof. A kind cluster holding a kustomize install from before must be recreated.
 - Decision 0015: knarr ships a Helm chart, published to `oci://ghcr.io/steven-cutting/charts/knarr` with the release's image digest stamped in, for ease of adoption, and Helm becomes the only supported install once 0015's ticket 06 retires the kustomize route. It amends Decision 0012's kustomize-only packaging; the kustomize release overlay stays documented until then.
 - Local image builds are native: `just image-build` and `just fake-worker-image-build` build linux/arm64 on an arm64 host, from new `linux-aarch64` entries in `pixi.lock`, so the kind loop runs on Apple silicon. The release image stays linux/amd64.
 - kubectl in the cluster environment moves from 1.34.3 to 1.36.0, because 1.34.3 has no linux-aarch64 build.

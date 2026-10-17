@@ -1,0 +1,28 @@
+## same tag, new image ID: just deploy (3)
+2026-10-17T07:58:08Z
+before: sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4
+after:  sha256:d7538c664e2cc297e3955d6ccf3c2afe91e3dc999e37bc46ff9222fc9d688b95
+exit=0
+Release "knarr" has been upgraded. Happy Helming!
+REVISION: 3
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	3       	2026-10-17 00:58:10.998982 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+deployment env: ERL_FLAGS
+deployment volumes: tmp kube-api-access
+deployment annotations: {"deployment.kubernetes.io/revision":"2","meta.helm.sh/release-name":"knarr","meta.helm.sh/release-namespace":"default"}
+pod-template local-image-id: sha256:d7538c664e2cc297e3955d6ccf3c2afe91e3dc999e37bc46ff9222fc9d688b95
+managers: helm/Apply, kube-controller-manager/Update
+pod knarr-6fd4df8d6d-ztttx uid 18291c49-8b6b-421b-a0d6-cbb3e0940ed3 phase Running ready True env ERL_FLAGS volumes tmp kube-api-access
+
+## restore the original image under the tag: just deploy (4)
+exit=0
+Release "knarr" has been upgraded. Happy Helming!
+REVISION: 4
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	4       	2026-10-17 00:58:14.828419 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+deployment env: ERL_FLAGS
+deployment volumes: tmp kube-api-access
+deployment annotations: {"deployment.kubernetes.io/revision":"3","meta.helm.sh/release-name":"knarr","meta.helm.sh/release-namespace":"default"}
+pod-template local-image-id: sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4
+managers: helm/Apply, kube-controller-manager/Update
+pod knarr-7cb48d9b97-hsjmm uid 6d1f2f69-634e-447f-8076-81e229d10d4e phase Running ready True env ERL_FLAGS volumes tmp kube-api-access

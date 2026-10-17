@@ -76,6 +76,10 @@ GROUPS = {
         (
             "charts/**",
             "deploy/base/**",
+            # test_chart.py holds the e2e-fast values and the wrong-ca patch to these.
+            "deploy/e2e-fast/**",
+            "deploy/wrong-ca/**",
+            "fixtures/chart-values/**",
             "src/knarr/application_ffi.erl",
             "scripts/schemas/**",
             "scripts/checks/chart.py",
@@ -86,9 +90,13 @@ GROUPS = {
         "cluster_commands cluster_name fake_worker_cluster keda_e2e observability",
         (
             "scripts/checks/cluster.py",
+            "scripts/checks/chart.py",
             "scripts/checks/keda_e2e.py",
             "scripts/checks/observability.py",
             "scripts/cluster-name.sh",
+            # cluster.py installs the chart (helm-chart ticket 03).
+            "charts/**",
+            "fixtures/chart-values/**",
             "deploy/**",
             "fixtures/fake_worker/deploy/**",
             "fixtures/keda_e2e/**",
@@ -168,6 +176,8 @@ CLUSTERS = {
         "Dockerfile",
         ".dockerignore",
         "deploy/**",
+        "charts/**",
+        "scripts/checks/chart.py",
         "scripts/checks/image.py",
         "scripts/prune_runtime.py",
         "scripts/container-entrypoint.sh",
@@ -182,7 +192,12 @@ CLUSTERS = {
         "scripts/checks/deployment.py",
         "scripts/schemas/**",
     ),
-    "kwok": ("deploy/**", "scripts/checks/deployment.py", "scripts/schemas/**"),
+    "kwok": (
+        "deploy/**",
+        "charts/**",
+        "scripts/checks/deployment.py",
+        "scripts/schemas/**",
+    ),
 }
 
 

@@ -33,9 +33,11 @@ on:
       - Justfile
       - deploy/base/**
       - deploy/wrong-ca/**
+      - charts/**
       - fixtures/fake_worker/**
       - src/knarr/**
       - scripts/checks/cluster.py
+      - scripts/checks/chart.py
 
 permissions: {}
 
