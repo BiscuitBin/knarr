@@ -82,7 +82,7 @@ The collector keeps its records in memory and logs each one as `fake_worker coll
 
 ## Running it
 
-The image builds from the repository root with `fixtures/fake_worker/Dockerfile`. It uses the same stages as knarr's: the locked pixi environments, the checksum-pinned rebar3, an erlang-shipment, and an `ubuntu:24.04` runtime as UID/GID 10001 behind the descriptor-bounding entrypoint. Its `FROM` lines carry the same digests as knarr's, and `test_image.py` fails while the two Dockerfiles differ there or in rebar3's `ADD`, so a base image moves in both. `Dockerfile.dockerignore` beside it is its context allowlist, so knarr's `.dockerignore` and image are unchanged. Like knarr's, it is built and run in CI on linux/amd64.
+The image builds from the repository root with `fixtures/fake_worker/Dockerfile`. It uses the same stages as knarr's: the locked pixi environments, the checksum-pinned rebar3, an erlang-shipment, and an `ubuntu:24.04` runtime as UID/GID 10001 behind the descriptor-bounding entrypoint. Its `FROM` lines carry the same digests as knarr's, and `test_image.py` fails while the two Dockerfiles differ there or in rebar3's `ADD`, so a base image moves in both. `Dockerfile.dockerignore` beside it is its context allowlist, so knarr's `.dockerignore` and image are unchanged. Like knarr's, it builds for the host architecture: linux/amd64 in CI, and linux/arm64 on an Apple-silicon host ([ticket 50](../../.scratch/bootstrap/issues/50-local-arm64-image.md)).
 
 With the cluster tools installed and a kind cluster up (see the [local cluster guide](../how-to/local-cluster.md)):
 
