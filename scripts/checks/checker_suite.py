@@ -71,6 +71,17 @@ GROUPS = {
             "scripts/checks/deployment.py",
         ),
     ),
+    "chart": (
+        "chart",
+        (
+            "charts/**",
+            "deploy/base/**",
+            "src/knarr/application_ffi.erl",
+            "scripts/schemas/**",
+            "scripts/checks/chart.py",
+            "scripts/checks/deployment.py",
+        ),
+    ),
     "cluster": (
         "cluster_commands cluster_name fake_worker_cluster keda_e2e observability",
         (

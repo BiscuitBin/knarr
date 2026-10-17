@@ -1,0 +1,35 @@
+# Every scheduling and metadata value set, so the gate renders and validates
+# the parts of the templates the default values leave out. Not packaged.
+image:
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: registry
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+nodeSelector:
+  kubernetes.io/os: linux
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: knarr
+    effect: NoSchedule
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/arch
+              operator: In
+              values: [amd64, arm64]
+priorityClassName: system-cluster-critical
+podAnnotations:
+  knarr.dev/local-image-id: sha256:0
+podLabels:
+  team: platform
+knarr:
+  poll_interval: 5
+  log_level: debug

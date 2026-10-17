@@ -1,0 +1,19 @@
+# Exactly the verbs k8s_client uses: no get, no watch, and nothing on any other
+# resource. knarr's only writes are a patch on pods and Events.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: knarr
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "knarr.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list, patch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [list]

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "knarr chart values",
+  "description": "Types only (Decision 0015): knarr refuses an out-of-range value at start, naming the key.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "pullPolicy": {
+          "type": "string"
+        },
+        "pullSecrets": {
+          "type": "array"
+        }
+      }
+    },
+    "knarr": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status_port": {
+          "type": "integer"
+        },
+        "status_path": {
+          "type": "string"
+        },
+        "max_body_bytes": {
+          "type": "integer"
+        },
+        "thresholds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "threshold_margin": {
+          "type": "integer"
+        },
+        "unknown_polls": {
+          "type": "integer"
+        },
+        "absent_after": {
+          "type": "integer"
+        },
+        "poll_interval": {
+          "type": "integer"
+        },
+        "poll_timeout": {
+          "type": "integer"
+        },
+        "patch_interval": {
+          "type": "integer"
+        },
+        "list_interval": {
+          "type": "integer"
+        },
+        "poll_concurrency": {
+          "type": "integer"
+        },
+        "poll_jitter_percent": {
+          "type": "integer"
+        },
+        "patch_rate_per_second": {
+          "type": "integer"
+        },
+        "patch_burst": {
+          "type": "integer"
+        },
+        "backoff_initial": {
+          "type": "integer"
+        },
+        "backoff_cap": {
+          "type": "integer"
+        },
+        "log_level": {
+          "type": "string"
+        }
+      }
+    },
+    "resources": {
+      "type": "object"
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    },
+    "priorityClassName": {
+      "type": "string"
+    },
+    "podAnnotations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "podLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

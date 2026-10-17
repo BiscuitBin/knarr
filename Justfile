@@ -302,7 +302,7 @@ check-clean baseline="":
 [doc('The complete read-only gate')]
 check:
     test -x .pixi/envs/default/bin/python3 || { printf '%s\n' 'the pixi environment is missing; run just initialize' >&2; exit 2; }
-    python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam test snapshots-check fake-worker-lint fake-worker-test test-checkers packaging-check toml-check lint
+    python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam test snapshots-check fake-worker-lint fake-worker-test test-checkers packaging-check chart-check toml-check lint
 
 # --------------------------------------------------------------- cluster ---
 # Cluster effects are deliberately outside the offline repository gate.
@@ -379,6 +379,13 @@ image-check image=cluster_image:
 packaging-check:
     hadolint Dockerfile fixtures/fake_worker/Dockerfile
     python3 scripts/checks/deployment.py
+
+# The chart (Decision 0015): helm lint --strict, the render through kubeconform
+# -strict, its drift from deploy/base and the version lockstep with gleam.toml.
+[group('check')]
+[doc('Lint, render and validate the Helm chart; hold it to deploy/base and gleam.toml')]
+chart-check:
+    python3 scripts/checks/chart.py
 
 # The fake worker fixture on kind (ticket 29). Its image builds from the
 # repository root, with its own Dockerfile and context allowlist beside it.

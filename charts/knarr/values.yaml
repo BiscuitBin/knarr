@@ -1,0 +1,50 @@
+# knarr's values (Decision 0015, values surface v1). The tracked values are the
+# local ones, which render deploy/base: `just chart-check` holds the two equal
+# apart from the namespace and Helm's labels. The release stamps the published
+# image into the packaged chart.
+
+image:
+  repository: knarr
+  tag: local
+  # A digest wins over the tag; with neither, the tag is the chart's appVersion.
+  digest: ""
+  pullPolicy: Never
+  pullSecrets: []
+
+# The install-wide settings knarr reads at start as `-knarr <key> <value>` in
+# ERL_FLAGS (config.allium Installed). Every key is unset by default, so knarr's
+# own default applies; a value outside its range stops knarr at start, naming
+# the key. The chart owns discovery, port and bind.
+knarr: {}
+#   status_port: 8080
+#   status_path: /knarr/v1/status
+#   max_body_bytes: 4096
+#   thresholds: [300, 900, 1800, 3600]
+#   threshold_margin: 60
+#   unknown_polls: 3
+#   absent_after: 300
+#   poll_interval: 30
+#   poll_timeout: 5
+#   patch_interval: 60
+#   list_interval: 60
+#   poll_concurrency: 64
+#   poll_jitter_percent: 10
+#   patch_rate_per_second: 5
+#   patch_burst: 10
+#   backoff_initial: 1
+#   backoff_cap: 60
+#   log_level: info
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+podAnnotations: {}
+podLabels: {}

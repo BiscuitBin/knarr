@@ -17,7 +17,13 @@ def test_every_module_has_exactly_one_owner():
         (["scripts/checks/tests/test_validate_docs.py"], ["docs"], [], []),
         (["src/knarr/config.gleam"], [], ["controller-process"], ["kind"]),
         (["fixtures/fake_worker/src/server.gleam"], [], ["worker-process"], ["worker"]),
-        (["deploy/base/deployment.yaml"], ["cluster", "deployment"], [], ["kind", "kwok"]),
+        (
+            ["deploy/base/deployment.yaml"],
+            ["chart", "cluster", "deployment"],
+            [],
+            ["kind", "kwok"],
+        ),
+        (["charts/knarr/templates/deployment.yaml"], ["chart"], [], []),
     ],
 )
 def test_selection(paths, regressions, runtime, clusters):
@@ -98,6 +104,10 @@ def test_unowned_test_module_fails(tmp_path, monkeypatch, unowned):
         ("fixtures/fake_worker/deploy/resources.json", "packaging"),
         (".scratch/bootstrap/evidence/01/tls/tls_check.escript", "packaging"),
         ("deploy/release/README.md", "release"),
+        ("deploy/base/resources.json", "chart"),
+        ("charts/knarr/values.schema.json", "chart"),
+        ("src/knarr/application_ffi.erl", "chart"),
+        ("scripts/checks/deployment.py", "chart"),
         ("deploy/base/resources.json", "cluster"),
         ("deploy/wrong-ca/kustomization.yaml", "cluster"),
         ("fixtures/fake_worker/deploy/resources.json", "cluster"),

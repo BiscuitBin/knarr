@@ -1,0 +1,9 @@
+knarr {{ .Chart.AppVersion }} is installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+It acts only on Deployments in namespace {{ .Release.Namespace }} that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace {{ .Release.Namespace }} knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v{{ .Chart.AppVersion }}/docs/how-to/install.md
