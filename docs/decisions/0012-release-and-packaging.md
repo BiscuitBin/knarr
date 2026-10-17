@@ -39,10 +39,12 @@ The evidence was gathered on 2026-10-09 (UTC) on an Apple M5 Pro (Darwin arm64) 
 
 ### §9.15: kustomize only
 
+Amended by [Decision 0015](0015-helm-chart.md): knarr ships a Helm chart, published to `oci://ghcr.io/steven-cutting/charts/knarr`, for ease of adoption, and Helm becomes the only supported install once 0015's ticket 06 retires `deploy/` and `just release-pin`. The kustomize route below stays the documented install until 0015's ticket 05 installs the published chart, and stays documented, as deprecated, until ticket 06.
+
 - **`deploy/base/` stays as it is,** the kind loop's base, with `knarr:local`, `imagePullPolicy: Never`, an empty Role and no mounted token; `scripts/checks/tests/test_deployment.py` pins those.
 - **A release overlay, `deploy/release/`,** built by ticket 36 from the design under [`evidence/28/overlay/`](../../.scratch/bootstrap/evidence/28/overlay/kustomization.yaml). It changes two things and nothing else: the `images` field renames the image to `ghcr.io/steven-cutting/knarr` pinned by digest, and one JSON patch sets `imagePullPolicy: IfNotPresent`. [overlay-render.txt](../../.scratch/bootstrap/evidence/28/overlay-render.txt) renders it with the dry run's digest, validates all three resources against the vendored schemas, and diffs it against the base render: two lines differ.
 - **The namespaced Role lives in the base.** One install per namespace (§9.18), so the Role, its verbs and the RoleBinding are the same for the kind loop and for a release. Ticket 14 adds them to the base; the overlay inherits them. A release is installed with `kubectl apply -k` on the overlay at the release tag, with the digest from the workflow's summary; ticket 34 writes that guide. Amended by ticket 37: at a release's own tag the overlay holds the previous release's digest, because the pin lands on `main` only after the run has pushed. An install checks out `vX.Y.Z` and runs `just release-pin sha256:<64 hex>` with the run's digest, which edits only the local copy and checks the render, then applies `deploy/release` with `kubectl apply -k`. `just release-pin` takes the bare digest, the log's `digest=` line or the part after `@` in the summary's reference, and needs the cluster environment (`just cluster-install`). Applied unchanged at the tag, the overlay installs the previous release, or for `v0.1.0` the all-zero placeholder, which no registry serves ([install-at-tag.txt](../../.scratch/bootstrap/evidence/37/install-at-tag.txt)). `pin-digest.sh` checks the render with the cluster environment's kustomize (5.8.2), and `kubectl apply -k` applies with kubectl's bundled one (5.7.1 in kubectl 1.34.3). Both render the same pinned image there; ticket 34's guide names both. Amended by [ticket 50](../../.scratch/bootstrap/issues/50-local-arm64-image.md): the cluster environment's kubectl is 1.36.0, which bundles kustomize 5.8.1.
-- **Helm is deferred** ([DEFERRED.md §8](../DEFERRED.md#8-other-future-targets)). One consumer, one namespace, two differences from the base and no values to template: a chart would add a second packaging to keep in step with the base for nothing it needs today. `kubernetes-helm` stays pinned in the cluster environment, unused, until a second consumer asks for values. Amended by [ticket 51](../../.scratch/bootstrap/issues/51-local-observability.md): helm is still not knarr's packaging, but it now renders the local observability stack's third-party charts with `helm template`.
+- **Helm is deferred** ([DEFERRED.md §8](../DEFERRED.md#8-other-future-targets)). One consumer, one namespace, two differences from the base and no values to template: a chart would add a second packaging to keep in step with the base for nothing it needs today. `kubernetes-helm` stays pinned in the cluster environment, unused, until a second consumer asks for values. Amended by [ticket 51](../../.scratch/bootstrap/issues/51-local-observability.md): helm is still not knarr's packaging, but it now renders the local observability stack's third-party charts with `helm template`. Amended by [Decision 0015](0015-helm-chart.md): this reasoning was sound for the goal it had, and the goal has changed. The maintainer wants a chart for ease of adoption, not for a second consumer, so 0015 decides the chart, its values and its publication, and moves `kubernetes-helm` into the default environment.
 
 ### Architectures: amd64 only for the MVP
 
@@ -125,7 +127,7 @@ The image in the dry run is a stand-in (`FROM scratch`, one file, knarr's labels
 
 ## What would reopen this
 
-- **A second consumer wants values** (another namespace layout, resource sizes, a different image name): a Helm chart, or kustomize components, over the same base.
+- **A second consumer wants values** (another namespace layout, resource sizes, a different image name): a Helm chart, or kustomize components, over the same base. Amended by [Decision 0015](0015-helm-chart.md): Helm was reopened for a different reason, ease of adoption, with no second consumer.
 - **A target cluster gets arm64 node pools:** the arm64 build in ticket 38, with the re-lock.
 - **GHCR gains an immutable-tag setting:** turn it on and keep the guard as a second line.
 - **The package has to be private:** GKE then needs a pull secret or Workload Identity Federation, and the overlay a `imagePullSecrets` patch. Amended by ticket 37: the package is public from its first push, so this would be a change to private by hand.
@@ -134,6 +136,7 @@ The image in the dry run is a stand-in (`FROM scratch`, one file, knarr's labels
 
 ## Related pages
 
+- [Decision 0015: knarr ships a Helm chart](0015-helm-chart.md), which amends §9.15
 - [Project overview](../OVERVIEW.md), §1 and §9.15
 - [Decision 0007: Local cluster and test tiers](0007-local-cluster.md), for the kind loop the base serves
 - [Decision 0003: Tool manager](0003-tool-manager.md), for the pins the image build reads

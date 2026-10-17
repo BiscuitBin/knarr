@@ -17,6 +17,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ### Changed
 
+- Decision 0015: knarr ships a Helm chart, published to `oci://ghcr.io/steven-cutting/charts/knarr` with the release's image digest stamped in, for ease of adoption, and Helm becomes the only supported install once 0015's ticket 06 retires the kustomize route. It amends Decision 0012's kustomize-only packaging; the kustomize release overlay stays documented until then.
 - Local image builds are native: `just image-build` and `just fake-worker-image-build` build linux/arm64 on an arm64 host, from new `linux-aarch64` entries in `pixi.lock`, so the kind loop runs on Apple silicon. The release image stays linux/amd64.
 - kubectl in the cluster environment moves from 1.34.3 to 1.36.0, because 1.34.3 has no linux-aarch64 build.
 - `deploy/release` pins the digest of 0.1.0, the first published release.

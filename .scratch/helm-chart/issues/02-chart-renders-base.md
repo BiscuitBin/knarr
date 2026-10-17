@@ -21,7 +21,7 @@ Rendered with local values, the chart matches `kustomize build deploy/base` apar
 **Status:** ready-for-agent
 
 - [ ] The chart renders the four resources into `.Release.Namespace`. It has no `replicaCount`, ClusterRole, PDB, Service or ServiceMonitor.
-- [ ] The values and schema are 0015's surface, no more and no less. `additionalProperties: false` rejects an unknown key, and a test proves it. If 0015 chose ranges, a checker test pins each range to `config.allium` and `config.gleam`.
+- [ ] The values and schema are 0015's surface, no more and no less. `additionalProperties: false` rejects an unknown key on the objects knarr defines, and a test proves it; another test proves an arbitrary annotation key such as `knarr.dev/local-image-id` renders, as 0015's open maps allow. If 0015 chose ranges, a checker test pins each range to `config.allium` and `config.gleam`.
 - [ ] `test_deployment.py`'s invariants hold on the chart's default render, through tests beside the existing ones: the Role rules, no Lease, the token projection, `ERL_FLAGS`, the security context, one replica and `Recreate`. A render with several `-knarr` values set keeps `-knarr discovery true` first.
 - [ ] A gate check fails when the chart's render with local values and `kustomize build deploy/base` differ outside the allowlist above. A seeded difference proves that it fails, and so does a seeded change to a selector label.
 - [ ] A render with a non-default `--namespace` puts every resource and the RoleBinding subject in that namespace.

@@ -48,12 +48,44 @@ The maintainer settled these points on 2026-10-16: the chart is published to OCI
 
 **Status:** ready-for-agent
 
-- [ ] **Authorization required:** the network, for the fetch. `.scratch/helm-chart/evidence/01/sources.txt` records every source above with its HTTP status, size and sha256, and the phrase each claim rests on, found or not found. It has the shape of ticket 28's [sources.txt](../../bootstrap/evidence/28/sources.txt), with a `sources.sh` beside it.
+- [x] **Authorization required:** the network, for the fetch. `.scratch/helm-chart/evidence/01/sources.txt` records every source above with its HTTP status, size and sha256, and the phrase each claim rests on, found or not found. It has the shape of ticket 28's [sources.txt](../../bootstrap/evidence/28/sources.txt), with a `sources.sh` beside it.
 - [ ] Optional. **Authorization required:** the network, for the `registry:2` image pull. A loopback `registry:2` dry run in `.scratch/helm-chart/evidence/01/` packages a scratch chart with a stamped digest, pushes it, pulls it by digest and templates it, and shows that the rendered image is the stamped reference.
-- [ ] Decision 0015 records each decision above with its evidence, and says plainly that 0012's reasoning was sound for its goal and that the goal has changed.
-- [ ] 0012, DEFERRED §8, OVERVIEW §9.15 and its status-table row point to 0015. Nothing they say contradicts it.
-- [ ] The record names the tickets that carry it out: 02 to 08 in this directory, and bootstrap ticket 38 for the index digest.
-- [ ] `CHANGELOG.md` records the decision under Unreleased.
-- [ ] `just docs-check` passes, and `just check` ends with "All checks passed and the worktree is unchanged."
+  Not done here: Decision 0015's Findings hand it to ticket 04's loopback dry run, where the real stamping script exists to run it.
+- [x] Decision 0015 records each decision above with its evidence, and says plainly that 0012's reasoning was sound for its goal and that the goal has changed.
+- [x] 0012, DEFERRED §8, OVERVIEW §9.15 and its status-table row point to 0015. Nothing they say contradicts it.
+- [x] The record names the tickets that carry it out: 02 to 08 in this directory, and bootstrap ticket 38 for the index digest.
+- [x] `CHANGELOG.md` records the decision under Unreleased.
+- [x] `just docs-check` passes, and `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes
+
+Settled on 2026-10-17 (UTC). The maintainer's choices (OCI on ghcr.io, Helm as the only install, kustomize and `release-pin` retiring, types-only schema, helm and kustomize in the default environment) were made in the planning session on 2026-10-16; this ticket records them.
+
+### What changed
+
+- New [Decision 0015](../../../docs/decisions/0015-helm-chart.md), registered in `docs/manifest.yml`, the [decisions index](../../../docs/decisions/README.md) and the [docs index](../../../docs/README.md). It records every decision above, says 0012 was sound for its goal and that the goal changed, and names 02 to 08 and bootstrap 38.
+- Amended to point at 0015: [Decision 0012](../../../docs/decisions/0012-release-and-packaging.md) (§9.15, "Helm is deferred", and "What would reopen this"), [DEFERRED §8](../../../docs/DEFERRED.md#8-other-future-targets) (Helm no longer deferred; helm moves to the default environment), and [OVERVIEW](../../../docs/OVERVIEW.md) §9.15 and its status-table row. All of them name one milestone: Helm becomes the only supported install when ticket 06 retires the kustomize route.
+- `CHANGELOG.md` records the decision under Unreleased, Changed.
+- Evidence: [sources.sh](../evidence/01/sources.sh) and [sources.txt](../evidence/01/sources.txt), in ticket 28's shape.
+- Review fixes, applied after the first green gate: the schema rule closes only the objects knarr defines, and leaves the user's maps and the Kubernetes objects open. The release stamps `image.repository`, `image.pullPolicy: IfNotPresent` and `image.digest` together. Ticket 07 attests the chart the way 38 attests the image. The 0012 quote is attributed to the right bullet. 02's and 04's boxes were tightened to match.
+
+### What was verified, and what was not
+
+- `sources.sh` fetched 25 pages, each HTTP 200; 41 phrases found, 0 not found ([sources.txt](../evidence/01/sources.txt)).
+- `just docs-check` passes, and `just check` ends with "All checks passed and the worktree is unchanged."
+- Not done: the optional `registry:2` dry run (ticket 04 carries it). Nothing pushed a chart, logged in to a registry or changed a repository setting.
+
+### Review
+
+Codex was unavailable (the requested model was not supported on this login), so a five-lens Claude subagent review ran instead, with two to three adversarial verifiers per finding. Six findings were confirmed and fixed (the review fixes above); six were rejected, among them the kubectl-only delete route, chart checks before the image push (raised for 04 below) and Helm 4 server-side apply over kustomize-applied resources (05's migration run would surface it).
+
+### What each later ticket needs
+
+- **02:** the chart goes at `charts/knarr/`, with `apiVersion: v2`, and `version` = `appVersion` = the `gleam.toml` version, enforced by a gate check. Tracked `values.yaml` holds the local values of `deploy/base` (`knarr`, `local`, `Never`). The schema checks types only. `additionalProperties: false` applies to the top level, `image` and the `-knarr` settings object. `podAnnotations`, `podLabels` and `nodeSelector` are string maps. `resources`, `affinity`, `tolerations` and `pullSecrets` stay open. Test both an unknown key being refused and an arbitrary annotation key rendering. `kubernetes-helm` (4.3.0) and `kustomize` move to the default environment. Chart tests are pytest over `helm template`, with no helm-unittest or chart-testing. Keep the resource names and the selector `app.kubernetes.io/name: knarr` exactly.
+- **03:** the kind loop and CI install the chart; `--set-string podAnnotations.knarr\.dev/local-image-id=<id>` relies on 02's open annotation map.
+- **04:** stamp `image.repository: ghcr.io/steven-cutting/knarr`, `image.pullPolicy: IfNotPresent` and `image.digest` together, and assert the rendered `image:` line and `imagePullPolicy`. Give the chart push its own existence guard. Recover a run that left the image present and the chart absent by bumping the version, never by a chart-only push. Run the loopback `registry:2` dry run this ticket left optional. Hardening worth considering: run the chart checks that need no digest before the image push.
+- **05:** prove adoption (the managed-by label and the two release annotations), verify the package's visibility, and change the `Uninstall` clause and the operations page. The kustomize route stays documented, as deprecated, until 06.
+- **06:** retire `deploy/`, `release-pin` and the overlay checks; Helm is then the only supported install.
+- **07:** attest the chart's digest with GitHub artifact attestations, as 38 does for the image. cosign and `.prov` stay deferred.
+- **08:** the Artifact Hub listing.
+- **Bootstrap 38:** when the release switches to an index digest, the chart stamps that digest in the same step.
