@@ -41,6 +41,9 @@ KIND_ONLY = {
     "observability-down",
     "observability-smoke",
     "grafana",
+    "observer",
+    "observer-cli",
+    "remsh",
 }
 # What the smoke sets on four workers through control, and what each one's status
 # endpoint must then answer, byte for byte (worker_contract.allium). Every body

@@ -92,6 +92,25 @@ def verify_download(body, sha256):
     return body
 
 
+def fetch_pinned(directory, url, sha256):
+    """The file `url` names under `directory`: the cached copy while its hash
+    still matches the pin, or a fresh download refused unless it does. Shared
+    by observability.py and observer.py."""
+    if not url.startswith("https://"):
+        raise ValueError(f"download URL is not https: {url}")
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / url.rpartition("/")[2]
+    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == sha256:
+        return path
+    with urllib.request.urlopen(url, timeout=120) as response:  # noqa: S310 - https, checked above
+        body = verify_download(response.read(), sha256)
+    # Whole or not at all: an interrupted write never leaves a partial file.
+    partial = path.with_name(f"{path.name}.partial")
+    partial.write_bytes(body)
+    partial.replace(path)
+    return path
+
+
 def keda_kustomization(pins, manifest, resource):
     """A kustomization over the release YAML that replaces each image it names
     with the pinned digest. Every image the YAML names must be pinned at the

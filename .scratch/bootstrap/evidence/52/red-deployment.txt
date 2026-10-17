@@ -1,0 +1,7 @@
+FAILED scripts/checks/tests/test_deployment.py::test_wrong_ca_variant_only_redirects_the_ca_file
+FAILED scripts/checks/tests/test_deployment.py::test_observer_variant_only_turns_distribution_on
+FAILED scripts/checks/tests/test_deployment.py::test_render_builds_and_validates_every_variant_and_checks_the_difference
+FAILED scripts/checks/tests/test_deployment.py::test_render_fails_when_the_overlay_changes_anything_else
+4 failed, 23 passed in 0.78s
+# The guard over the shipped variants, parametrized once over deploy/observer to show it fails on a variant that carries distribution:
+FAILED scripts/checks/tests/test_deployment.py::test_shipped_variants_carry_no_distribution[observer]

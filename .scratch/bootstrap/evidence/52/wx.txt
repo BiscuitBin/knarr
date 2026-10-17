@@ -1,0 +1,31 @@
+$ ls .pixi/envs/default/lib/erlang/lib/ | grep -E "^(wx|observer|runtime_tools)-"
+observer-2.19
+runtime_tools-2.5
+wx-2.7
+$ ls .pixi/envs/default/lib/erlang/lib/wx-2.7
+doc
+ebin
+include
+src
+$ find .pixi/envs/default -name "wxe_driver*"
+(no output: no driver)
+$ erl -noshell -eval "io:format(\"~p~n\", [catch observer:start()]), halt()."
+=CRASH REPORT==== 17-Oct-2026::00:13:49.973459 ===
+  crasher:
+    initial call: wxe_master:init/1
+    pid: <0.84.0>
+    registered_name: []
+    exception error: {load_driver,"No driver found"}
+      in function  wxe_util:priv_dir/2 (wxe_util.erl:193)
+      in call from wxe_util:init_nif/1 (wxe_util.erl:60)
+      in call from wxe_master:init/1 (wxe_master.erl:117)
+      in call from gen_server:init_it/2 (gen_server.erl:2276)
+      in call from gen_server:init_it/6 (gen_server.erl:2236)
+    ancestors: [<0.83.0>,observer,<0.10.0>]
+    message_queue_len: 0
+    messages: []
+    links: []
+$ which -a erl
+erl not found
+lsd: /opt/homebrew/bin/erl: No such file or directory (os error 2).
+

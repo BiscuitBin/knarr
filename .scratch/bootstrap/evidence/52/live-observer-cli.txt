@@ -1,0 +1,92 @@
+# 2026-10-17 00:37 PDT, this worktree's kind cluster, deploy/observer; stdin: q after 5 s; ANSI colour codes stripped
+$ just observer-cli
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/observer.py observer-cli "<checkout>"
+|Home(H)|Network(N)|Ports(O)|Sockets(K)|System(S)|Ets(E)||App(A)|Doc(D)|Plugin(P) | 0Days 00:18:12                                        |
+|Erlang/OTP 29 [erts-17.1] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit] knarr@127.0.0.1                            |
+|System     | Count/Limit           | System                    | Status                | Stat Info            | Size                      |
+|Proc Count | 124/1048576           | Version                   | 29                    | Active Task          | 2                         |
+|Port Count | 6/65536               | ps -o pcpu                | 1.0%                  | Context Switch       | 383975                   |
+|Atom Count | 22194/1048576         | ps -o pmem                | 0.5%                  | Reds(Total/SinceLast | 23661153/54895           |
+|Mem Type   | Size                  | Mem Type                  | Size                  | IO/GC:(1500ms)       | Total/Increments          |
+|Total      | 48.4199 MiB  | 100.0% | Binary                    | 1.7196 MiB   | 03.55% | IO Output            | 74.0388 MiB/66 B          |
+|Process    | 15.4241 MiB  | 31.85% | Code                      | 11.8435 MiB  | 24.46% | IO Input             | 24.7197 MiB/0 B           |
+|Atom       | 652.5352 KiB | 01.32% | Persistent Terms/31       | 16.5313 KiB           | Gc Count             | 16913/1                   |
+|Ets/52     | 979.1563 KiB | 01.97% | RunQueue                  | 1                     | Gc Words Reclaimed   | 13958995/411             |
+|No | Pid        |     Memory   |Name|>Label|>Initial Call                    |    Reductions| MsgQueue |Current Function                 |
+|1  |<0.50.0>    |   1.0634 MiB |code_server                                  |        476233| 0        |code_server:loop/1               |
+|2  |<0.155.0>   | 278.1719 KiB |{https,<<"10.96.0.1">>,443}                  |        409882| 0        |gen_server:loop/5                |
+|3  |<0.154.0>   | 225.3438 KiB |knarr_reconciler$3                           |        653675| 0        |gleam_erlang_ffi:select/2        |
+|4  |<0.45.0>    | 172.4844 KiB |application_controller                       |        109461| 0        |gen_server:loop/5                |
+|5  |<0.96.0>    | 172.2734 KiB |httpc_manager                                |         16853| 0        |gen_server:loop/5                |
+|6  |<0.160.0>   | 106.9141 KiB |{tls,client,<<"10.96.0.1">>}                 |        127498| 0        |gen_statem:loop/3                |
+|7  |<0.107.0>   |  66.3750 KiB |ssl_manager                                  |         11741| 0        |gen_server:loop/5                |
+|8  |<0.97.0>    |  33.7266 KiB |httpc_handler_sup                            |          1699| 0        |gen_server:loop/5                |
+|9  |<0.0.0>     |  33.6172 KiB |init                                         |          8386| 0        |init:boot_loop/2                 |
+|10 |<0.85.0>    |  29.7188 KiB |logger_std_h_default                         |          2551| 0        |gen_server:loop/5                |
+|11 |<0.11.0>    |  21.1016 KiB |erl_prim_loader                              |         44960| 0        |erl_prim_loader:loop/3           |
+|12 |<0.66.0>    |  18.5313 KiB |net_kernel                                   |          5695| 0        |gen_server:loop/5                |
+|13 |<0.74.0>    |  16.5000 KiB |user_drv                                     |          3052| 0        |gen_statem:loop/3                |
+|14 |<0.53.0>    |  16.4063 KiB |file_server_2                                |          2084| 0        |gen_server:loop/5                |
+|15 |<0.43.0>    |  16.4063 KiB |logger                                       |          1688| 0        |gen_server:loop/5                |
+|16 |<0.136.0>   |  16.3672 KiB |proc_lib:init_p/3                            |         40913| 0        |prim_inet:accept0/3              |
+|q(quit) p(pause) r/rr(reduction) m/mm(mem)b/bb(binary mem) t/tt(total heap size) mq/mmq(msg queue) 9(proc 9 info) F/B(page forward/back) |
+|Home(H)|Network(N)|Ports(O)|Sockets(K)|System(S)|Ets(E)||App(A)|Doc(D)|Plugin(P) | 0Days 00:18:14                                        |
+|Erlang/OTP 29 [erts-17.1] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit] knarr@127.0.0.1                            |
+|System     | Count/Limit           | System                    | Status                | Stat Info            | Size                      |
+|Proc Count | 124/1048576           | Version                   | 29                    | Active Task          | 2                         |
+|Port Count | 6/65536               | ps -o pcpu                | 1.0%                  | Context Switch       | 384298                   |
+|Atom Count | 22194/1048576         | ps -o pmem                | 0.5%                  | Reds(Total/SinceLast | 23749010/87857           |
+|Mem Type   | Size                  | Mem Type                  | Size                  | IO/GC:(1500ms)       | Total/Increments          |
+|Total      | 48.5574 MiB  | 100.0% | Binary                    | 1.7193 MiB   | 03.54% | IO Output            | 74.0474 MiB/8.7988 KiB    |
+|Process    | 15.5619 MiB  | 32.05% | Code                      | 11.8435 MiB  | 24.39% | IO Input             | 24.7211 MiB/1.4141 KiB    |
+|Atom       | 652.5352 KiB | 01.31% | Persistent Terms/31       | 16.5313 KiB           | Gc Count             | 16933/20                  |
+|Ets/52     | 979.1563 KiB | 01.97% | RunQueue                  | 1                     | Gc Words Reclaimed   | 14035572/76577           |
+|No | Pid        |     Memory   |Name|>Label|>Initial Call                    |    Reductions| MsgQueue |Current Function                 |
+|1  |<0.50.0>    |   1.0634 MiB |code_server                                  |        476234| 0        |code_server:loop/1               |
+|2  |<0.155.0>   | 278.1719 KiB |{https,<<"10.96.0.1">>,443}                  |        409884| 0        |gen_server:loop/5                |
+|3  |<0.154.0>   | 225.3438 KiB |knarr_reconciler$3                           |        653676| 0        |gleam_erlang_ffi:select/2        |
+|4  |<0.45.0>    | 172.4844 KiB |application_controller                       |        109462| 0        |gen_server:loop/5                |
+|5  |<0.96.0>    | 172.2734 KiB |httpc_manager                                |         16854| 0        |gen_server:loop/5                |
+|6  |<0.160.0>   | 106.9141 KiB |{tls,client,<<"10.96.0.1">>}                 |        127500| 0        |gen_statem:loop/3                |
+|7  |<0.107.0>   |  66.3750 KiB |ssl_manager                                  |         11742| 0        |gen_server:loop/5                |
+|8  |<0.97.0>    |  33.7266 KiB |httpc_handler_sup                            |          1700| 0        |gen_server:loop/5                |
+|9  |<0.0.0>     |  33.6172 KiB |init                                         |          8387| 0        |init:boot_loop/2                 |
+|10 |<0.85.0>    |  29.7188 KiB |logger_std_h_default                         |          2552| 0        |gen_server:loop/5                |
+|11 |<0.11.0>    |  21.1016 KiB |erl_prim_loader                              |         44961| 0        |erl_prim_loader:loop/3           |
+|12 |<0.66.0>    |  18.5313 KiB |net_kernel                                   |          5696| 0        |gen_server:loop/5                |
+|13 |<0.74.0>    |  16.5000 KiB |user_drv                                     |          3053| 0        |gen_statem:loop/3                |
+|14 |<0.124.0>   |  16.4063 KiB |proc_lib:init_p/3                            |        187892| 0        |gleam_erlang_ffi:select/2        |
+|15 |<0.53.0>    |  16.4063 KiB |file_server_2                                |          2085| 0        |gen_server:loop/5                |
+|16 |<0.43.0>    |  16.4063 KiB |logger                                       |          1689| 0        |gen_server:loop/5                |
+|q(quit) p(pause) r/rr(reduction) m/mm(mem)b/bb(binary mem) t/tt(total heap size) mq/mmq(msg queue) 9(proc 9 info) F/B(page forward/back) |
+|Home(H)|Network(N)|Ports(O)|Sockets(K)|System(S)|Ets(E)||App(A)|Doc(D)|Plugin(P) | 0Days 00:18:15                                        |
+|Erlang/OTP 29 [erts-17.1] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit] knarr@127.0.0.1                            |
+|System     | Count/Limit           | System                    | Status                | Stat Info            | Size                      |
+|Proc Count | 124/1048576           | Version                   | 29                    | Active Task          | 2                         |
+|Port Count | 6/65536               | ps -o pcpu                | 1.0%                  | Context Switch       | 384633                   |
+|Atom Count | 22194/1048576         | ps -o pmem                | 0.5%                  | Reds(Total/SinceLast | 23839386/90376           |
+|Mem Type   | Size                  | Mem Type                  | Size                  | IO/GC:(1500ms)       | Total/Increments          |
+|Total      | 48.6534 MiB  | 100.0% | Binary                    | 1.7200 MiB   | 03.54% | IO Output            | 74.0561 MiB/8.9180 KiB    |
+|Process    | 15.6572 MiB  | 32.18% | Code                      | 11.8435 MiB  | 24.34% | IO Input             | 24.7226 MiB/1.5146 KiB    |
+|Atom       | 652.5352 KiB | 01.31% | Persistent Terms/31       | 16.5313 KiB           | Gc Count             | 16968/35                  |
+|Ets/52     | 979.1563 KiB | 01.97% | RunQueue                  | 1                     | Gc Words Reclaimed   | 14113377/77805           |
+|No | Pid        |     Memory   |Name|>Label|>Initial Call                    |    Reductions| MsgQueue |Current Function                 |
+|1  |<0.50.0>    |   1.0634 MiB |code_server                                  |        476235| 0        |code_server:loop/1               |
+|2  |<0.155.0>   | 278.1719 KiB |{https,<<"10.96.0.1">>,443}                  |        409886| 0        |gen_server:loop/5                |
+|3  |<0.154.0>   | 225.3438 KiB |knarr_reconciler$3                           |        653677| 0        |gleam_erlang_ffi:select/2        |
+|4  |<0.45.0>    | 172.4844 KiB |application_controller                       |        109463| 0        |gen_server:loop/5                |
+|5  |<0.96.0>    | 172.2734 KiB |httpc_manager                                |         16855| 0        |gen_server:loop/5                |
+|6  |<0.160.0>   | 106.9141 KiB |{tls,client,<<"10.96.0.1">>}                 |        127502| 0        |gen_statem:loop/3                |
+|7  |<0.107.0>   |  66.3750 KiB |ssl_manager                                  |         11743| 0        |gen_server:loop/5                |
+|8  |<0.97.0>    |  33.7266 KiB |httpc_handler_sup                            |          1701| 0        |gen_server:loop/5                |
+|9  |<0.0.0>     |  33.6172 KiB |init                                         |          8388| 0        |init:boot_loop/2                 |
+|10 |<0.85.0>    |  29.7188 KiB |logger_std_h_default                         |          2553| 0        |gen_server:loop/5                |
+|11 |<0.11.0>    |  21.1016 KiB |erl_prim_loader                              |         44962| 0        |erl_prim_loader:loop/3           |
+|12 |<0.66.0>    |  18.5313 KiB |net_kernel                                   |          5732| 0        |gen_server:loop/5                |
+|13 |<0.74.0>    |  16.5000 KiB |user_drv                                     |          3054| 0        |gen_statem:loop/3                |
+|14 |<0.124.0>   |  16.4531 KiB |proc_lib:init_p/3                            |        188061| 0        |gleam_erlang_ffi:select/2        |
+|15 |<0.53.0>    |  16.4063 KiB |file_server_2                                |          2086| 0        |gen_server:loop/5                |
+|16 |<0.43.0>    |  16.4063 KiB |logger                                       |          1690| 0        |gen_server:loop/5                |
+|q(quit) p(pause) r/rr(reduction) m/mm(mem)b/bb(binary mem) t/tt(total heap size) mq/mmq(msg queue) 9(proc 9 info) F/B(page forward/back) |
+exit 0

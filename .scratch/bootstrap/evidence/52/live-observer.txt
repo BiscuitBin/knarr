@@ -1,0 +1,13 @@
+# 2026-10-17 00:26 PDT, this worktree's kind cluster, deploy/observer. No wx-capable OTP 29 is installed on this host yet, so the GUI itself is unverified.
+$ just observer
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/observer.py observer "<checkout>" "$1"
+observer: name a wx-capable OTP 29 erl; see docs/how-to/local-observer.md
+error: recipe `observer` failed on line 450 with exit code 1
+exit 1
+$ just observer "$PWD/.pixi/envs/default/bin/erl"
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/observer.py observer "<checkout>" "$1"
+observer: <checkout>/.pixi/envs/default/bin/erl has no wx driver, so it cannot open Observer; see docs/how-to/local-observer.md
+error: recipe `observer` failed on line 450 with exit code 1
+exit 1

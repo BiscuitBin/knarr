@@ -18,6 +18,8 @@ def test_every_module_has_exactly_one_owner():
         (["src/knarr/config.gleam"], [], ["controller-process"], ["kind"]),
         (["fixtures/fake_worker/src/server.gleam"], [], ["worker-process"], ["worker"]),
         (["deploy/base/deployment.yaml"], ["cluster", "deployment"], [], ["kind", "kwok"]),
+        (["scripts/checks/observer.py"], ["cluster"], [], []),
+        (["fixtures/observer/packages.json"], ["cluster"], [], []),
     ],
 )
 def test_selection(paths, regressions, runtime, clusters):

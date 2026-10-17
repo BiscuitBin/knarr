@@ -25,7 +25,7 @@ import urllib.request
 from pathlib import Path
 
 import cluster
-from keda_e2e import keda_kustomization, verify_download
+from keda_e2e import fetch_pinned, keda_kustomization
 
 FIXTURE = cluster.ROOT / "fixtures/observability"
 NAMESPACE = "observability"
@@ -52,23 +52,8 @@ def kube_version():
 
 
 def fetch_chart(state, chart):
-    """The chart archive under .cluster/observability/charts/: the cached copy
-    while its hash still matches the pin, or a fresh download refused unless it
-    does."""
-    if not chart["url"].startswith("https://"):
-        raise ValueError(f"chart URL is not https: {chart['url']}")
-    target = state / NAMESPACE / "charts"
-    target.mkdir(parents=True, exist_ok=True)
-    path = target / chart["url"].rpartition("/")[2]
-    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == chart["sha256"]:
-        return path
-    with urllib.request.urlopen(chart["url"], timeout=120) as response:  # noqa: S310 - https, checked above
-        body = verify_download(response.read(), chart["sha256"])
-    # Whole or not at all: an interrupted write never leaves a partial archive.
-    partial = path.with_name(f"{path.name}.partial")
-    partial.write_bytes(body)
-    partial.replace(path)
-    return path
+    """The chart archive under .cluster/observability/charts/."""
+    return fetch_pinned(state / NAMESPACE / "charts", chart["url"], chart["sha256"])
 
 
 def render(stack, charts):

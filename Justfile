@@ -440,6 +440,30 @@ observability-smoke: cluster-tools
 grafana port="0": cluster-tools
     python3 scripts/checks/observability.py grafana "{{ justfile_directory() }}" "$1"
 
+# Ticket 52's attach to knarr on kind, after `just deploy <image> observer`: the
+# overlay turns Erlang distribution on in the pod, and each recipe forwards its
+# port and starts a hidden local node. The GUI needs a wx-capable OTP 29 erl,
+# which the pixi environments lack; docs/how-to/local-observer.md says how.
+[group('cluster')]
+[doc('Open the Observer GUI on knarr, from a wx-capable OTP 29 erl, until its window closes')]
+observer erl=env("KNARR_OBSERVER_ERL", ""): cluster-tools
+    python3 scripts/checks/observer.py observer "{{ justfile_directory() }}" "$1"
+
+[group('cluster')]
+[doc('Download and compile observer_cli and recon, pinned by sha256, for observer-cli (needs network)')]
+observer-cli-install: cluster-tools
+    python3 scripts/checks/observer.py observer-cli-install "{{ justfile_directory() }}"
+
+[group('cluster')]
+[doc('Run observer_cli on knarr in the terminal, its modules loaded only for the session')]
+observer-cli: cluster-tools
+    python3 scripts/checks/observer.py observer-cli "{{ justfile_directory() }}"
+
+[group('cluster')]
+[doc('Open a remote shell on knarr; leave with Ctrl-G then q, since q() stops knarr')]
+remsh: cluster-tools
+    python3 scripts/checks/observer.py remsh "{{ justfile_directory() }}"
+
 [group('cluster')]
 [doc('Render and validate every deploy/ variant, and hold the release overlay to its two-line difference')]
 deployment-check: cluster-tools

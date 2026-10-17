@@ -1,0 +1,28 @@
+# 2026-10-17 00:25 PDT, this worktree's kind cluster, deploy/observer, right after just observer-cli; stdin as shown, then EOF
+$ just remsh   # stdin: i(). q (answers the pager) code:is_loaded(observer_cli). code:is_loaded(recon). node().
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/observer.py remsh "<checkout>"
+Erlang/OTP 29 [erts-17.1] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Eshell V17.1 (press Ctrl+G to abort, type help(). for help)
+(knarr@127.0.0.1)1> Pid                   Initial Call                          Heap     Reds Msgs
+Registered            Current Function                     Stack              
+<0.0.0>               erl_init:start/2                      2586     8354    0
+init                  init:boot_loop/2                         4              
+<0.1.0>               erts_code_purger:start/0                 5  2688472    0
+erts_code_purger      erlang:hibernate/3                       1              
+<0.2.0>               erts_literal_area_collector:start        5  2686944    0
+[... 88 lines of i() output elided; its fixed-width columns truncate names ...]
+kernel_safe_sup       gen_server:loop_hibernate/4              8              
+<0.85.0>              logger_olp:init/1                     1598     1445    0
+logger_std_h_default  gen_server:loop/5                        9              
+<0.86.0>              erlang:apply/2                         233      767    0
+                      logger_std_h:file_ctrl_loop/1            4              
+more (y/n)? (y) ok
+(knarr@127.0.0.1)2> false
+(knarr@127.0.0.1)3> false
+(knarr@127.0.0.1)4> 'knarr@127.0.0.1'
+(knarr@127.0.0.1)5> *** Shell process terminated! Read EOF ***
+exit 0
+$ kubectl get pods (restart count, after EOF left the shell)
+knarr-5c7575c685-v6hcf Running restarts=0

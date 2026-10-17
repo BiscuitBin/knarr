@@ -125,7 +125,7 @@ def test_wrong_ca_variant_only_redirects_the_ca_file():
         {"name": "wrong-ca", "mountPath": "/etc/knarr/wrong-ca", "readOnly": True}
     ]
     assert pod["volumes"] == [{"name": "wrong-ca", "configMap": {"name": "knarr-wrong-ca"}}]
-    assert deployment.variants() == ["base", "e2e-fast", "release", "wrong-ca"]
+    assert deployment.variants() == ["base", "e2e-fast", "observer", "release", "wrong-ca"]
 
 
 def test_e2e_fast_variant_only_shortens_the_intervals():
@@ -147,6 +147,59 @@ def test_e2e_fast_variant_only_shortens_the_intervals():
             }
         ]
     }
+
+
+# What turns Erlang distribution on: the flags the observer overlay sets, and
+# its port. A cookie grants remote code execution to whoever holds it, so only
+# that dev-only overlay may carry one (ticket 52).
+# Each is a whole token, so a digest that holds the digits 4370, or a key such
+# as secret-name, is not a match.
+DISTRIBUTION = re.compile(r"ERL_[AZ]FLAGS|(?<![\w-])-(?:setcookie|s?name)\b|(?<!\w)4370(?!\w)")
+
+
+def test_observer_variant_only_turns_distribution_on():
+    patch = json.loads((ROOT / "deploy/observer/patch.json").read_text())
+    pod = patch["spec"]["template"]["spec"]
+    assert pod == {
+        "containers": [
+            {
+                "name": "knarr",
+                "env": [
+                    {
+                        "name": "ERL_ZFLAGS",
+                        "value": "-name knarr@127.0.0.1 -setcookie knarr-dev-only"
+                        " -start_epmd false -erl_epmd_port 4370"
+                        " -kernel inet_dist_listen_min 4370 inet_dist_listen_max 4370"
+                        " inet_dist_use_interface {127,0,0,1}",
+                    }
+                ],
+                "ports": [{"name": "erlang-dist", "containerPort": 4370}],
+            }
+        ]
+    }
+
+
+@pytest.mark.parametrize("variant", ["base", "release"])
+def test_shipped_variants_carry_no_distribution(variant):
+    for path in sorted((ROOT / "deploy" / variant).iterdir()):
+        text = path.read_text()
+        assert DISTRIBUTION.findall(text) == [], path
+
+
+@pytest.mark.parametrize(
+    ("text", "found"),
+    [
+        ("value: -name knarr@127.0.0.1", ["-name"]),
+        ('"-sname x -setcookie c"', ["-sname", "-setcookie"]),
+        ("name: ERL_ZFLAGS", ["ERL_ZFLAGS"]),
+        ("containerPort: 4370", ["4370"]),
+        ("digest: sha256:0a4370b9" + "0" * 56, []),
+        ("secret-name: x\nname: -names", []),
+        ("port: 43700", []),
+    ],
+)
+def test_the_distribution_markers_are_whole_tokens(text, found):
+    assert DISTRIBUTION.findall(text) == found
 
 
 def test_unknown_variant_is_refused():
@@ -474,11 +527,13 @@ def test_render_builds_and_validates_every_variant_and_checks_the_difference(tmp
     assert [arguments for tool, arguments, _ in calls if tool == "kustomize"] == [
         ["build", str(ROOT / "deploy/base")],
         ["build", str(ROOT / "deploy/e2e-fast")],
+        ["build", str(ROOT / "deploy/observer")],
         ["build", str(ROOT / "deploy/release")],
         ["build", str(ROOT / "deploy/wrong-ca")],
     ]
     validated = [(arguments, stdin) for tool, arguments, stdin in calls if tool == "kubeconform"]
     assert [stdin for _, stdin in validated] == [
+        BASE_RENDER,
         BASE_RENDER,
         BASE_RENDER,
         RELEASE_RENDER,
@@ -495,4 +550,4 @@ def test_render_fails_when_the_overlay_changes_anything_else(tmp_path):
     assert result.returncode != 0
     assert "replicas" in result.stderr
     # The difference is checked after every variant is validated.
-    assert [tool for tool, _, _ in calls] == ["kustomize", "kubeconform"] * 4
+    assert [tool for tool, _, _ in calls] == ["kustomize", "kubeconform"] * 5
