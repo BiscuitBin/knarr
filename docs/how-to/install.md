@@ -70,7 +70,7 @@ kubectl -n "$worker_namespace" rollout status deployment/knarr
 
 An install made with `kubectl apply -k deploy/release` moves to Helm by adoption, in place. The chart keeps the overlay's four resource names, all `knarr`, and its Deployment selector, so Helm takes the same objects over rather than installing a second controller. Opted-in Deployments stay opted in, and owned annotations survive: the pod is replaced under `Recreate`, a gap with no Knarr pod is allowed, and two Knarr pods never run at once ([Decision 0015](../decisions/0015-helm-chart.md), migration by adoption; [lifecycle.allium](../specs/lifecycle.allium), `Restart` `Replica`, `NoStartupStep`).
 
-Helm 4 writes by server-side apply as field manager `helm`, which refuses to change a field another manager owns. `kubectl apply -k` left every field it set owned by `kubectl-client-side-apply`, so a bare `helm upgrade --install` fails on the image and other fields, and forcing it once leaves kubectl co-owning the rest, so every later upgrade conflicts again. First hand the fields to Helm's manager: from the retained operator checkout, whose overlay still pins the installed digest, apply the same overlay server-side as `helm`. The force overwrites live values, so check first that the install still matches the overlay: `kubectl diff` must print nothing. If it prints a difference, someone changed the install by hand; carry that change into your Helm values, or accept losing it, before you continue ([drift check evidence](../../.scratch/helm-chart/evidence/05/14-handover-drift-check.txt)). Applying unchanged values under a second manager is the [Kubernetes ownership transfer](https://kubernetes.io/docs/reference/using-api/server-side-apply/#transferring-ownership-between-managers); `--force-conflicts` covers the fields kubectl's last-applied record cannot account for, and writes the values they already hold ([migration evidence](../../.scratch/helm-chart/evidence/05/07-migration-ssa-handover-forced.txt)):
+Helm 4 writes by server-side apply as field manager `helm`, which refuses to change a field another manager owns. `kubectl apply -k` left every field it set owned by `kubectl-client-side-apply`, so a bare `helm upgrade --install` fails on the image and other fields, and forcing it once leaves kubectl co-owning the rest, so every later upgrade conflicts again. First hand the fields to Helm's manager: from the retained operator checkout, whose overlay still pins the installed digest, apply the same overlay server-side as `helm`. The force overwrites live values, so check first that the install still matches the overlay: `kubectl diff` must print nothing. If it prints a difference, someone changed the install by hand; carry that change into your values file, `knarr-values.yaml`, or accept losing it, before you continue ([drift check evidence](../../.scratch/helm-chart/evidence/05/14-handover-drift-check.txt)). Applying unchanged values under a second manager is the [Kubernetes ownership transfer](https://kubernetes.io/docs/reference/using-api/server-side-apply/#transferring-ownership-between-managers); `--force-conflicts` covers the fields kubectl's last-applied record cannot account for, and writes the values they already hold ([migration evidence](../../.scratch/helm-chart/evidence/05/07-migration-ssa-handover-forced.txt)):
 
 ```sh
 kubectl config current-context
@@ -78,7 +78,7 @@ kubectl -n "$worker_namespace" diff -k deploy/release
 kubectl -n "$worker_namespace" apply --server-side --field-manager=helm --force-conflicts -k deploy/release
 ```
 
-Then mark each resource as belonging to the release, and upgrade into it with the same release name and namespace:
+Then mark each resource as belonging to the release, and upgrade into it with the same release name and namespace. Pass the values file here as on every later [upgrade](#upgrade): an adoption without it installs the chart's defaults over any change you carried into it. With no overrides, the file can be empty:
 
 ```sh
 for resource in serviceaccount/knarr role/knarr rolebinding/knarr deployment/knarr; do
@@ -87,7 +87,8 @@ for resource in serviceaccount/knarr role/knarr rolebinding/knarr deployment/kna
     meta.helm.sh/release-name=knarr meta.helm.sh/release-namespace="$worker_namespace"
 done
 helm upgrade --install knarr oci://ghcr.io/steven-cutting/charts/knarr \
-  --version "$chart_version" --namespace "$worker_namespace" --wait
+  --version "$chart_version" --namespace "$worker_namespace" \
+  --values knarr-values.yaml --wait
 ```
 
 Helm refuses a resource missing that label or either annotation as one that "exists and cannot be imported into the current release"; mark it and run the upgrade again. A `conflict occurred while applying` error names a field still owned by another manager: the handover above was skipped or ran from a different overlay. Helm then marks the release `failed`, and the kustomize controller keeps running unchanged; run the handover and the upgrade again. Do not delete the kustomize install first: deleting the running controller before cleanup leaves its owned annotations standing. After the migration, later upgrades are the plain [upgrade](#upgrade) above, and the operator checkout of the overlay is no longer needed ([conflict evidence](../../.scratch/helm-chart/evidence/05/04-migration-conflict.txt); [recovery evidence](../../.scratch/helm-chart/evidence/05/10-migration-recovery.txt)).
