@@ -4,13 +4,15 @@
 It measures the three §3 success criteria in one run. It installs KEDA at the
 version fixtures/keda_e2e/keda.json pins, deploys the fake worker under a
 ScaledObject, and scales it from 6 to 3 replicas a few times: first without
-knarr, then with deploy/e2e-fast, with three busy and three idle workers each
-round, counting busy kills from the collector. Then it restarts knarr at the
-defaults over three Deployments and judges lifecycle's `Restart` `Threshold`,
-and judges budget's `Threshold` over every scrape of /metrics. Each phase
-prints `ok` or `FAIL` lines; the scrapes, pod reads and kill records are kept
-under build/keda-e2e/. The judges are pure and take recorded values; the
-orchestration below them drives the cluster through cluster.py's helpers.
+knarr, then with knarr's chart under the e2e-fast values
+(fixtures/chart-values/e2e-fast.yaml), with three busy and three idle workers
+each round, counting busy kills from the collector. Then it upgrades knarr to
+the chart's defaults over three Deployments and judges lifecycle's `Restart`
+`Threshold`, and judges budget's `Threshold` over every scrape of /metrics.
+Each phase prints `ok` or `FAIL` lines; the scrapes, pod reads and kill
+records are kept under build/keda-e2e/. The judges are pure and take recorded
+values; the orchestration below them drives the cluster through cluster.py's
+helpers.
 """
 
 from __future__ import annotations
@@ -768,8 +770,8 @@ def reset():
 
 
 def comparison(run, rounds, seed):
-    """The baseline rounds without knarr, then the same rounds with it under
-    deploy/e2e-fast, scraping /metrics throughout the second. Returns both
+    """The baseline rounds without knarr, then the same rounds with it installed
+    from the chart with the e2e-fast values, scraping /metrics throughout the second. Returns both
     phases' rounds and the knarr phase's scrapes."""
     state, out = run.state, run.out
     baseline = [scale_round(state, out, n, seed, "baseline") for n in range(1, rounds + 1)]

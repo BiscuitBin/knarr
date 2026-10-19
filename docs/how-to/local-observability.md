@@ -144,8 +144,9 @@ Every pin in `stack.json` moves by hand, and they move together: Renovate has
 5. If an image name changes, update the list of disabled packages in
    `.github/renovate.json`.
 
-helm itself is in the cluster pixi environment and moves with the "local
-cluster" Renovate group.
+helm itself is in the default pixi environment, where it also lints and
+renders knarr's chart ([Decision 0015](../decisions/0015-helm-chart.md)), and
+moves with the "local cluster" Renovate group.
 
 ## Teardown
 

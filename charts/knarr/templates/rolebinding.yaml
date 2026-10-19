@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: knarr
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "knarr.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: knarr
+subjects:
+  # The namespace binds the right ServiceAccount when a render is applied with
+  # `kubectl apply -f`, which sets no namespace on a subject.
+  - kind: ServiceAccount
+    name: knarr
+    namespace: {{ .Release.Namespace | quote }}

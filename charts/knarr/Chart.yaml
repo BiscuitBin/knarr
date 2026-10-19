@@ -1,0 +1,11 @@
+# knarr's Helm chart (Decision 0015). version and appVersion both equal the
+# gleam.toml version; `just chart-check` fails when they differ.
+apiVersion: v2
+name: knarr
+description: Biases Deployment scale-down away from busy worker pods by setting pod-deletion-cost on live pods.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/steven-cutting/knarr
+sources:
+  - https://github.com/steven-cutting/knarr

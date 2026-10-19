@@ -334,6 +334,19 @@
       "requires": []
     },
     {
+      "path": "decisions/0015-helm-chart.md",
+      "title": "Decision 0015: knarr ships a Helm chart",
+      "kind": "decision",
+      "audience": [
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "decision_helm_chart"
+      ],
+      "requires": []
+    },
+    {
       "path": "how-to/local-cluster.md",
       "title": "Run the walking skeleton locally",
       "kind": "how-to",

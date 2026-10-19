@@ -1,5 +1,7 @@
 """Selection must skip unrelated work without losing affected tests."""
 
+import itertools
+
 import pytest
 
 import checker_suite as suite
@@ -17,7 +19,21 @@ def test_every_module_has_exactly_one_owner():
         (["scripts/checks/tests/test_validate_docs.py"], ["docs"], [], []),
         (["src/knarr/config.gleam"], [], ["controller-process"], ["kind"]),
         (["fixtures/fake_worker/src/server.gleam"], [], ["worker-process"], ["worker"]),
-        (["deploy/base/deployment.yaml"], ["cluster", "deployment"], [], ["kind", "kwok"]),
+        (
+            ["deploy/base/deployment.yaml"],
+            ["chart", "cluster", "deployment"],
+            [],
+            ["kind", "kwok"],
+        ),
+        # The local loop and CI install the chart (helm-chart ticket 03).
+        (
+            ["charts/knarr/templates/deployment.yaml"],
+            ["chart", "cluster", "release"],
+            [],
+            ["kind", "kwok"],
+        ),
+        # Only the KEDA harness installs it, and its workflow has no path filter.
+        (["fixtures/chart-values/e2e-fast.yaml"], ["chart", "cluster"], [], []),
     ],
 )
 def test_selection(paths, regressions, runtime, clusters):
@@ -98,6 +114,15 @@ def test_unowned_test_module_fails(tmp_path, monkeypatch, unowned):
         ("fixtures/fake_worker/deploy/resources.json", "packaging"),
         (".scratch/bootstrap/evidence/01/tls/tls_check.escript", "packaging"),
         ("deploy/release/README.md", "release"),
+        ("deploy/base/resources.json", "chart"),
+        ("charts/knarr/values.schema.json", "chart"),
+        # stamp-chart_test.sh stamps and packages the tracked chart.
+        ("charts/knarr/values.yaml", "release"),
+        ("src/knarr/application_ffi.erl", "chart"),
+        ("scripts/checks/deployment.py", "chart"),
+        # test_chart.py holds the e2e-fast values and the wrong-ca patch to these.
+        ("deploy/e2e-fast/patch.json", "chart"),
+        ("deploy/wrong-ca/patch.json", "chart"),
         ("deploy/base/resources.json", "cluster"),
         ("deploy/wrong-ca/kustomization.yaml", "cluster"),
         ("fixtures/fake_worker/deploy/resources.json", "cluster"),
@@ -111,3 +136,22 @@ def test_changes_select_regressions_that_read_the_changed_file(path, required):
 
 def test_tls_runtime_probe_changes_select_the_image_smoke():
     assert suite.select([".scratch/bootstrap/evidence/01/tls/run.sh"])["kind"]
+
+
+def push_paths(workflow):
+    """The `on.push.paths` filters of a workflow, as written."""
+    text = (suite.ROOT / ".github/workflows" / workflow).read_text()
+    block = text.split("\n  push:\n", 1)[1].split("\n    paths:\n", 1)[1]
+    items = itertools.takewhile(lambda line: line.startswith("      - "), block.splitlines())
+    return tuple(line[8:] for line in items)
+
+
+def test_reconcile_proof_runs_on_a_chart_only_change():
+    # Its wrong-CA case and its deploys install the chart (helm-chart ticket 03).
+    paths = push_paths("reconcile-proof.yml")
+    # The helper stops at the end of the list, never reading into the job steps.
+    assert paths
+    assert not any(" " in path for path in paths)
+    assert suite.matches("charts/knarr/templates/deployment.yaml", paths)
+    assert suite.matches("charts/knarr/values.yaml", paths)
+    assert suite.matches("scripts/checks/chart.py", paths)

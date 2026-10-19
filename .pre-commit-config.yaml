@@ -27,7 +27,10 @@ repos:
       - id: check-json
       - id: check-merge-conflict
       - id: check-toml
+      # A chart template is Go template text that renders YAML, not YAML;
+      # scripts/checks/chart.py lints and validates what it renders.
       - id: check-yaml
+        exclude: ^charts/[^/]+/templates/
       - id: detect-private-key
 
   - repo: local

@@ -302,7 +302,7 @@ check-clean baseline="":
 [doc('The complete read-only gate')]
 check:
     test -x .pixi/envs/default/bin/python3 || { printf '%s\n' 'the pixi environment is missing; run just initialize' >&2; exit 2; }
-    python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam test snapshots-check fake-worker-lint fake-worker-test test-checkers packaging-check toml-check lint
+    python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam test snapshots-check fake-worker-lint fake-worker-test test-checkers packaging-check chart-check toml-check lint
 
 # --------------------------------------------------------------- cluster ---
 # Cluster effects are deliberately outside the offline repository gate.
@@ -342,10 +342,12 @@ image-build image=cluster_image platform=image_platform:
 image-load image=cluster_image: cluster-tools
     python3 scripts/checks/cluster.py image-load "{{ justfile_directory() }}" "$1"
 
-# The variant is a directory under deploy/ with a kustomization: `base`, or
-# `wrong-ca` for the negative TLS case (ticket 14).
+# Installs charts/knarr as release knarr with `helm upgrade --install --wait`.
+# The variant is `base`; `e2e-fast`, which adds fixtures/chart-values/e2e-fast.yaml
+# (ticket 33); or `wrong-ca`, the negative TLS case (ticket 14), which patches
+# the chart's render and applies it without waiting (helm-chart ticket 03).
 [group('cluster')]
-[doc('Load and deploy the base, or a deploy/ variant, to this worktree kind cluster')]
+[doc('Load the knarr image and install the chart, or a variant, on this worktree kind cluster')]
 deploy image=cluster_image variant="base": cluster-tools
     python3 scripts/checks/cluster.py deploy "{{ justfile_directory() }}" "$1" "$2"
 
@@ -379,6 +381,13 @@ image-check image=cluster_image:
 packaging-check:
     hadolint Dockerfile fixtures/fake_worker/Dockerfile
     python3 scripts/checks/deployment.py
+
+# The chart (Decision 0015): helm lint --strict, the render through kubeconform
+# -strict, its drift from deploy/base and the version lockstep with gleam.toml.
+[group('check')]
+[doc('Lint, render and validate the Helm chart; hold it to deploy/base and gleam.toml')]
+chart-check:
+    python3 scripts/checks/chart.py
 
 # The fake worker fixture on kind (ticket 29). Its image builds from the
 # repository root, with its own Dockerfile and context allowlist beside it.

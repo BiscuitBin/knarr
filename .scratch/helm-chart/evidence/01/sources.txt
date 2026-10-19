@@ -1,0 +1,69 @@
+date: 2026-10-17T06:11Z
+cert-manager     http 200   191047 bytes  sha256 69989a44defc  https://cert-manager.io/docs/installation/helm/
+cm-manifests     http 200     9565 bytes  sha256 ad37e1428084  https://raw.githubusercontent.com/cert-manager/cert-manager/master/make/manifests.mk
+cm-schema        http 200   114590 bytes  sha256 3b90cf555bad  https://raw.githubusercontent.com/cert-manager/cert-manager/master/deploy/charts/cert-manager/values.schema.json
+kyverno          http 200     5388 bytes  sha256 cb9cc7916d5d  https://raw.githubusercontent.com/kyverno/kyverno/main/.github/workflows/helm-release.yaml
+kyverno-codegen  http 200     2760 bytes  sha256 eaac2ecc4d2e  https://raw.githubusercontent.com/kyverno/kyverno/main/.github/workflows/check-codegen.yaml
+keda-charts      http 200     1619 bytes  sha256 f680c5812ce9  https://raw.githubusercontent.com/kedacore/charts/main/README.md
+keda-contrib     http 200     5071 bytes  sha256 adff45c7e98e  https://raw.githubusercontent.com/kedacore/charts/main/CONTRIBUTING.md
+keda-makefile    http 200    20568 bytes  sha256 db16d902c599  https://raw.githubusercontent.com/kedacore/keda/main/Makefile
+keda-schema      http 200     2439 bytes  sha256 12925ab27751  https://raw.githubusercontent.com/kedacore/charts/main/keda/values.schema.json
+extdns-schema    http 200    29776 bytes  sha256 7220069b50e7  https://raw.githubusercontent.com/kubernetes-sigs/external-dns/master/charts/external-dns/values.schema.json
+prom-release     http 200     3304 bytes  sha256 29d3475f845f  https://raw.githubusercontent.com/prometheus-community/helm-charts/main/.github/workflows/release.yaml
+helm4            http 200    37128 bytes  sha256 5e533049a2c7  https://helm.sh/blog/helm-4-released
+helm3-eol        http 200    43160 bytes  sha256 8d678c3821e4  https://helm.sh/blog/helm-v3-end-of-life
+helm-overview    http 200    43182 bytes  sha256 b83f6f938cbb  https://helm.sh/docs/overview/
+helm-oci         http 200    60910 bytes  sha256 b8ee2c99627c  https://helm.sh/docs/topics/registries/
+helm-labels      http 200    30226 bytes  sha256 f48e7b877685  https://helm.sh/docs/chart_best_practices/labels/
+helm-charts      http 200   180562 bytes  sha256 d29d109b3135  https://helm.sh/docs/topics/charts/
+helm-adopt       http 200     9255 bytes  sha256 4eecd071922f  https://raw.githubusercontent.com/helm/helm/v4.3.1/pkg/action/validate.go
+helm-v431        http 200    62545 bytes  sha256 72533ffe17a6  https://api.github.com/repos/helm/helm/releases/tags/v4.3.1
+helm-v3221       http 200    56792 bytes  sha256 4d96f4f1a80a  https://api.github.com/repos/helm/helm/releases/tags/v3.22.1
+ct               http 200    59060 bytes  sha256 6701443c265d  https://api.github.com/repos/helm/chart-testing/releases/tags/v3.15.0
+unittest         http 200    36002 bytes  sha256 368d977a6015  https://api.github.com/repos/helm-unittest/helm-unittest/releases/tags/v1.2.1
+kubeconform      http 200    16801 bytes  sha256 13f6a9e624d8  https://raw.githubusercontent.com/yannh/kubeconform/master/Readme.md
+ghcr             http 200   197275 bytes  sha256 d75058361e1d  https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
+artifacthub      http 200    33764 bytes  sha256 25ce0506bc8c  https://artifacthub.io/docs/topics/repositories/helm-charts/
+--
+found       cert-manager     "The OCI Helm charts are the source of truth": cert-manager names its OCI chart the source of truth
+found       cert-manager     "oci://quay.io/jetstack/charts/cert-manager": its chart is pushed to OCI at quay.io/jetstack/charts
+found       cm-manifests     "--app-version=$(VERSION) --version=$(VERSION)": its chart version and appVersion are both the one release version: lockstep
+found       cm-manifests     "$(HELM) template": its static YAML is built from the chart with helm template, in the same repository
+found       cm-schema        ""digest": {": its chart has an image digest value
+found       cm-schema        ""additionalProperties": false": its values.schema.json refuses unknown keys
+found       kyverno          "helm push": Kyverno pushes its charts with helm push
+found       kyverno          "ghcr.io/${{ github.repository_owner }}/charts": to ghcr.io/<owner>/charts
+found       kyverno          "cosign sign": and signs them with cosign
+found       kyverno-codegen  "Verify codegen is up to date": its drift check is a separate workflow, check-codegen.yaml, not a job of helm-release.yaml
+found       keda-charts      "helm repo add kedacore https://kedacore.github.io/charts": KEDA publishes its chart from a separate charts repository
+found       keda-contrib     "Update the CRDs & Kubernetes resources based on the release artifact (YAML)": each chart release copies the main repository YAML by hand
+found       keda-makefile    "$(KUSTOMIZE) edit set image": that YAML release artifact is built with kustomize in the main repository: two packagings in two places
+found       keda-schema      ""additionalProperties": false": KEDA ships a values.schema.json
+found       extdns-schema    ""additionalProperties"": external-dns ships a values.schema.json
+found       prom-release     "version: v4.3.1": prometheus-community releases with Helm v4.3.1
+found       prom-release     "helm push "${pkg}" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts"": and pushes to oci://ghcr.io/<owner>/charts
+found       helm4            "On Wednesday November 12th": Helm 4.0.0 shipped on 2025-11-12 (the post is dated November 17, 2025)
+found       helm4            "Server side apply is now supported": Helm 4 adds server-side apply
+found       helm4            "Post-renderers are now plugins": and makes post-renderers plugins
+found       helm3-eol        "Security fixes end February 10th, 2027": Helm 3 gets security fixes until 2027-02-10
+found       helm3-eol        "expected to be compatible with the majority of existing Helm 3 charts": Helm expects existing Helm 3 charts to work under Helm 4
+found       helm-overview    "v2 charts continue to work unchanged": an apiVersion v2 chart works unchanged under Helm 4
+found       helm-overview    "Install charts by digest for better supply chain security": Helm 4 installs a chart by digest
+found       helm-oci         "the reference must be prefixed with oci://": the push reference form
+found       helm-oci         "Installing a chart with a digest is more secure than a tag because digests are immutable": install by digest
+found       helm-oci         "If you have created a provenance file": helm push uploads a .prov beside the chart
+found       helm-labels      "helm.sh/chart": the recommended chart label
+found       helm-labels      "app.kubernetes.io/managed-by": and the managed-by label
+found       helm-adopt       "helmReleaseNameAnnotation = "meta.helm.sh/release-name"": Helm 4.3.1 adopts an existing resource by the release-name annotation
+found       helm-adopt       "helmReleaseNamespaceAnnotation = "meta.helm.sh/release-namespace"": the release-namespace annotation
+found       helm-adopt       "appManagedByHelm = "Helm"": and the managed-by: Helm label
+found       helm-adopt       "exists and cannot be imported into the current release": a resource without them is refused
+found       helm-v431        ""published_at":"2026-10-15": Helm v4.3.1 was released on 2026-10-15
+found       helm-v3221       ""published_at":"2026-10-15": Helm v3.22.1 was released on 2026-10-15
+found       ct               ""tag_name":"v3.15.0"": chart-testing v3.15.0 exists
+found       unittest         ""tag_name":"v1.2.1"": helm-unittest v1.2.1 exists
+found       kubeconform      "-strict disallow additional properties not in schema": kubeconform -strict, which a helm template render goes through
+found       ghcr             "When you first publish a package, the default visibility is private": a new GHCR package is private by default: 05 verifies the chart rather than assuming
+found       artifacthub      "oci://registry/namespace/chart-name": Artifact Hub lists OCI chart repositories
+found       artifacthub      "artifacthub.io": with an artifacthub.io metadata layer
+-- 41 phrases found, 0 not found

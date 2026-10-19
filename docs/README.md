@@ -31,6 +31,7 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 - [Decision 0010: Prometheus metrics](decisions/0010-metrics.md): the skeleton's metrics choice.
 - [Decision 0012: Release and packaging](decisions/0012-release-and-packaging.md): how a release is versioned, published and installed.
 - [Decision 0013: In-cluster Kubernetes client](decisions/0013-in-cluster-client.md): verified TLS, token reload and the Role's verbs.
+- [Decision 0015: knarr ships a Helm chart](decisions/0015-helm-chart.md): the Helm chart that becomes knarr's only supported install.
 
 ## Maintainer documents
 

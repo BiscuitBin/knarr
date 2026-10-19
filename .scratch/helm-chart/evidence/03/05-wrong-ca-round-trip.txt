@@ -1,0 +1,55 @@
+## sh .scratch/bootstrap/evidence/14/wrong-ca.sh (deploy wrong-ca, check, trap redeploys base)
+date: 2026-10-17T07:58Z
+host: Darwin arm64
+commit: 3457250
+configmap/knarr-wrong-ca created
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py deploy "<worktree>" "$1" "$2"
+Image: "knarr:helm-tickets-1-4-493b5b78" with ID "sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4" not yet present on node "helm-tickets-1-4-493b5b78-control-plane", loading...
+serviceaccount/knarr serverside-applied
+role.rbac.authorization.k8s.io/knarr serverside-applied
+rolebinding.rbac.authorization.k8s.io/knarr serverside-applied
+deployment.apps/knarr serverside-applied
+pod knarr-754967fffd-vbcnf
+KNARR_CA_FILE=/etc/knarr/wrong-ca/ca.crt
+--- the reconciler lines ---
+2026-10-17T07:58:31.421977811Z {"time":"2026-10-17T07:58:31.421Z","level":"info","msg":"token changed","sha256":"...","expires_at":"1792224511"}
+2026-10-17T07:58:31.490085194Z {"time":"2026-10-17T07:58:31.489Z","level":"error","msg":"list failed","resource":"pods","error":"tls_alert unknown_ca"}
+2026-10-17T07:59:31.503899797Z {"time":"2026-10-17T07:59:31.503Z","level":"error","msg":"list failed","resource":"pods","error":"tls_alert unknown_ca"}
+ok   2 cycles refused the handshake with unknown_ca
+ok   no LIST or PATCH succeeded: there is no unverified fallback
+ok   pod Running and NotReady with restartCount 0: the failure is a value, not a crash, and readiness never latched
+wrong-ca: all checks passed
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py deploy "<worktree>" "$1" "$2"
+Image: "knarr:helm-tickets-1-4-493b5b78" with ID "sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4" not yet present on node "helm-tickets-1-4-493b5b78-control-plane", loading...
+Release "knarr" has been upgraded. Happy Helming!
+NAME: knarr
+LAST DEPLOYED: Sat Oct 17 00:59:39 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 5
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
+configmap "knarr-wrong-ca" deleted from default namespace
+exit=0
+
+## state after the round trip
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	5       	2026-10-17 00:59:39.725184 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+deployment env: ERL_FLAGS
+deployment volumes: tmp kube-api-access
+deployment annotations: {"deployment.kubernetes.io/revision":"5","meta.helm.sh/release-name":"knarr","meta.helm.sh/release-namespace":"default"}
+pod-template local-image-id: sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4
+managers: helm/Apply, kube-controller-manager/Update
+pod knarr-7cb48d9b97-jkv4x uid e8f7e220-a2ec-4a07-bac4-944036049463 phase Running ready True env ERL_FLAGS volumes tmp kube-api-access

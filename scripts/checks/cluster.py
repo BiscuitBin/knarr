@@ -15,6 +15,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import chart
+
 ROOT = Path(__file__).resolve().parents[2]
 KIND_NODE = (
     "kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0"
@@ -58,6 +60,18 @@ ANSWER_SECONDS = 15
 WORKER_SECONDS = 120
 # Loopback only: a proxy in the environment never sees the smoke's requests.
 LOOPBACK = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+# knarr's install on the worktree cluster: the chart as release knarr in the
+# kubeconfig's namespace (helm-chart ticket 03). Each variant adds to it:
+# e2e-fast a values file, wrong-ca a test-only patch on the render.
+NAMESPACE = "default"
+VARIANTS = {
+    "base": (),
+    "e2e-fast": ("--values", str(ROOT / "fixtures/chart-values/e2e-fast.yaml")),
+    "wrong-ca": (),
+}
+WRONG_CA = ROOT / "deploy/wrong-ca/patch.json"
+# Helm 4 installs and upgrades by server-side apply as this field manager.
+HELM_MANAGER = "helm"
 
 
 def run(*args, **kwargs):
@@ -268,30 +282,35 @@ def render_fake_worker(state, image):
     return target
 
 
-def render(state, image, variant):
-    """Write the base, pointed at the local image and marked with its ID so a rebuilt
-    image rolls out, to .cluster/render/base/, and a variant beside it, where its
-    kustomization's `../base` resolves. Returns the directory to build."""
-    render_root = state / "render"
-    base = render_root / "base"
-    if base.exists():
-        shutil.rmtree(base)
-    base.mkdir(parents=True)
-    data = json.loads((ROOT / "deploy/base/resources.json").read_text())
-    deployment = next(item for item in data["items"] if item["kind"] == "Deployment")
-    deployment["spec"]["template"]["spec"]["containers"][0]["image"] = image
-    deployment["spec"]["template"]["metadata"].setdefault("annotations", {})[
-        "knarr.dev/local-image-id"
-    ] = output("docker", "image", "inspect", "--format={{.Id}}", image)
-    (base / "resources.json").write_text(json.dumps(data))
-    shutil.copyfile(ROOT / "deploy/base/kustomization.yaml", base / "kustomization.yaml")
-    if variant == "base":
-        return base
-    target = render_root / variant
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(ROOT / "deploy" / variant, target)
-    return target
+def chart_values(image, image_id):
+    """The chart values that point it at the local image, marked with its ID so a
+    rebuilt image under the same tag rolls out."""
+    repository, colon, tag = image.rpartition(":")
+    if not colon or not repository or "/" in tag:
+        raise ValueError(f"the image must be repository:tag, not {image}")
+    # --set-string: --set would read a tag such as 20261017, true or null as a
+    # number, a boolean or null, which the schema refuses or the chart drops.
+    return (
+        "--set-string",
+        f"image.repository={repository}",
+        "--set-string",
+        f"image.tag={tag}",
+        "--set-string",
+        f"podAnnotations.knarr\\.dev/local-image-id={image_id}",
+    )
+
+
+def wrong_ca(values):
+    """The chart's render with deploy/wrong-ca's patch, every resource marked as
+    the release's, as Helm marks what it installs."""
+    return chart.canonical(
+        chart.render(*values, namespace=NAMESPACE),
+        patches=[WRONG_CA],
+        annotations={
+            "meta.helm.sh/release-name": chart.RELEASE,
+            "meta.helm.sh/release-namespace": NAMESPACE,
+        },
+    )
 
 
 def environment(action, checkout):
@@ -322,11 +341,44 @@ def environment(action, checkout):
 
 
 def deploy(name, state, image, variant):
-    """Load knarr's image into kind and roll out the base or a deploy/ variant."""
+    """Load knarr's image into kind and install the chart, with the variant's values.
+
+    `helm upgrade --install --wait` installs or upgrades release knarr in place.
+    wrong-ca never becomes Ready by design, so it is applied without a wait:
+    server-side, as Helm's own field manager, so the next install owns, and
+    removes, the CA file and volume it adds.
+    """
     run("kind", "load", "docker-image", image, "--name", name)
-    rendered = output("kustomize", "build", str(render(state, image, variant)))
-    run("kubectl", "apply", "-f", "-", input=rendered)
-    run("kubectl", "rollout", "status", "deployment/knarr", "--timeout=120s")
+    values = chart_values(image, output("docker", "image", "inspect", "--format={{.Id}}", image))
+    if variant == "wrong-ca":
+        rendered = state / "render" / "wrong-ca.yaml"
+        rendered.parent.mkdir(parents=True, exist_ok=True)
+        rendered.write_text(wrong_ca(values))
+        run(
+            "kubectl",
+            "apply",
+            "--server-side",
+            f"--field-manager={HELM_MANAGER}",
+            "-f",
+            str(rendered),
+        )
+        return
+    run(
+        "helm",
+        "upgrade",
+        "--install",
+        chart.RELEASE,
+        str(chart.CHART),
+        "--namespace",
+        NAMESPACE,
+        "--server-side=true",
+        "--reset-values",
+        "--wait",
+        "--timeout",
+        "120s",
+        *values,
+        *VARIANTS[variant],
+    )
 
 
 def fake_worker_deploy(name, state, image, extra=()):
@@ -358,7 +410,7 @@ def main():
     default = "fake-worker" if action.startswith("fake-worker") else "knarr"
     image = sys.argv[3] if len(sys.argv) > 3 else f"{default}:{name}"
     variant = sys.argv[4] if len(sys.argv) > 4 else "base"
-    if not (ROOT / "deploy" / variant / "kustomization.yaml").is_file():
+    if variant not in VARIANTS:
         raise ValueError(f"unknown deployment variant: {variant}")
     if action == "down":
         run(
@@ -460,5 +512,7 @@ if __name__ == "__main__":
     try:
         main()
     except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as error:
+        # chart.render() captures helm's output; without this its message is lost.
+        sys.stderr.write(getattr(error, "stderr", None) or "")
         print(f"cluster: {error}", file=sys.stderr)
         sys.exit(1)

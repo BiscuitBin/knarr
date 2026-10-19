@@ -1,0 +1,17 @@
+## just deploy (2: the same image, an in-place upgrade)
+2026-10-17T07:57:45Z
+exit=0
+Release "knarr" has been upgraded. Happy Helming!
+NAME: knarr
+LAST DEPLOYED: Sat Oct 17 00:57:47 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 2
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	2       	2026-10-17 00:57:47.385068 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+deployment env: ERL_FLAGS
+deployment volumes: tmp kube-api-access
+deployment annotations: {"deployment.kubernetes.io/revision":"1","meta.helm.sh/release-name":"knarr","meta.helm.sh/release-namespace":"default"}
+pod-template local-image-id: sha256:1bc46ebe7eb06a09a773b41659dc051858c172e32dd3c4d4e173dd1416fc7fb4
+managers: helm/Apply, kube-controller-manager/Update
+pod knarr-7cb48d9b97-crqc2 uid 1926c8e4-b604-49e7-98bc-c0430c3a0af6 phase Running ready True env ERL_FLAGS volumes tmp kube-api-access
