@@ -113,7 +113,7 @@ kubectl -n workers get events --field-selector type=Warning
 
 ## Uninstall and recover
 
-If the controller is unavailable, including when a `v0.1.0` skeleton has replaced it, remove the Deployment opt-in labels as below, then proceed directly to [manual recovery](#manual-recovery). The discovery and metric waits apply to a running controller; an unavailable controller cannot complete them. A fresh skeleton install with no earlier controller leftovers has its own [direct removal procedure](../how-to/install.md#upgrade-or-remove) ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`, `Restart` `Leftovers`).
+If the controller is unavailable, including when a `v0.1.0` skeleton has replaced it, remove the Deployment opt-in labels as below, then proceed directly to [manual recovery](#manual-recovery). The discovery and metric waits apply to a running controller; an unavailable controller cannot complete them. A fresh skeleton install with no earlier controller leftovers has its own [direct removal procedure](../how-to/install.md#remove-the-skeleton) ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`, `Restart` `Leftovers`).
 
 Keep Knarr running while removing the exact opt-in label from every managed Deployment. Cleanup begins from the next discovery cycle, on live pods, oldest-due first within the write budget; it is not an immediate synchronous operation. The following commands use namespace `workers`, matching the examples above ([config.allium](../specs/config.allium), `Configuration` `OptIn`, `Effective`; [lifecycle.allium](../specs/lifecycle.allium), `Cleanup` `Scope`, `Order`, `Uninstall` `Procedure`):
 
@@ -153,7 +153,19 @@ kubectl -n workers annotate pod worker-pod \
   knarr.io/applied-
 ```
 
-Once automatic cleanup or manual recovery and marker inspection are complete, delete the install from the operator checkout of the currently installed release. Deleting a running controller before its cleanup wait leaves every owned annotation as a leftover. Manual recovery after a dead install uses the same inspection and conditional per-pod removal above, preserving other writers' values ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`):
+Once automatic cleanup or manual recovery and marker inspection are complete, delete the install with the command matching how it was installed. Deleting a running controller before its cleanup wait leaves every owned annotation as a leftover. Manual recovery after a dead install uses the same inspection and conditional per-pod removal above, preserving other writers' values ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Procedure`, `Recovery`). A Helm release is uninstalled by name:
+
+```sh
+helm -n workers uninstall knarr
+```
+
+A [kubectl-only install](../how-to/install.md#install-with-kubectl-only) has no Helm release for `helm uninstall` to find; delete the manifest saved when it was rendered and applied:
+
+```sh
+kubectl -n workers delete -f knarr-rendered.yaml
+```
+
+An install from the deprecated kustomize release overlay is deleted from the operator checkout of the currently installed release, until [Decision 0015](../decisions/0015-helm-chart.md)'s ticket 06 retires that route:
 
 ```sh
 kubectl -n workers delete -k deploy/release

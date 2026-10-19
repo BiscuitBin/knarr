@@ -1,0 +1,44 @@
+# kubectl diff output below is quoted with a leading "| " so its one-space
+# context lines keep the repository's even indentation; nothing else changed.
+2026-10-19T07:35:18Z
++ docker tag knarr:05-install-first-publis-48e495fa knarr:local
++ kind load docker-image knarr:local --name 05-install-first-publis-48e495fa
+Image: "knarr:local" with ID "sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc" not yet present on node "05-install-first-publis-48e495fa-control-plane", loading...
++ kubectl apply -k deploy/base
+serviceaccount/knarr created
+role.rbac.authorization.k8s.io/knarr created
+rolebinding.rbac.authorization.k8s.io/knarr created
+deployment.apps/knarr created
++ kubectl rollout status deployment/knarr --timeout=120s
+Waiting for deployment "knarr" rollout to finish: 0 of 1 updated replicas are available...
+deployment "knarr" successfully rolled out
++ kubectl -n default diff -k deploy/base
++ echo 'diff exit 0'
+diff exit 0
++ kubectl -n default set resources deployment/knarr --limits=memory=300Mi
+deployment.apps/knarr resource requirements updated
++ kubectl -n default diff -k deploy/base
+| diff -u -N <tmp> <tmp>
+| --- <tmp> 00:35:23
+| +++ <tmp> 00:35:23
+| @@ -6,7 +6,7 @@
+|      kubectl.kubernetes.io/last-applied-configuration: |
+|        {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"name":"knarr","namespace":"default"},"spec":{"replicas":1,"selector":{"matchLabels":{"app.kubernetes.io/name":"knarr"}},"strategy":{"type":"Recreate"},"template":{"metadata":{"labels":{"app.kubernetes.io/name":"knarr"}},"spec":{"automountServiceAccountToken":false,"containers":[{"env":[{"name":"ERL_FLAGS","value":"-knarr discovery true"}],"image":"knarr:local","imagePullPolicy":"Never","livenessProbe":{"httpGet":{"path":"/healthz","port":"http"},"periodSeconds":5,"timeoutSeconds":2},"name":"knarr","ports":[{"containerPort":8080,"name":"http"}],"readinessProbe":{"httpGet":{"path":"/readyz","port":"http"},"periodSeconds":5,"timeoutSeconds":2},"resources":{"limits":{"memory":"256Mi"},"requests":{"cpu":"50m","memory":"64Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/tmp","name":"tmp"},{"mountPath":"/var/run/secrets/kubernetes.io/serviceaccount","name":"kube-api-access","readOnly":true}]}],"securityContext":{"runAsGroup":10001,"runAsNonRoot":true,"runAsUser":10001,"seccompProfile":{"type":"RuntimeDefault"}},"serviceAccountName":"knarr","volumes":[{"emptyDir":{},"name":"tmp"},{"name":"kube-api-access","projected":{"sources":[{"serviceAccountToken":{"expirationSeconds":600,"path":"token"}},{"configMap":{"items":[{"key":"ca.crt","path":"ca.crt"}],"name":"kube-root-ca.crt"}},{"downwardAPI":{"items":[{"fieldRef":{"fieldPath":"metadata.namespace"},"path":"namespace"}]}}]}}]}}}}
+|    creationTimestamp: "2026-10-19T07:35:21Z"
+| -  generation: 2
+| +  generation: 3
+|    name: knarr
+|    namespace: default
+|    resourceVersion: "501"
+| @@ -57,7 +57,7 @@
+|            timeoutSeconds: 2
+|          resources:
+|            limits:
+| -            memory: 300Mi
+| +            memory: 256Mi
+|            requests:
+|              cpu: 50m
+|              memory: 64Mi
++ echo 'diff exit 1'
+diff exit 1
+exit=0

@@ -1,0 +1,49 @@
+# Pod watches of the adoption runs, recounted. The count printed inside each
+# transcript held a pod as Running from its first Running line until its DELETED
+# event, so a stopped (Succeeded) pod still awaiting deletion counted. Here a pod
+# runs only while its latest line says Running. The watches in 04 and 05 are
+# unreadable, all <none>: their columns read the watch event, not .object; 06,
+# 07, 08 and 10 use the corrected columns. 06's adoption failed, so its pod
+# never changed.
+== 06-migration-ssa-handover.txt
+ADDED   knarr-7f4c64b4c4-dbk2b   Running   true    <none>
+most knarr pods Running at once: 1
+== 07-migration-ssa-handover-forced.txt
+ADDED   knarr-7f4c64b4c4-2vj97   Running   true    <none>
+MODIFIED   knarr-7f4c64b4c4-2vj97   Running   true    2026-10-19T06:37:16Z
+MODIFIED   knarr-7f4c64b4c4-2vj97   Running   true    2026-10-19T06:37:16Z
+MODIFIED   knarr-7f4c64b4c4-2vj97   Succeeded   false   2026-10-19T06:37:16Z
+ADDED      knarr-59dcfcf49-mpqck    Pending     <none>   <none>
+MODIFIED   knarr-59dcfcf49-mpqck    Pending     <none>   <none>
+MODIFIED   knarr-59dcfcf49-mpqck    Pending     false    <none>
+MODIFIED   knarr-7f4c64b4c4-2vj97   Succeeded   false    2026-10-19T06:36:46Z
+DELETED    knarr-7f4c64b4c4-2vj97   Succeeded   false    2026-10-19T06:36:46Z
+MODIFIED   knarr-59dcfcf49-mpqck    Running     false    <none>
+MODIFIED   knarr-59dcfcf49-mpqck    Running     true     <none>
+most knarr pods Running at once: 1
+== 08-migration-client-side.txt
+ADDED   knarr-7f4c64b4c4-r5f8l   Running   true    <none>
+MODIFIED   knarr-7f4c64b4c4-r5f8l   Running   true    2026-10-19T06:40:15Z
+MODIFIED   knarr-7f4c64b4c4-r5f8l   Running   true    2026-10-19T06:40:15Z
+MODIFIED   knarr-7f4c64b4c4-r5f8l   Succeeded   false   2026-10-19T06:40:15Z
+ADDED      knarr-59dcfcf49-fzkw8    Pending     <none>   <none>
+MODIFIED   knarr-59dcfcf49-fzkw8    Pending     <none>   <none>
+MODIFIED   knarr-59dcfcf49-fzkw8    Pending     false    <none>
+MODIFIED   knarr-59dcfcf49-fzkw8    Running     false    <none>
+MODIFIED   knarr-7f4c64b4c4-r5f8l   Succeeded   false    2026-10-19T06:39:45Z
+DELETED    knarr-7f4c64b4c4-r5f8l   Succeeded   false    2026-10-19T06:39:45Z
+MODIFIED   knarr-59dcfcf49-fzkw8    Running     true     <none>
+most knarr pods Running at once: 1
+== 10-migration-recovery.txt
+ADDED   knarr-7f4c64b4c4-vvbww   Running   true    <none>
+MODIFIED   knarr-7f4c64b4c4-vvbww   Running   true    2026-10-19T07:16:02Z
+MODIFIED   knarr-7f4c64b4c4-vvbww   Running   true    2026-10-19T07:16:02Z
+MODIFIED   knarr-7f4c64b4c4-vvbww   Succeeded   false   2026-10-19T07:16:02Z
+ADDED      knarr-59dcfcf49-kb7br    Pending     <none>   <none>
+MODIFIED   knarr-59dcfcf49-kb7br    Pending     <none>   <none>
+MODIFIED   knarr-59dcfcf49-kb7br    Pending     false    <none>
+MODIFIED   knarr-7f4c64b4c4-vvbww   Succeeded   false    2026-10-19T07:15:32Z
+DELETED    knarr-7f4c64b4c4-vvbww   Succeeded   false    2026-10-19T07:15:32Z
+MODIFIED   knarr-59dcfcf49-kb7br    Running     false    <none>
+MODIFIED   knarr-59dcfcf49-kb7br    Running     true     <none>
+most knarr pods Running at once: 1
