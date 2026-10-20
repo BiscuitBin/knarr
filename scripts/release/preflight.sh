@@ -52,9 +52,8 @@ changelog=$(git show "$full:CHANGELOG.md") || fail 'reading CHANGELOG.md failed'
 rc=0; printf '%s\n' "$changelog" | changelog_has_version "$version" || rc=$?
 printf 'changelog_has_version %s: %s\n' "$version" "$rc"
 [ "$rc" = 0 ] || fail "CHANGELOG.md has no '## [$version] - YYYY-MM-DD' heading"
-heading=$(printf '%s\n' "$changelog" | grep -F "## [$version] - " | head -n 1)
-printf 'changelog heading: %s\n' "$heading"
-dated=${heading##* - }
+dated=$(printf '%s\n' "$changelog" | changelog_date "$version") || fail 'changelog_date failed'
+printf 'changelog heading: ## [%s] - %s\n' "$version" "$dated"
 [ "$dated" = "$today" ] || fail "the heading is dated $dated, and today (UTC) is $today"
 
 echo; echo '== the chart, as publish stamps it first'

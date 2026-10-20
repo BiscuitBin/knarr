@@ -6,7 +6,8 @@
 # buildx's --metadata-file, `curl -sI` against registry:2 and ghcr.io, and
 # `docker buildx imagetools inspect`.
 #   version_of_tag, tags_for, toml_version, tag_matches_version,
-#   changelog_has_version   the release guards and the tag set
+#   changelog_has_version, changelog_date
+#                           the release guards and the tag set
 #   digest_of_headers, digest_of_metadata, digest_of_inspect
 #                           one digest read three ways
 #   tag_exists_verdict      absent, present or unknown: a refused, denied or
@@ -104,6 +105,13 @@ eq 'changelog_has_version: a prerelease heading' "$(printf '## [0.2.0-rc.1] - 20
 eq 'changelog_has_version: a heading with no date' "$(printf '## [0.1.0]\n' | status changelog_has_version 0.1.0)" 1
 eq 'changelog_has_version: a draft suffix' "$(printf '## [0.1.0] - 2026-10-20 draft\n' | status changelog_has_version 0.1.0)" 1
 eq 'changelog_has_version: a date without leading zeros' "$(printf '## [0.1.0] - 2026-1-5\n' | status changelog_has_version 0.1.0)" 1
+
+# changelog_date <version>: CHANGELOG.md on stdin, the date of the first
+# heading changelog_has_version accepts, and never a line that only contains one
+eq 'changelog_date: the released heading'"'"'s date' "$(printf '%s\n' "$changelog" | said changelog_date 0.1.0)" '2026-10-20; exit 0'
+eq 'changelog_date: no heading is exit 1' "$(printf '## [Unreleased]\n' | said changelog_date 0.1.0)" '; exit 1'
+eq 'changelog_date: prose ending in a heading is not the heading' "$(lines '- The next heading reads ## [0.1.0] - 2026-10-21' '## [0.1.0] - 2026-10-20' | said changelog_date 0.1.0)" '2026-10-20; exit 0'
+eq 'changelog_date: a placeholder date is not the heading' "$(lines '## [0.1.0] - YYYY-MM-DD' '## [0.1.0] - 2026-10-20' | said changelog_date 0.1.0)" '2026-10-20; exit 0'
 eq 'changelog_has_version: a [YANKED] suffix' "$(printf '## [0.1.0] - 2026-10-20 [YANKED]\n' | status changelog_has_version 0.1.0)" 1
 eq 'changelog_has_version: no " - " before the date' "$(printf '## [0.1.0] 2026-10-20\n' | status changelog_has_version 0.1.0)" 1
 

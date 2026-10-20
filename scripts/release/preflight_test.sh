@@ -6,7 +6,8 @@
 # the preflight in it with the real git, isolated from the user's
 # configuration. The passing commit is checked first, then each guard the
 # release would fail on: a tag that disagrees with gleam.toml, a commit main
-# does not carry, a missing or stale changelog heading, a chart that disagrees
+# does not carry, a missing or stale changelog heading (one a line of prose
+# naming a heading neither hides nor stands in for), a chart that disagrees
 # with the version, a local tag that already exists, and a missing commit.
 # Needs helm (the default pixi environment).
 # Usage: sh scripts/release/preflight_test.sh
@@ -95,6 +96,24 @@ fixture "$stale" 0.2.0 0.2.0 '## [0.2.0] - 2000-01-01'
 run "$stale" v0.2.0 "$(git -C "$stale" rev-parse HEAD)"
 eq 'refused: a heading not dated today (UTC)' "$rc" 1
 has 'refused: says which day it should be' "$out" "FAIL: the heading is dated 2000-01-01, and today (UTC) is $today"
+
+# Prose naming a heading dated today is not the heading, which is stale.
+prose=$work/prose
+fixture "$prose" 0.2.0 0.2.0 "- The next heading reads ## [0.2.0] - $today
+
+## [0.2.0] - 2000-01-01"
+run "$prose" v0.2.0 "$(git -C "$prose" rev-parse HEAD)"
+eq 'refused: a stale heading behind prose naming today'"'"'s' "$rc" 1
+has 'refused: says the heading is stale' "$out" "FAIL: the heading is dated 2000-01-01, and today (UTC) is $today"
+
+# Prose naming the heading's form does not hide the heading, which is today's.
+form=$work/form
+fixture "$form" 0.2.0 0.2.0 "- Write \`## [0.2.0] - YYYY-MM-DD\` when releasing.
+
+## [0.2.0] - $today"
+run "$form" v0.2.0 "$(git -C "$form" rev-parse HEAD)"
+eq 'pass: a heading dated today behind prose naming its form' "$rc" 0
+has 'pass: reads the heading, not the prose' "$out" "changelog heading: ## [0.2.0] - $today"
 
 # A chart that disagrees with the version: publish's first stamp would refuse.
 skew=$work/skew
