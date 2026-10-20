@@ -1,0 +1,96 @@
+2026-10-19T05:59:03Z
++ E=.scratch/helm-chart/evidence/05
++ image=knarr:05-install-first-publis-48e495fa
++ kind load docker-image knarr:05-install-first-publis-48e495fa --name 05-install-first-publis-48e495fa
+Image: "knarr:05-install-first-publis-48e495fa" with ID "sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc" not yet present on node "05-install-first-publis-48e495fa-control-plane", loading...
+++ docker image inspect --format '{{.Id}}' knarr:05-install-first-publis-48e495fa
++ id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc
++ helm install knarr charts/knarr --namespace default --wait --timeout 120s --set-string image.repository=knarr --set-string image.tag=05-install-first-publis-48e495fa --set-string 'podAnnotations.knarr\.dev/local-image-id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc'
+NAME: knarr
+LAST DEPLOYED: Sun Oct 18 22:59:06 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
++ kubectl rollout status deployment/knarr
+deployment "knarr" successfully rolled out
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	1       	2026-10-18 22:59:06.623975 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply
+Role knarr managed-by=Helm release=knarr managers=helm/Apply
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kube-controller-manager/Update
+deployment image: knarr:05-install-first-publis-48e495fa
+== knarr pods
+knarr-59dcfcf49-8gctj uid 5c98e362-c07d-4646-8609-f33e8a4048f9 phase Running ready true image knarr:05-install-first-publis-48e495fa
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
++ just smoke
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "<worktree>"
+ok /healthz
+ok /readyz
+ok /metrics
+++ kubectl get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={.items[0].metadata.uid}'
++ before=5c98e362-c07d-4646-8609-f33e8a4048f9
++ helm upgrade knarr charts/knarr --namespace default --wait --timeout 120s --set-string image.repository=knarr --set-string image.tag=05-install-first-publis-48e495fa --set-string 'podAnnotations.knarr\.dev/local-image-id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc' --set-string knarr.log_level=debug
+Release "knarr" has been upgraded. Happy Helming!
+NAME: knarr
+LAST DEPLOYED: Sun Oct 18 22:59:09 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
++ kubectl rollout status deployment/knarr
+deployment "knarr" successfully rolled out
+++ kubectl get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={.items[0].metadata.uid}'
++ after=b6d293b1-e4c5-4a05-8b5c-2681fe7b0eb5
++ test 5c98e362-c07d-4646-8609-f33e8a4048f9 '!=' b6d293b1-e4c5-4a05-8b5c-2681fe7b0eb5
++ echo 'pod rolled: 5c98e362-c07d-4646-8609-f33e8a4048f9 -> b6d293b1-e4c5-4a05-8b5c-2681fe7b0eb5'
+pod rolled: 5c98e362-c07d-4646-8609-f33e8a4048f9 -> b6d293b1-e4c5-4a05-8b5c-2681fe7b0eb5
++ kubectl get deploy knarr -o 'jsonpath={.spec.template.spec.containers[0].env}{"\n"}'
+[{"name":"ERL_FLAGS","value":"-knarr discovery true -knarr log_level '\"debug\"'"}]
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	2       	2026-10-18 22:59:09.568382 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply
+Role knarr managed-by=Helm release=knarr managers=helm/Apply
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kube-controller-manager/Update
+deployment image: knarr:05-install-first-publis-48e495fa
+== knarr pods
+knarr-7d4f5979d8-q5cvv uid b6d293b1-e4c5-4a05-8b5c-2681fe7b0eb5 phase Running ready true image knarr:05-install-first-publis-48e495fa
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
++ just smoke
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "<worktree>"
+ok /healthz
+ok /readyz
+ok /metrics
+exit=0

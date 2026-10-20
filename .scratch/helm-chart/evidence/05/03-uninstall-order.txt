@@ -1,0 +1,117 @@
+2026-10-19T06:20:11Z
++ E=.scratch/helm-chart/evidence/05
++ image=knarr:05-install-first-publis-48e495fa
+++ docker image inspect --format '{{.Id}}' knarr:05-install-first-publis-48e495fa
++ id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc
++ helm install knarr charts/knarr --namespace default --wait --timeout 120s --set-string image.repository=knarr --set-string image.tag=05-install-first-publis-48e495fa --set-string 'podAnnotations.knarr\.dev/local-image-id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc'
+NAME: knarr
+LAST DEPLOYED: Sun Oct 18 23:20:11 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
++ just fake-worker-deploy
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py fake-worker-deploy "<worktree>" "$1"
+Image: "fake-worker:05-install-first-publis-48e495fa" with ID "sha256:a8b34c545fc802891c41eeb1b2120567945be5998c3e850f77e49736abb7c35b" not yet present on node "05-install-first-publis-48e495fa-control-plane", loading...
+service/fake-worker-collector unchanged
+deployment.apps/fake-worker created
+deployment.apps/fake-worker-collector unchanged
+deployment "coredns" successfully rolled out
+deployment "fake-worker-collector" successfully rolled out
+Waiting for deployment "fake-worker" rollout to finish: 0 of 4 updated replicas are available...
+Waiting for deployment "fake-worker" rollout to finish: 1 of 4 updated replicas are available...
+Waiting for deployment "fake-worker" rollout to finish: 2 of 4 updated replicas are available...
+Waiting for deployment "fake-worker" rollout to finish: 3 of 4 updated replicas are available...
+deployment "fake-worker" successfully rolled out
+++ kubectl get pods -l app.kubernetes.io/name=fake-worker -o 'jsonpath={.items[*].metadata.name}'
++ pods='fake-worker-5d7f5c6cf6-l9pxj fake-worker-5d7f5c6cf6-mzl9g fake-worker-5d7f5c6cf6-nv4dg fake-worker-5d7f5c6cf6-ttqns'
++ set -- fake-worker-5d7f5c6cf6-l9pxj fake-worker-5d7f5c6cf6-mzl9g fake-worker-5d7f5c6cf6-nv4dg fake-worker-5d7f5c6cf6-ttqns
++ foreign=fake-worker-5d7f5c6cf6-l9pxj
++ kubectl annotate pod fake-worker-5d7f5c6cf6-l9pxj controller.kubernetes.io/pod-deletion-cost=-7
+pod/fake-worker-5d7f5c6cf6-l9pxj annotated
++ for pod in '$2' '$3' '$4'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-5d7f5c6cf6-mzl9g 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ for pod in '$2' '$3' '$4'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-5d7f5c6cf6-nv4dg 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ for pod in '$2' '$3' '$4'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-5d7f5c6cf6-ttqns 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ kubectl label deployment fake-worker knarr.io/enabled=true
+deployment.apps/fake-worker labeled
++ wait_for 60 owned_three
+waited 70 s
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	1       	2026-10-18 23:20:11.174986 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply
+Role knarr managed-by=Helm release=knarr managers=helm/Apply
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kube-controller-manager/Update
+deployment image: knarr:05-install-first-publis-48e495fa
+== knarr pods
+knarr-59dcfcf49-qt9tx uid 59563651-bc4e-4fb6-9aed-196cd82a0876 phase Running ready true image knarr:05-install-first-publis-48e495fa
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
+fake-worker-5d7f5c6cf6-l9pxj	-7
+fake-worker-5d7f5c6cf6-mzl9g	1800	{"at":"2026-10-19T06:21:19Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:21:19Z"}}
+fake-worker-5d7f5c6cf6-nv4dg	1800	{"at":"2026-10-19T06:21:21Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:21:21Z"}}
+fake-worker-5d7f5c6cf6-ttqns	1800	{"at":"2026-10-19T06:21:23Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:21:23Z"}}
++ sh .scratch/helm-chart/evidence/05/metrics.sh
+knarr_last_discovery_timestamp_seconds 1792390872
+knarr_annotations{deployment="fake-worker",annotation="pod-deletion-cost",standing="foreign"} 1
+knarr_targets{kind="deployments"} 1
+knarr_targets{kind="pods"} 4
++ kubectl label deployment -l knarr.io/enabled=true knarr.io/enabled-
+deployment.apps/fake-worker unlabeled
+++ date +%s
++ optout=1792390888
++ wait_for 60 cleaned
+waited 105 s
++ sh .scratch/helm-chart/evidence/05/metrics.sh
+knarr_last_discovery_timestamp_seconds 1792390992
+knarr_targets{kind="deployments"} 0
+knarr_targets{kind="pods"} 0
++ kubectl get pods -o 'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.knarr\.io/applied}{"\n"}{end}'
+fake-worker-5d7f5c6cf6-l9pxj
+fake-worker-5d7f5c6cf6-mzl9g
+fake-worker-5d7f5c6cf6-nv4dg
+fake-worker-5d7f5c6cf6-ttqns
+fake-worker-collector-65dd9c9b7d-2qlnz
+knarr-59dcfcf49-qt9tx
++ kubectl get pod fake-worker-5d7f5c6cf6-l9pxj -o 'jsonpath={.metadata.annotations}{"\n"}'
+{"controller.kubernetes.io/pod-deletion-cost":"-7","knarr.dev/local-image-id":"sha256:a8b34c545fc802891c41eeb1b2120567945be5998c3e850f77e49736abb7c35b"}
++ helm -n default uninstall knarr --wait
+release "knarr" uninstalled
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME	NAMESPACE	REVISION	UPDATED	STATUS	CHART	APP VERSION
+== knarr resources
+serviceaccount/knarr absent
+role/knarr absent
+rolebinding/knarr absent
+deployment/knarr absent
+== knarr pods
+knarr-59dcfcf49-qt9tx uid 59563651-bc4e-4fb6-9aed-196cd82a0876 phase Succeeded ready false image knarr:05-install-first-publis-48e495fa
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
+fake-worker-5d7f5c6cf6-l9pxj	-7
+fake-worker-5d7f5c6cf6-mzl9g
+fake-worker-5d7f5c6cf6-nv4dg
+fake-worker-5d7f5c6cf6-ttqns
++ kubectl get deployment,serviceaccount,role,rolebinding -l app.kubernetes.io/name=knarr
+No resources found in default namespace.
+exit=0

@@ -1,0 +1,117 @@
+2026-10-19T07:19:20Z
++ E=.scratch/helm-chart/evidence/05
++ image=knarr:05-install-first-publis-48e495fa
++ cluster=05-install-first-publis-48e495fa
++ kind load docker-image knarr:05-install-first-publis-48e495fa --name 05-install-first-publis-48e495fa
+Image: "knarr:05-install-first-publis-48e495fa" with ID "sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc" not yet present on node "05-install-first-publis-48e495fa-control-plane", loading...
+++ docker image inspect --format '{{.Id}}' knarr:05-install-first-publis-48e495fa
++ id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc
++ helm template knarr charts/knarr --namespace default --set-string image.repository=knarr --set-string image.tag=05-install-first-publis-48e495fa --set-string 'podAnnotations.knarr\.dev/local-image-id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc'
++ grep '^kind:' ai_tmp/knarr-rendered.yaml
+kind: ServiceAccount
+kind: Role
+kind: RoleBinding
+kind: Deployment
++ kubectl -n default apply -f ai_tmp/knarr-rendered.yaml
+serviceaccount/knarr created
+role.rbac.authorization.k8s.io/knarr created
+rolebinding.rbac.authorization.k8s.io/knarr created
+deployment.apps/knarr created
++ kubectl -n default rollout status deployment/knarr --timeout=120s
+Waiting for deployment "knarr" rollout to finish: 0 of 1 updated replicas are available...
+deployment "knarr" successfully rolled out
++ helm list --namespace default
+NAME	NAMESPACE	REVISION	UPDATED	STATUS	CHART	APP VERSION
++ just smoke
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "<worktree>"
+ok /healthz
+ok /readyz
+ok /metrics
++ just fake-worker-deploy
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py fake-worker-deploy "<worktree>" "$1"
+Image: "fake-worker:05-install-first-publis-48e495fa" with ID "sha256:a8b34c545fc802891c41eeb1b2120567945be5998c3e850f77e49736abb7c35b" not yet present on node "05-install-first-publis-48e495fa-control-plane", loading...
+service/fake-worker-collector created
+deployment.apps/fake-worker created
+deployment.apps/fake-worker-collector created
+deployment "coredns" successfully rolled out
+Waiting for deployment "fake-worker-collector" rollout to finish: 0 of 1 updated replicas are available...
+deployment "fake-worker-collector" successfully rolled out
+deployment "fake-worker" successfully rolled out
+++ kubectl get pods -l app.kubernetes.io/name=fake-worker -o 'jsonpath={.items[*].metadata.name}'
++ set -- fake-worker-5d7f5c6cf6-2t5jk fake-worker-5d7f5c6cf6-jnkfj fake-worker-5d7f5c6cf6-mk5gc fake-worker-5d7f5c6cf6-mvbsd
++ foreign=fake-worker-5d7f5c6cf6-2t5jk
++ kubectl annotate pod fake-worker-5d7f5c6cf6-2t5jk controller.kubernetes.io/pod-deletion-cost=-7
+pod/fake-worker-5d7f5c6cf6-2t5jk annotated
++ for pod in '$2' '$3' '$4'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-5d7f5c6cf6-jnkfj 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ for pod in '$2' '$3' '$4'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-5d7f5c6cf6-mk5gc 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ for pod in '$2' '$3' '$4'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-5d7f5c6cf6-mvbsd 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ kubectl label deployment fake-worker knarr.io/enabled=true
+deployment.apps/fake-worker labeled
++ wait_for 60 owned_three
+waited 110 s
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME	NAMESPACE	REVISION	UPDATED	STATUS	CHART	APP VERSION
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=None managers=kubectl-client-side-apply/Update
+Role knarr managed-by=Helm release=None managers=kubectl-client-side-apply/Update
+RoleBinding knarr managed-by=Helm release=None managers=kubectl-client-side-apply/Update
+Deployment knarr managed-by=Helm release=None managers=kubectl-client-side-apply/Update,kube-controller-manager/Update
+deployment image: knarr:05-install-first-publis-48e495fa
+== knarr pods
+knarr-59dcfcf49-rldkq uid 717e9fb1-8876-4aa2-8495-d53252266e20 phase Running ready true image knarr:05-install-first-publis-48e495fa
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
+fake-worker-5d7f5c6cf6-2t5jk	-7
+fake-worker-5d7f5c6cf6-jnkfj	1800	{"at":"2026-10-19T07:20:45Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T07:20:45Z"}}
+fake-worker-5d7f5c6cf6-mk5gc	1800	{"at":"2026-10-19T07:20:34Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T07:20:34Z"}}
+fake-worker-5d7f5c6cf6-mvbsd	1800	{"at":"2026-10-19T07:20:27Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T07:20:27Z"}}
++ kubectl label deployment -l knarr.io/enabled=true knarr.io/enabled-
+deployment.apps/fake-worker unlabeled
+++ date +%s
++ optout=1792394488
++ wait_for 60 cleaned
+waited 115 s
++ sh .scratch/helm-chart/evidence/05/metrics.sh
+knarr_last_discovery_timestamp_seconds 1792394604
+knarr_targets{kind="deployments"} 0
+knarr_targets{kind="pods"} 0
++ kubectl get pods -o 'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.knarr\.io/applied}{"\n"}{end}'
+fake-worker-5d7f5c6cf6-2t5jk
+fake-worker-5d7f5c6cf6-jnkfj
+fake-worker-5d7f5c6cf6-mk5gc
+fake-worker-5d7f5c6cf6-mvbsd
+fake-worker-collector-65dd9c9b7d-cq2zt
+knarr-59dcfcf49-rldkq
++ kubectl get pod fake-worker-5d7f5c6cf6-2t5jk -o 'jsonpath={.metadata.annotations}{"\n"}'
+{"controller.kubernetes.io/pod-deletion-cost":"-7","knarr.dev/local-image-id":"sha256:a8b34c545fc802891c41eeb1b2120567945be5998c3e850f77e49736abb7c35b"}
++ kubectl -n default delete -f ai_tmp/knarr-rendered.yaml --wait
+serviceaccount "knarr" deleted from default namespace
+role.rbac.authorization.k8s.io "knarr" deleted from default namespace
+rolebinding.rbac.authorization.k8s.io "knarr" deleted from default namespace
+deployment.apps "knarr" deleted from default namespace
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME	NAMESPACE	REVISION	UPDATED	STATUS	CHART	APP VERSION
+== knarr resources
+serviceaccount/knarr absent
+role/knarr absent
+rolebinding/knarr absent
+deployment/knarr absent
+== knarr pods
+knarr-59dcfcf49-rldkq uid 717e9fb1-8876-4aa2-8495-d53252266e20 phase Succeeded ready false image knarr:05-install-first-publis-48e495fa
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
+fake-worker-5d7f5c6cf6-2t5jk	-7
+fake-worker-5d7f5c6cf6-jnkfj
+fake-worker-5d7f5c6cf6-mk5gc
+fake-worker-5d7f5c6cf6-mvbsd
++ kubectl get deployment,serviceaccount,role,rolebinding -l app.kubernetes.io/name=knarr
+No resources found in default namespace.
+exit=0

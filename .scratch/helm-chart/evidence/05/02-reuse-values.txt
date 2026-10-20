@@ -1,0 +1,38 @@
+2026-10-19T05:59:26Z
++ kubectl create namespace reuse-check
+namespace/reuse-check created
++ helm install reuse ai_tmp/reuse/old --namespace reuse-check
+NAME: reuse
+LAST DEPLOYED: Sun Oct 18 22:59:26 2026
+NAMESPACE: reuse-check
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release reuse in namespace reuse-check.
+
+It acts only on Deployments in namespace reuse-check that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace reuse-check knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
++ helm get values reuse --namespace reuse-check
+USER-SUPPLIED VALUES:
+null
++ helm upgrade reuse ai_tmp/reuse/new --namespace reuse-check --reuse-values --dry-run=server
++ grep image:
+          image: knarr:old-release
++ helm upgrade reuse ai_tmp/reuse/new --namespace reuse-check --reset-then-reuse-values --dry-run=server
++ grep image:
+          image: knarr:new-release
++ helm upgrade reuse ai_tmp/reuse/new --namespace reuse-check --dry-run=server
++ grep image:
+          image: knarr:new-release
++ helm uninstall reuse --namespace reuse-check
+release "reuse" uninstalled
++ kubectl delete namespace reuse-check
+namespace "reuse-check" deleted
+exit=0

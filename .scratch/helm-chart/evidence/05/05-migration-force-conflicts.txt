@@ -1,0 +1,101 @@
+2026-10-19T06:27:07Z
++ E=.scratch/helm-chart/evidence/05
++ image=knarr:05-install-first-publis-48e495fa
++ helm history knarr --namespace default
+REVISION	UPDATED                 	STATUS	CHART      	APP VERSION	DESCRIPTION
+1       	Sun Oct 18 23:26:35 2026	failed	knarr-0.1.0	0.1.0      	Release "knarr" failed: conflict occurred while applying object default/knarr rbac.authorization.k8s.io/v1, Kind=RoleBinding: Apply failed with 1 conflict: conflict with "kubectl-client-side-apply" using rbac.authorization.k8s.io/v1: .subjects && conflict occurred while applying object default/knarr apps/v1, Kind=Deployment: Apply failed with 2 conflicts: conflicts with "kubectl-client-side-apply" using apps/...
++ watch=88113
++ sleep 2
++ kubectl get pods -l app.kubernetes.io/name=knarr --watch --output-watch-events -o 'custom-columns=NAME:.metadata.name,PHASE:.status.phase,READY:.status.containerStatuses[0].ready,DELETING:.metadata.deletionTimestamp'
+++ docker image inspect --format '{{.Id}}' knarr:05-install-first-publis-48e495fa
++ id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc
++ helm upgrade --install knarr charts/knarr --namespace default --wait --timeout 120s --force-conflicts --set-string image.repository=knarr --set-string image.tag=05-install-first-publis-48e495fa --set-string 'podAnnotations.knarr\.dev/local-image-id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc'
+Release "knarr" has been upgraded. Happy Helming!
+NAME: knarr
+LAST DEPLOYED: Sun Oct 18 23:27:09 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
++ sleep 5
++ kill 88113
++ cat ai_tmp/05-watch.txt
+NAME     PHASE    READY    DELETING
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
+<none>   <none>   <none>   <none>
++ awk 'NR > 1 { if ($3 == "Running") run[$2] = 1; if ($1 == "DELETED") delete run[$2];
+  n = 0; for (p in run) n++; if (n > max) max = n }
+  END { print "most knarr pods Running at once:", max; exit max > 1 }' ai_tmp/05-watch.txt
+most knarr pods Running at once:
++ helm history knarr --namespace default
+REVISION	UPDATED                 	STATUS    	CHART      	APP VERSION	DESCRIPTION
+1       	Sun Oct 18 23:26:35 2026	superseded	knarr-0.1.0	0.1.0      	Release "knarr" failed: conflict occurred while applying object default/knarr rbac.authorization.k8s.io/v1, Kind=RoleBinding: Apply failed with 1 conflict: conflict with "kubectl-client-side-apply" using rbac.authorization.k8s.io/v1: .subjects && conflict occurred while applying object default/knarr apps/v1, Kind=Deployment: Apply failed with 2 conflicts: conflicts with "kubectl-client-side-apply" using apps/...
+2       	Sun Oct 18 23:27:09 2026	deployed  	knarr-0.1.0	0.1.0      	Upgrade complete
++ kubectl rollout status deployment/knarr
+deployment "knarr" successfully rolled out
++ kubectl get rolebinding knarr -o 'jsonpath={.subjects}{"\n"}'
+[{"kind":"ServiceAccount","name":"knarr","namespace":"default"}]
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	2       	2026-10-18 23:27:09.384071 -0700 PDT	deployed	knarr-0.1.0	0.1.0
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply,kubectl-client-side-apply/Update,kubectl-annotate/Update,kubectl-label/Update
+Role knarr managed-by=Helm release=knarr managers=helm/Apply,kubectl-client-side-apply/Update,kubectl-annotate/Update,kubectl-label/Update
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply,kubectl-client-side-apply/Update,kubectl-annotate/Update,kubectl-label/Update
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kubectl-client-side-apply/Update,kubectl-annotate/Update,kubectl-label/Update,kube-controller-manager/Update
+deployment image: knarr:05-install-first-publis-48e495fa
+== knarr pods
+knarr-59dcfcf49-zbbhh uid ccefdf96-a5b4-4a40-aae1-d37292d933b1 phase Running ready true image knarr:05-install-first-publis-48e495fa
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
+fake-worker-5d7f5c6cf6-dp46h
+fake-worker-5d7f5c6cf6-vddd2	1800	{"at":"2026-10-19T06:25:49Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:25:49Z"}}
+fake-worker-5d7f5c6cf6-wh2tv	1800	{"at":"2026-10-19T06:25:57Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:25:57Z"}}
+fake-worker-5d7f5c6cf6-ww5rf	1800	{"at":"2026-10-19T06:25:40Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:25:40Z"}}
++ just smoke
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "<worktree>"
+ok /healthz
+ok /readyz
+ok /metrics
++ helm upgrade knarr charts/knarr --namespace default --wait --timeout 120s --set-string image.repository=knarr --set-string image.tag=05-install-first-publis-48e495fa --set-string 'podAnnotations.knarr\.dev/local-image-id=sha256:e7fb9fb20124f6189ee94f5ebad0735c36bfe760c7d8096e5fa315855398e4cc' --set-string knarr.log_level=debug
+level=WARN msg="upgrade failed" name=knarr error="conflict occurred while applying object default/knarr apps/v1, Kind=Deployment: Apply failed with 1 conflict: conflict with \"kubectl-client-side-apply\" using apps/v1: .spec.template.spec.containers[name=\"knarr\"].env[name=\"ERL_FLAGS\"].value"
+Error: UPGRADE FAILED: conflict occurred while applying object default/knarr apps/v1, Kind=Deployment: Apply failed with 1 conflict: conflict with "kubectl-client-side-apply" using apps/v1: .spec.template.spec.containers[name="knarr"].env[name="ERL_FLAGS"].value
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS	CHART      	APP VERSION
+knarr	default  	3       	2026-10-18 23:27:17.128008 -0700 PDT	failed	knarr-0.1.0	0.1.0
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply,kubectl-client-side-apply/Update,kubectl-annotate/Update,kubectl-label/Update
+Role knarr managed-by=Helm release=knarr managers=helm/Apply,kubectl-client-side-apply/Update,kubectl-annotate/Update,kubectl-label/Update
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply,kubectl-client-side-apply/Update,kubectl-annotate/Update,kubectl-label/Update
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kubectl-client-side-apply/Update,kubectl-annotate/Update,kubectl-label/Update,kube-controller-manager/Update
+deployment image: knarr:05-install-first-publis-48e495fa
+== knarr pods
+knarr-59dcfcf49-zbbhh uid ccefdf96-a5b4-4a40-aae1-d37292d933b1 phase Running ready true image knarr:05-install-first-publis-48e495fa
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
+fake-worker-5d7f5c6cf6-dp46h
+fake-worker-5d7f5c6cf6-vddd2	1800	{"at":"2026-10-19T06:25:49Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:25:49Z"}}
+fake-worker-5d7f5c6cf6-wh2tv	1800	{"at":"2026-10-19T06:25:57Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:25:57Z"}}
+fake-worker-5d7f5c6cf6-ww5rf	1800	{"at":"2026-10-19T06:25:40Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-19T06:25:40Z"}}
+exit=0

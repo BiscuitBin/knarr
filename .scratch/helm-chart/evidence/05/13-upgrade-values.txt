@@ -1,0 +1,40 @@
+2026-10-19T07:34:15Z
++ kubectl create namespace values-check
+namespace/values-check created
++ helm install vals ai_tmp/reuse/old --namespace values-check --set knarr.poll_interval=10
+NAME: vals
+LAST DEPLOYED: Mon Oct 19 00:34:15 2026
+NAMESPACE: values-check
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+knarr 0.1.0 is installed as release vals in namespace values-check.
+
+It acts only on Deployments in namespace values-check that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace values-check knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.1.0/docs/how-to/install.md
++ helm get values vals --namespace values-check
+USER-SUPPLIED VALUES:
+knarr:
+  poll_interval: 10
++ helm upgrade vals ai_tmp/reuse/new --namespace values-check --dry-run=server
++ grep -A1 -E 'image:|name: ERL_FLAGS'
++ grep -E 'image:|value:'
+          image: knarr:new-release
+              value: "-knarr discovery true -knarr poll_interval 10"
++ helm upgrade vals ai_tmp/reuse/new --namespace values-check --set-string knarr.log_level=debug --dry-run=server
++ grep -A1 -E 'image:|name: ERL_FLAGS'
++ grep -E 'image:|value:'
+          image: knarr:new-release
+              value: "-knarr discovery true -knarr log_level '\"debug\"'"
++ helm uninstall vals --namespace values-check
+release "vals" uninstalled
++ kubectl delete namespace values-check
+namespace "values-check" deleted
+exit=0
