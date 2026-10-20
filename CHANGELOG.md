@@ -1,8 +1,10 @@
 # Changelog
 
-Notable changes to Knarr are recorded here, by release. This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Knarr is pre-MVP: 0.1.0 is the walking skeleton, published to rehearse the release route. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides versioning and the release workflow: a release pull request moves the `[Unreleased]` section under `## [X.Y.Z] - YYYY-MM-DD`, and the release workflow refuses a tag whose version has no such heading.
+Notable changes to Knarr are recorded here, by release. This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). 0.1.0 is the walking skeleton, published to rehearse the release route. 0.2.0 is the first release of the controller, the MVP, and the first to publish the Helm chart. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides versioning and the release workflow: a release pull request moves the `[Unreleased]` section under `## [X.Y.Z] - YYYY-MM-DD`, and the release workflow refuses a tag whose version has no such heading.
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-10-20
 
 ### Added
 
@@ -26,7 +28,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 - Decision 0015: knarr ships a Helm chart, published to `oci://ghcr.io/steven-cutting/charts/knarr` with the release's image digest stamped in, for ease of adoption, and Helm becomes the only supported install once 0015's ticket 06 retires the kustomize route. It amends Decision 0012's kustomize-only packaging; the kustomize release overlay stays documented until then.
 - Local image builds are native: `just image-build` and `just fake-worker-image-build` build linux/arm64 on an arm64 host, from new `linux-aarch64` entries in `pixi.lock`, so the kind loop runs on Apple silicon. The release image stays linux/amd64.
 - kubectl in the cluster environment moves from 1.34.3 to 1.36.0, because 1.34.3 has no linux-aarch64 build.
-- `deploy/release` pins the digest of 0.1.0, the first published release.
+- `deploy/release` pins the digest of 0.1.0, the first published release. A release's own digest is pinned on `main` after its run, so at the 0.2.0 tag the overlay still names 0.1.0's: install a release with its chart, or run `just release-pin` with that release's digest first (Decision 0012).
 
 ### Removed
 
