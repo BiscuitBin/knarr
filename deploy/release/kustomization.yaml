@@ -17,7 +17,7 @@ resources:
 images:
   - name: knarr
     newName: ghcr.io/steven-cutting/knarr
-    digest: sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7
+    digest: sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
 patches:
   - path: pull-policy.yaml
     target:
