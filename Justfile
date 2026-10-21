@@ -465,3 +465,12 @@ deployment-check: cluster-tools
 [doc('Pin the release overlay to an image digest and print the rendered reference (edits a tracked file)')]
 release-pin digest: cluster-tools
     sh scripts/release/pin-digest.sh "$1"
+
+# Read-only, and outside the check group because it reads origin/main as the
+# last git fetch left it. Run it on the release pull request's merge commit
+# after fetching, before the annotated tag is made: a pushed v* tag cannot move
+# (Decision 0012), so a guard verify would fail burns the version.
+[group('release')]
+[doc("Run the release workflow's tag guards and first chart stamp offline on the commit about to be tagged")]
+release-preflight tag commit:
+    sh scripts/release/preflight.sh "$1" "$2"

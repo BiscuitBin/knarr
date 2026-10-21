@@ -17,6 +17,8 @@
 #   changelog_has_version <version>
 #                              CHANGELOG.md on stdin: a line that is exactly
 #                              "## [<version>] - YYYY-MM-DD"
+#   changelog_date <version>   CHANGELOG.md on stdin: the date of the first
+#                              such line; fails (1) when there is none
 #   digest_of_headers          `curl -sI` output on stdin: Docker-Content-Digest
 #   digest_of_metadata         buildx --metadata-file JSON on stdin
 #   digest_of_inspect          `buildx imagetools inspect` output on stdin
@@ -73,12 +75,15 @@ tag_matches_version() { # tag, version
 }
 
 changelog_has_version() { # version; CHANGELOG.md on stdin
+  changelog_date "$1" > /dev/null
+}
+changelog_date() { # version; CHANGELOG.md on stdin: the release heading's date
   # The literal prefix through index (dots are not wildcards), then a date and
   # nothing after it. The digit classes are spelled out: mawk and BSD awk
-  # disagree on {4} intervals.
+  # disagree on {4} intervals. The first such heading wins.
   awk -v v="$1" '
     BEGIN { p = "## [" v "] - " }
-    index($0, p) == 1 && substr($0, length(p) + 1) ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ { found = 1 }
+    !found && index($0, p) == 1 && substr($0, length(p) + 1) ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ { found = 1; print substr($0, length(p) + 1) }
     END { exit !found }'
 }
 

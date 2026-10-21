@@ -9,6 +9,7 @@ import gleam/result
 import gleam/string
 import knarr/metrics
 import knarr/observability
+import knarr/poller_http
 
 pub fn startup_counter_and_vm_collectors_test() -> Nil {
   let first = metrics.collect()
@@ -19,12 +20,16 @@ pub fn startup_counter_and_vm_collectors_test() -> Nil {
 }
 
 // Catalogue.Install: knarr_build_info{version} is 1 with the release
-// version, and the discovery histogram carries the fixed buckets, counting
+// version (the app's vsn, which poller_http_test holds to gleam.toml), and the discovery histogram carries the fixed buckets, counting
 // one more observation in the buckets at and above the value observed.
 pub fn build_info_and_discovery_histogram_are_declared_test() -> Nil {
   let metric = "knarr_discovery_duration_seconds"
   let exposition = metrics.collect()
-  assert string.contains(exposition, "knarr_build_info{version=\"0.1.0\"} 1\n")
+  let version = poller_http.version()
+  assert string.contains(
+    exposition,
+    "knarr_build_info{version=\"" <> version <> "\"} 1\n",
+  )
   assert string.contains(
     exposition,
     "# TYPE knarr_discovery_duration_seconds histogram\n",

@@ -30,6 +30,7 @@ import knarr/metrics
 import knarr/observability
 import knarr/patcher
 import knarr/poller.{type Endpoint}
+import knarr/poller_http
 import knarr/reconcile
 import knarr/reconciler
 import knarr/runtime
@@ -4188,7 +4189,7 @@ pub fn positional_config_matches_the_record_test() -> Nil {
   assert config.token_file == "/token"
   assert config.installed == installed
   assert config.interval_ms == 60_000
-  assert config.version == "0.1.0"
+  assert config.version == poller_http.version()
   // The clock is in milliseconds, and the draw is bounded.
   assert config.now() > 1_000_000_000_000
   assert config.random(1) == 0
