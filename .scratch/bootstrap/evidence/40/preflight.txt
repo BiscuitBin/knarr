@@ -1,0 +1,27 @@
+sh scripts/release/preflight.sh "$1" "$2"
+date: 2026-10-21T05:43Z
+tag: v0.2.0
+commit: c917c2ebdef75d31bd455f30a5d33ea4fcd96081
+parents: 216beacfb9d547e2b44887d35c036810c8666c94 4013caae43a1bedcf9b077d9385c661a8321b13f
+subject: Merge pull request #53 from steven-cutting/40-mvp-release
+committed: 2026-10-20T22:43:16-07:00
+origin/main: c917c2ebdef75d31bd455f30a5d33ea4fcd96081
+origin/main is this commit
+no local v0.2.0
+
+== the guards, as verify runs them
+toml_version: 0.2.0
+tag_matches_version v0.2.0 0.2.0: 0
+ancestor_verdict c917c2e origin/main: ancestor (0)
+changelog_has_version 0.2.0: 0
+changelog heading: ## [0.2.0] - 2026-10-21
+
+== the chart, as publish stamps it first
+stamp-chart: knarr-0.2.0.tgz
+
+tags_for v0.2.0:
+  0.2.0
+  0.2
+  sha-c917c2e
+
+preflight passed: tag c917c2ebdef75d31bd455f30a5d33ea4fcd96081 as v0.2.0
