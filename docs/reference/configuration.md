@@ -8,7 +8,7 @@ requires: []
 
 # Deployment configuration
 
-This reference describes the implemented controller, rather than the published `v0.1.0` skeleton. Follow the [install guide](../how-to/install.md) for release selection. Configuration lives on the Deployment object: the opt-in is a label, and overrides are annotations. Changing these fields does not change the pod template or trigger a rollout ([config.allium](../specs/config.allium), `Configuration` `OptIn`, `Keys`).
+This reference describes the implemented controller, first published in `v0.2.0`, rather than the `v0.1.0` skeleton. Follow the [install guide](../how-to/install.md) for release selection. Configuration lives on the Deployment object: the opt-in is a label, and overrides are annotations. Changing these fields does not change the pod template or trigger a rollout ([config.allium](../specs/config.allium), `Configuration` `OptIn`, `Keys`).
 
 ## Opt in
 

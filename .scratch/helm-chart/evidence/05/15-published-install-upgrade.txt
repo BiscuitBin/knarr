@@ -1,0 +1,168 @@
+2026-10-21T05:51:33Z
++ E=.scratch/helm-chart/evidence/05
++ W=ai_tmp/05-published
++ echo 'Host deviation: this host is arm64 (OrbStack) and the release image amd64 only. Under Rosetta'
+Host deviation: this host is arm64 (OrbStack) and the release image amd64 only. Under Rosetta
++ echo 'the BEAM needs the JIT single mapping, so every helm install, upgrade and template passes'
+the BEAM needs the JIT single mapping, so every helm install, upgrade and template passes
++ echo '--post-renderer jmsingle, which adds only the env entry ERL_AFLAGS="+JMsingle true" before'
+--post-renderer jmsingle, which adds only the env entry ERL_AFLAGS="+JMsingle true" before
++ echo 'ERL_FLAGS. Helm still owns every field, and the pod still runs the published image digest.'
+ERL_FLAGS. Helm still owns every field, and the pod still runs the published image digest.
++ export HELM_PLUGINS=<worktree>/ai_tmp/helm-plugins
++ HELM_PLUGINS=<worktree>/ai_tmp/helm-plugins
++ cat ai_tmp/helm-plugins/jmsingle/render.sh
+#!/bin/sh
+# Host workaround only: the amd64 release image runs under Rosetta on an arm64
+# host only with the BEAM JIT's single memory mapping. Adds ERL_AFLAGS before
+# the chart's ERL_FLAGS; ERL_AFLAGS is prepended to the emulator's arguments.
+set -eu
+perl -pe 's/^(\s*)- name: ERL_FLAGS$/$1- name: ERL_AFLAGS\n$1  value: "+JMsingle true"\n$1- name: ERL_FLAGS/'
++ mkdir -p ai_tmp/05-published
++ just cluster-down
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py down "<worktree>"
+Deleting cluster "05-install-first-publis-48e495fa" ...
+Deleted nodes: ["05-install-first-publis-48e495fa-control-plane"]
++ just cluster-up
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py up "<worktree>"
+Creating cluster "05-install-first-publis-48e495fa" ...
+ • Ensuring node image (kindest/node:v1.35.8) 🖼️  ...
+ ✓ Ensuring node image (kindest/node:v1.35.8) 🖼️
+ • Preparing nodes 📦   ...
+ ✓ Preparing nodes 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing CNI 🔌  ...
+ ✓ Installing CNI 🔌
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Waiting ≤ 3m0s for control-plane = Ready ⏳  ...
+ ✓ Waiting ≤ 3m0s for control-plane = Ready ⏳
+ • Ready after 17s 💚
+Set kubectl context to "kind-05-install-first-publis-48e495fa"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-05-install-first-publis-48e495fa --kubeconfig <worktree>/.cluster/kubeconfig
+
+Thanks for using kind! 😊
+node/05-install-first-publis-48e495fa-control-plane condition met
++ worker_namespace=default
++ chart_version=0.2.0
++ chart_digest=sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
++ kubectl config current-context
+kind-05-install-first-publis-48e495fa
++ helm install knarr oci://ghcr.io/steven-cutting/charts/knarr@sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016 --namespace default --wait --post-renderer jmsingle
+Pulled: ghcr.io/steven-cutting/charts/knarr@sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
+Digest: sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
+NAME: knarr
+LAST DEPLOYED: Tue Oct 20 22:52:04 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+knarr 0.2.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.2.0/docs/how-to/install.md
++ kubectl -n default rollout status deployment/knarr
+deployment "knarr" successfully rolled out
++ kubectl -n default get deployment knarr -o 'jsonpath={.spec.template.spec.containers[0].image}{"\n"}'
+ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[0].ready}{"\t"}{.status.containerStatuses[0].imageID}{"\n"}{end}'
+knarr-567b6fc55-wmgkx	true	ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
++ kubectl -n default get deployment knarr -o 'jsonpath={.spec.template.spec.containers[0].env}{"\n"}'
+[{"name":"ERL_AFLAGS","value":"+JMsingle true"},{"name":"ERL_FLAGS","value":"-knarr discovery true"}]
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                            	STATUS  	CHART      	APP VERSION
+knarr	default  	1       	2026-10-20 22:52:04.53904 -0700 PDT	deployed	knarr-0.2.0	0.2.0      
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply
+Role knarr managed-by=Helm release=knarr managers=helm/Apply
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kube-controller-manager/Update
+deployment image: ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
+== knarr pods
+knarr-567b6fc55-wmgkx uid dbea8a6a-aea8-4c9f-afd2-5a90dd686fe5 phase Running ready true image ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
++ just smoke
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "<worktree>"
+ok /healthz
+ok /readyz
+ok /metrics
++ printf 'knarr:\n  log_level: debug\n'
++ cat ai_tmp/05-published/knarr-values.yaml
+knarr:
+  log_level: debug
+++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={.items[0].metadata.uid}'
++ before=dbea8a6a-aea8-4c9f-afd2-5a90dd686fe5
++ helm upgrade knarr oci://ghcr.io/steven-cutting/charts/knarr --version 0.2.0 --namespace default --values ai_tmp/05-published/knarr-values.yaml --wait --post-renderer jmsingle
+Pulled: ghcr.io/steven-cutting/charts/knarr:0.2.0
+Digest: sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
+Release "knarr" has been upgraded. Happy Helming!
+NAME: knarr
+LAST DEPLOYED: Tue Oct 20 22:52:11 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+knarr 0.2.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.2.0/docs/how-to/install.md
++ kubectl -n default rollout status deployment/knarr
+deployment "knarr" successfully rolled out
+++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={.items[0].metadata.uid}'
++ after=11b4b645-f8bd-4e93-9601-954187000ec1
++ test dbea8a6a-aea8-4c9f-afd2-5a90dd686fe5 '!=' 11b4b645-f8bd-4e93-9601-954187000ec1
++ echo 'pod rolled: dbea8a6a-aea8-4c9f-afd2-5a90dd686fe5 -> 11b4b645-f8bd-4e93-9601-954187000ec1'
+pod rolled: dbea8a6a-aea8-4c9f-afd2-5a90dd686fe5 -> 11b4b645-f8bd-4e93-9601-954187000ec1
++ helm history knarr --namespace default
+REVISION	UPDATED                 	STATUS    	CHART      	APP VERSION	DESCRIPTION     
+1       	Tue Oct 20 22:52:04 2026	superseded	knarr-0.2.0	0.2.0      	Install complete
+2       	Tue Oct 20 22:52:11 2026	deployed  	knarr-0.2.0	0.2.0      	Upgrade complete
++ helm list --namespace default -o json
+[{"name":"knarr","namespace":"default","revision":"2","updated":"2026-10-20 22:52:11.676083 -0700 PDT","status":"deployed","chart":"knarr-0.2.0","app_version":"0.2.0"}]
++ kubectl -n default get deployment knarr -o 'jsonpath={.spec.template.spec.containers[0].env}{"\n"}'
+[{"name":"ERL_AFLAGS","value":"+JMsingle true"},{"name":"ERL_FLAGS","value":"-knarr discovery true -knarr log_level '\"debug\"'"}]
++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[0].ready}{"\t"}{.status.containerStatuses[0].imageID}{"\n"}{end}'
+knarr-6d4f6889c8-rmcz6	true	ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	2       	2026-10-20 22:52:11.676083 -0700 PDT	deployed	knarr-0.2.0	0.2.0      
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply
+Role knarr managed-by=Helm release=knarr managers=helm/Apply
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kube-controller-manager/Update
+deployment image: ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
+== knarr pods
+knarr-6d4f6889c8-rmcz6 uid 11b4b645-f8bd-4e93-9601-954187000ec1 phase Running ready true image ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
++ just smoke
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "<worktree>"
+ok /healthz
+ok /readyz
+ok /metrics
+exit=0

@@ -8,7 +8,7 @@ requires: []
 
 # Operate and remove Knarr
 
-This guide describes the implemented controller; the published `v0.1.0` skeleton does not contain these features. Start with [installation](../how-to/install.md), [worker preparation](../how-to/worker.md), and [configuration](../reference/configuration.md). Knarr writes annotations on live pods, leaves replica counts to the scaler, and never patches a pod once its view shows `deletionTimestamp` ([ownership.allium](../specs/ownership.allium), `Ownership` `Objects`; [reconcile.allium](../specs/reconcile.allium), `Loop` `Terminating`).
+This guide describes the implemented controller, first published in `v0.2.0`; the `v0.1.0` skeleton does not contain these features. Start with [installation](../how-to/install.md), [worker preparation](../how-to/worker.md), and [configuration](../reference/configuration.md). Knarr writes annotations on live pods, leaves replica counts to the scaler, and never patches a pod once its view shows `deletionTimestamp` ([ownership.allium](../specs/ownership.allium), `Ownership` `Objects`; [reconcile.allium](../specs/reconcile.allium), `Loop` `Terminating`).
 
 ## Verify PodDeletionCost
 
