@@ -6,7 +6,7 @@
 
 **Non-goals:** Verified-publisher or official status. Any change to the chart's templates or values.
 
-**Blocked by:** 05
+**Blocked by:** 05, org transfer [05](../../org-transfer/issues/05-first-release-under-org.md) ([Decision 0016](../../../docs/decisions/0016-biscuitbin-org.md): the listing is registered once, under the org)
 
 **MVP critical path:** no.
 

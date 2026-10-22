@@ -25,5 +25,6 @@ These records explain accepted choices and the evidence or source material behin
 13. [0013: In-cluster Kubernetes client](0013-in-cluster-client.md), settled by ticket 14.
 14. [0014: Dependency updates and audit](0014-dependency-updates-and-audit.md), settled by ticket 27.
 15. [0015: knarr ships a Helm chart](0015-helm-chart.md), settled by helm chart ticket 01.
+16. [0016: knarr's home is the biscuitbin org](0016-biscuitbin-org.md), settled by org transfer ticket 01.
 
 Read the [project direction](../project/README.md) for proposals and open questions. A later change to an accepted choice should amend or supersede its record explicitly, preserving enough context for a reader to understand why the choice changed.

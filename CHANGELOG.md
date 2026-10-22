@@ -6,6 +6,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ### Changed
 
+- Decision 0016: knarr's home moves to `github.com/biscuitbin/knarr` by GitHub's repository transfer, and releases from 0.3.0 publish to `ghcr.io/biscuitbin/knarr` and `oci://ghcr.io/biscuitbin/charts/knarr`. 0.1.0 and 0.2.0 stay at `ghcr.io/steven-cutting/…`, unchanged. Decisions 0012 and 0015 carry amendment notes; the references themselves change in a later ticket.
 - The install guide, the worker, KEDA and configuration guides and the operations page name `v0.2.0` as the first release that publishes the chart and contains the controller they describe.
 - `just packaging-check` validates the fake worker's resources only, and `just image-check` reads knarr's memory budget from the chart's values. The wrong-CA patch moved to `fixtures/wrong-ca/patch.json`, and the chart tests carry every invariant the base's tests pinned.
 - The uninstall procedure, in `lifecycle.allium` `Uninstall` `Procedure` and the operations page, no longer has a `kubectl delete -k` route; `helm uninstall` and `kubectl delete -f` on the saved render stay.
