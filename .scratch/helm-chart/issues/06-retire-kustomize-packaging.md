@@ -19,18 +19,18 @@
 
 **MVP critical path:** no.
 
-**Status:** ready-for-agent
+**Status:** done. Pull request [#56](https://github.com/steven-cutting/knarr/pull/56) is open. See [the hand-back notes](#hand-back-notes).
 
 - [x] `deploy/` no longer exists, and `rg -n "deploy/(base|release|e2e-fast)|release-pin" -g '!.scratch/**' -g '!CHANGELOG.md'` finds no live reference.
 - [x] The chart tests carry every invariant `test_deployment.py` pinned on the base, and that file loses no assertion without a chart counterpart. The hand-back lists the mapping.
-- [ ] `just deploy`, `just smoke` and `just keda-e2e` pass on kind. **Authorization required:** a push, so that cluster-smoke, keda-e2e and reconcile-proof each show a green run, and the hand-back records them.
+- [x] `just deploy`, `just smoke` and `just keda-e2e` pass on kind. **Authorization required:** a push, so that cluster-smoke, keda-e2e and reconcile-proof each show a green run, and the hand-back records them. All three passed on pull request #56 at `ac888c2` ([CI](#ci)).
 - [x] Decisions 0012 and 0015 record the retirement. So do the [install guide](../../../docs/how-to/install.md), the [operations page](../../../docs/operations/controller.md), the [local-cluster how-to](../../../docs/how-to/local-cluster.md) and the [configuration reference](../../../docs/reference/configuration.md). `CHANGELOG.md` says which release first ships without the kustomize overlay.
 - [x] `just check-specs` reports no diagnostic and `just analyse-specs` no finding after the `Uninstall` change.
 - [x] `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes
 
-Offline part and the local kind run on 2026-10-21 (UTC). The maintainer ran `just initialize` in this worktree and authorized the network for `just cluster-install`, `just image-build` and `just keda-e2e`. Nothing was pushed.
+Offline part and the local kind run on 2026-10-21 (UTC). The maintainer ran `just initialize` in this worktree and authorized the network for `just cluster-install`, `just image-build` and `just keda-e2e`. On 2026-10-22 (UTC) the maintainer authorized the push, pull request #56 and its `keda-e2e` and `cluster-s1` labels.
 
 ### What changed
 
@@ -77,9 +77,15 @@ Every assertion `test_deployment.py` made on the base, and where the chart tests
 
 - Links in earlier tickets to what this ticket removed now point at the `v0.2.0` tag, with their text unchanged: [05](05-install-first-published-chart.md)'s migration box linked `install.md#select-the-tag-and-digest-together`, and bootstrap [36](../../bootstrap/issues/36-release-workflow-and-overlay.md) and [37](../../bootstrap/issues/37-first-release-v0-1-0.md) linked `deploy/release/kustomization.yaml` and `pin-digest.sh`. lychee checks local links offline and failed on all four.
 
-### Not done
+### CI
 
-- **Push and CI (authorization required).** Nothing was pushed, so cluster-smoke, keda-e2e and reconcile-proof have no green run on this branch yet. The kind box stays open for those runs, although `just deploy`, `just smoke` and `just keda-e2e` passed locally.
+Pull request [#56](https://github.com/steven-cutting/knarr/pull/56), at `ac888c2`, on 2026-10-22 (UTC). keda-e2e and reconcile-proof run on a pull request only while it carries their label, so the `keda-e2e` and `cluster-s1` labels were added after it opened:
+
+- cluster-smoke ("Kind smoke"): [run 39724409647](https://github.com/steven-cutting/knarr/actions/runs/39724409647/job/119645672286), success, 1m51s. The same CI run passed the repository gate, the selected checker regressions, the fake worker smoke and kwok readiness.
+- keda-e2e: [run 39724848650](https://github.com/steven-cutting/knarr/actions/runs/39724848650/job/119646299983), success, 12 minutes.
+- reconcile-proof: [run 39724848306](https://github.com/steven-cutting/knarr/actions/runs/39724848306/job/119646298737), success, 9 minutes.
+
+Adding each label also started a run of the other workflow, which skipped because its own label was not the one added (runs 39724848294 and 39724848927). `gh pr checks` shows those skipped runs, the latest for each name.
 
 ### What each later ticket needs
 
