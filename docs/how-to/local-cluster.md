@@ -93,7 +93,7 @@ runs leave it off, so they make no API call. `just deploy <image> e2e-fast`
 adds the values file `fixtures/chart-values/e2e-fast.yaml`, the short
 intervals of [the KEDA harness](../reference/keda-e2e.md).
 `just deploy <image> wrong-ca` deploys the negative-TLS case: it applies the
-test-only patch `deploy/wrong-ca/patch.json` to the chart's `helm template`
+test-only patch `fixtures/wrong-ca/patch.json` to the chart's `helm template`
 output with kustomize, since Helm 4's post-renderers are plugins, and needs a
 `knarr-wrong-ca` ConfigMap holding an unrelated `ca.crt`; the ticket 14
 evidence script creates one from a throwaway certificate. Its pod never
@@ -109,14 +109,12 @@ memory and has a 256 MiB limit; `just image-check` enforces that same limit with
 swap disabled and verifies the descriptor cap. The printed memory reading is
 informational, not a peak measurement or a capacity guarantee for future work.
 
-The offline gate validates image lint, base resources against local Kubernetes
-schemas, and static security settings. `just chart-check` lints the chart,
-validates its render, and holds it to `deploy/base` and to `gleam.toml`'s
-version (Decision 0015). `just deployment-check`, with the
-optional cluster tools installed, renders every variant under `deploy/`
-(`base`, `e2e-fast`, `release` and `wrong-ca`) with kustomize and validates each. It fails
-unless the release overlay changes exactly two lines of the base's render: the
-image, pinned by digest, and the pull policy. Container checks separately prove both image stages use
+The offline gate lints both images and validates the fake worker's resources
+against local Kubernetes schemas. `just chart-check` lints the chart,
+validates its render against the same schemas, and holds its version to
+`gleam.toml`'s (Decision 0015); the chart tests pin its static security
+settings. The chart is knarr's only packaging: helm-chart ticket 06 retired
+the kustomize tree under `deploy/`. Container checks separately prove both image stages use
 the pixi manifest's OTP major (with lock agreement checked by the gate) and that the runtime starts with a read-only root.
 The kind smoke job proves actual endpoint access; the kwok job proves cluster
 readiness only. Both jobs remain outside aggregate `check`.

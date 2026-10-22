@@ -31,9 +31,8 @@ on:
       - Dockerfile
       - .dockerignore
       - Justfile
-      - deploy/base/**
-      - deploy/wrong-ca/**
       - charts/**
+      - fixtures/wrong-ca/**
       - fixtures/fake_worker/**
       - src/knarr/**
       - scripts/checks/cluster.py

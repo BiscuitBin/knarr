@@ -241,9 +241,9 @@ contract Restart {
         -- (observability Probes Readiness) and starts its counters at 0
         -- (observability Catalogue SeriesLife). Ticket 32 stated this
         -- clause with tend on 2026-10-14 from the overview's decided rows.
-        -- The manifest test in scripts/checks/tests/test_deployment.py
-        -- proves one replica, strategy Recreate and no leader-election
-        -- resource, and the readiness latch and supervisor restart tests
+        -- The chart tests in scripts/checks/tests/test_chart.py prove one
+        -- replica, strategy Recreate and no leader-election resource on
+        -- the chart's render, and the readiness latch and supervisor restart tests
         -- in test/reconciler_test.gleam prove what the new process
         -- answers.
     @invariant NoExpiry
@@ -363,19 +363,21 @@ contract Uninstall {
         -- of ownership of either annotation. Only after cleanup and
         -- inspection does the operator delete the install, with the delete
         -- command of the route it was installed by: helm uninstall for a
-        -- Helm release; kubectl delete -f on the manifest saved at install
-        -- for a helm template render applied with kubectl, which leaves no
-        -- Helm release for helm uninstall to find; and kubectl delete -k
-        -- for a kustomize install until helm-chart ticket 06 retires that
-        -- route. Deleting knarr before the wait leaves owned
-        -- annotations standing under Restart Leftovers. A value without a
+        -- Helm release; and kubectl delete -f on the manifest saved at
+        -- install for a helm template render applied with kubectl, which
+        -- leaves no Helm release for helm uninstall to find. Deleting knarr
+        -- before the wait leaves owned annotations standing under Restart
+        -- Leftovers. A value without a
         -- usable marker is foreign (ownership Adoption) and is left alone
         -- unless independent evidence confirms it is a knarr leftover.
         -- The page is ticket 34's; its adversarial review corrected the
         -- blanket release command on 2026-10-15 without changing automatic
         -- cleanup or any controller behaviour. Helm-chart ticket 05 named
         -- the delete commands with tend on 2026-10-19, changing neither the
-        -- order nor any controller behaviour.
+        -- order nor any controller behaviour. Helm-chart ticket 06 dropped
+        -- the kubectl delete -k route with the kustomize packaging on
+        -- 2026-10-21, changing neither the order nor any controller
+        -- behaviour.
     @invariant Recovery
         -- Manual recovery after a dead install or a rejected cleanup uses
         -- the same inspection. For a usable canonical marker (ownership

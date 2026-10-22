@@ -12,9 +12,9 @@ export PATH := justfile_directory() / ".pixi" / "envs" / "default" / "bin" + ":"
 export PYTHONDONTWRITEBYTECODE := "1"
 
 # Any recipe may write ignored paths, such as build/ and the <title>.new a
-# failing snapshot test leaves. Five recipes change tracked files on purpose:
-# `fix`, `snapshots-review`, `snapshots-accept`, `release-pin`, and `birdie`
-# running `accept`, `reject` or `stale delete`. None is in the check group, and
+# failing snapshot test leaves. Four recipes change tracked files on purpose:
+# `fix`, `snapshots-review`, `snapshots-accept`, and `birdie` running `accept`,
+# `reject` or `stale delete`. None is in the check group, and
 # `just check` proves its recipes change nothing Git can see.
 
 # birdie keeps the list of snapshots a test run referenced in $TMPDIR, named by
@@ -377,15 +377,15 @@ image-check image=cluster_image:
     python3 scripts/checks/image.py "$1"
 
 [group('check')]
-[doc("Lint both images and validate the base and fake worker resources against pinned local schemas")]
+[doc("Lint both images and validate the fake worker resources against pinned local schemas")]
 packaging-check:
     hadolint Dockerfile fixtures/fake_worker/Dockerfile
     python3 scripts/checks/deployment.py
 
 # The chart (Decision 0015): helm lint --strict, the render through kubeconform
-# -strict, its drift from deploy/base and the version lockstep with gleam.toml.
+# -strict and the version lockstep with gleam.toml.
 [group('check')]
-[doc('Lint, render and validate the Helm chart; hold it to deploy/base and gleam.toml')]
+[doc('Lint, render and validate the Helm chart; hold its version to gleam.toml')]
 chart-check:
     python3 scripts/checks/chart.py
 
@@ -449,22 +449,7 @@ observability-smoke: cluster-tools
 grafana port="0": cluster-tools
     python3 scripts/checks/observability.py grafana "{{ justfile_directory() }}" "$1"
 
-[group('cluster')]
-[doc('Render and validate every deploy/ variant, and hold the release overlay to its two-line difference')]
-deployment-check: cluster-tools
-    python3 scripts/checks/deployment.py --render
-
 # ---------------------------------------------------------------- release ---
-
-# Writes deploy/release/kustomization.yaml, a tracked file, so it is outside the
-# check group. Each release runs it after its run (ticket 37 did first), with
-# the bare sha256: digest: the value after digest= in the log, or after @ in
-# the reference its run summary prints. It fails unless the overlay then
-# renders exactly that reference.
-[group('release')]
-[doc('Pin the release overlay to an image digest and print the rendered reference (edits a tracked file)')]
-release-pin digest: cluster-tools
-    sh scripts/release/pin-digest.sh "$1"
 
 # Read-only, and outside the check group because it reads origin/main as the
 # last git fetch left it. Run it on the release pull request's merge commit

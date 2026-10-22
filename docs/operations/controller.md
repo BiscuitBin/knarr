@@ -113,7 +113,7 @@ kubectl -n workers get events --field-selector type=Warning
 
 ## Uninstall and recover
 
-If the controller is unavailable, including when a `v0.1.0` skeleton has replaced it, remove the Deployment opt-in labels as below, then proceed directly to [manual recovery](#manual-recovery). The discovery and metric waits apply to a running controller; an unavailable controller cannot complete them. A fresh skeleton install with no earlier controller leftovers has its own [direct removal procedure](../how-to/install.md#remove-the-skeleton) ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`, `Restart` `Leftovers`).
+If the controller is unavailable, including when a `v0.1.0` skeleton has replaced it, remove the Deployment opt-in labels as below, then proceed directly to [manual recovery](#manual-recovery). The discovery and metric waits apply to a running controller; an unavailable controller cannot complete them. A fresh skeleton install with no earlier controller leftovers has its own [direct removal procedure](https://github.com/steven-cutting/knarr/blob/v0.2.0/docs/how-to/install.md#remove-the-skeleton), in the `v0.2.0` install guide ([lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`, `Restart` `Leftovers`).
 
 Keep Knarr running while removing the exact opt-in label from every managed Deployment. Cleanup begins from the next discovery cycle, on live pods, oldest-due first within the write budget; it is not an immediate synchronous operation. The following commands use namespace `workers`, matching the examples above ([config.allium](../specs/config.allium), `Configuration` `OptIn`, `Effective`; [lifecycle.allium](../specs/lifecycle.allium), `Cleanup` `Scope`, `Order`, `Uninstall` `Procedure`):
 
@@ -165,11 +165,7 @@ A [kubectl-only install](../how-to/install.md#install-with-kubectl-only) has no 
 kubectl -n workers delete -f knarr-rendered.yaml
 ```
 
-An install from the deprecated kustomize release overlay is deleted from the operator checkout of the currently installed release, until [Decision 0015](../decisions/0015-helm-chart.md)'s ticket 06 retires that route:
-
-```sh
-kubectl -n workers delete -k deploy/release
-```
+An install still made from the retired kustomize release overlay has no Helm release either. Once the steps above are done, delete it with `kubectl delete -k` from the retained operator checkout of the installed release, as [the `v0.2.0` operations page](https://github.com/steven-cutting/knarr/blob/v0.2.0/docs/operations/controller.md#uninstall-and-recover) describes; it need not move to Helm first ([Decision 0015](../decisions/0015-helm-chart.md), end state).
 
 A pod carrying a value without a marker is foreign, and the uninstall procedure leaves it alone. If someone removed the marker by hand, inspect both keys using the following inventory and remove only confirmed Knarr leftovers, one key at a time. Removing just the marker does not release annotations: a running Knarr treats those values as foreign for that pod's life ([ownership.allium](../specs/ownership.allium), `Ownership` `Adoption`; [lifecycle.allium](../specs/lifecycle.allium), `Uninstall` `Recovery`):
 

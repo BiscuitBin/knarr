@@ -53,7 +53,8 @@ GROUPS = {
         (
             "Dockerfile",
             "fixtures/fake_worker/Dockerfile",
-            "deploy/base/resources.json",
+            # image.py reads knarr's memory limit from the chart's values.
+            "charts/knarr/values.yaml",
             "fixtures/fake_worker/deploy/**",
             ".scratch/bootstrap/evidence/01/tls/**",
             ".dockerignore",
@@ -65,7 +66,6 @@ GROUPS = {
     "deployment": (
         "deployment fake_worker_manifests",
         (
-            "deploy/**",
             "fixtures/fake_worker/deploy/**",
             "scripts/schemas/**",
             "scripts/checks/deployment.py",
@@ -75,11 +75,8 @@ GROUPS = {
         "chart",
         (
             "charts/**",
-            "deploy/base/**",
-            # test_chart.py holds the e2e-fast values and the wrong-ca patch to these.
-            "deploy/e2e-fast/**",
-            "deploy/wrong-ca/**",
             "fixtures/chart-values/**",
+            "fixtures/wrong-ca/**",
             "src/knarr/application_ffi.erl",
             "scripts/schemas/**",
             "scripts/checks/chart.py",
@@ -97,7 +94,7 @@ GROUPS = {
             # cluster.py installs the chart (helm-chart ticket 03).
             "charts/**",
             "fixtures/chart-values/**",
-            "deploy/**",
+            "fixtures/wrong-ca/**",
             "fixtures/fake_worker/deploy/**",
             "fixtures/keda_e2e/**",
             "fixtures/observability/**",
@@ -107,9 +104,9 @@ GROUPS = {
         ),
     ),
     "release": (
-        "release_lib release_pin",
+        "release_lib",
         # stamp-chart_test.sh stamps and packages the tracked chart.
-        ("scripts/release/**", "deploy/release/**", ".github/workflows/release.yml", "charts/**"),
+        ("scripts/release/**", ".github/workflows/release.yml", "charts/**"),
     ),
     "audit": (
         "hex_audit runtime_scan ripsecrets_redacted",
@@ -175,7 +172,6 @@ CLUSTERS = {
         "src/**",
         "Dockerfile",
         ".dockerignore",
-        "deploy/**",
         "charts/**",
         "scripts/checks/chart.py",
         "scripts/checks/image.py",
@@ -192,12 +188,9 @@ CLUSTERS = {
         "scripts/checks/deployment.py",
         "scripts/schemas/**",
     ),
-    "kwok": (
-        "deploy/**",
-        "charts/**",
-        "scripts/checks/deployment.py",
-        "scripts/schemas/**",
-    ),
+    # kwok runs cluster-up and cluster-ready only, so only the shared paths and
+    # cluster.py select it.
+    "kwok": (),
 }
 
 

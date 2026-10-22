@@ -21,6 +21,7 @@ from typing import Self
 
 import pytest
 
+import chart as knarr_chart
 import cluster
 import keda_e2e
 import observability
@@ -228,12 +229,13 @@ def test_prometheus_scrapes_knarr_and_kube_state_metrics_and_nothing_else() -> N
 
 
 def test_the_knarr_pod_carries_the_label_and_port_the_scrape_keeps() -> None:
-    resources = json.loads((REPOSITORY / "deploy/base/resources.json").read_text())
-    deployment = next(item for item in resources["items"] if item["kind"] == "Deployment")
-    template = deployment["spec"]["template"]
-    assert template["metadata"]["labels"]["app.kubernetes.io/name"] == "knarr"
-    ports = [port for c in template["spec"]["containers"] for port in c.get("ports", [])]
-    assert [port["name"] for port in ports] == ["http"]
+    rendered = knarr_chart.canonical(knarr_chart.render())
+    template = rendered.split("  template:\n", 1)[1]
+    assert "    metadata:\n      labels:\n" in template
+    assert "        app.kubernetes.io/name: knarr\n" in template.split("    spec:\n", 1)[0]
+    assert re.findall(r"^\s+- containerPort: \d+\n\s+name: (\S+)$", template, re.MULTILINE) == [
+        "http"
+    ]
 
 
 def test_grafana_is_local_only_and_calls_neither_home_nor_the_api() -> None:

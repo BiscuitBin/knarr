@@ -1,5 +1,0 @@
-# A digest-pinned image never changes under a tag, so IfNotPresent is safe and
-# saves a registry round trip on every restart.
-- op: replace
-  path: /spec/template/spec/containers/0/imagePullPolicy
-  value: IfNotPresent

@@ -80,7 +80,7 @@ Left out on purpose:
 
 ### End state
 
-- **Helm is the only supported install.** Ticket 06 retires the kustomize tree under `deploy/`, `just release-pin` and the overlay checks once the chart has installed a release (ticket 05) and the local loop and CI run on it (ticket 03). A kubectl-only user pipes `helm template` into `kubectl apply`.
+- **Helm is the only supported install.** Ticket 06 retires the kustomize tree under `deploy/`, `just release-pin` and the overlay checks once the chart has installed a release (ticket 05) and the local loop and CI run on it (ticket 03). A kubectl-only user pipes `helm template` into `kubectl apply`. Amended by [ticket 06](../../.scratch/helm-chart/issues/06-retire-kustomize-packaging.md) on 2026-10-21: done. `deploy/`, `just release-pin`, `pin-digest.sh`, `deployment.py --render`, `just deployment-check` and the drift check are gone. The base's invariants are tested on the chart's render in `test_chart.py`, the wrong-CA patch moved to `fixtures/wrong-ca/`, and `v0.2.0` is the last release whose tag carries the overlay. The kubectl-only route keeps the render, since `kubectl delete -f` on it is the route's uninstall.
 
 ### Deferred
 
@@ -125,7 +125,7 @@ The tickets that carry this record out are in [`.scratch/helm-chart/issues/`](..
 - **[08](../../.scratch/helm-chart/issues/08-artifact-hub-listing.md)** lists the chart on Artifact Hub.
 - **Bootstrap [38](../../.scratch/bootstrap/issues/38-attestations-sbom-arm64.md)** switches the release to an index digest; the chart stamps whichever digest the release pins.
 
-Until 04 publishes a chart and 05 installs it, 0012's kustomize route remains the documented install, and the MVP installs through it. From 05 it stays documented, as deprecated, beside the Helm-first guide, and Helm becomes the only supported install when 06 retires it.
+Until 04 publishes a chart and 05 installs it, 0012's kustomize route remains the documented install, and the MVP installs through it. From 05 it stays documented, as deprecated, beside the Helm-first guide, and Helm becomes the only supported install when 06 retires it. Amended by 06: retired, and the guide points an overlay install at the `v0.2.0` guide's migration procedure.
 
 ## What would reopen this
 

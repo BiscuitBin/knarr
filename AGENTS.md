@@ -55,7 +55,7 @@ Every page is registered once in `docs/manifest.yml`, repeats its metadata in fr
 
 <important if="a gate recipe fails, or you are about to hand work back">
 
-- Rerun the one recipe `just check` named and read only the first failure. Fix it at the root with the `fix-quality` skill. Only `just fix`, `just release-pin` and the snapshot recipes (`just snapshots-review`, `just snapshots-accept` and `just birdie`) rewrite tracked files; a check recipe that changed the worktree is a defect in that recipe.
+- Rerun the one recipe `just check` named and read only the first failure. Fix it at the root with the `fix-quality` skill. Only `just fix` and the snapshot recipes (`just snapshots-review`, `just snapshots-accept` and `just birdie`) rewrite tracked files; a check recipe that changed the worktree is a defect in that recipe.
 - Hand back only when `just check` ends with "All checks passed and the worktree is unchanged." and `git status --short` is empty. The `project-check` skill is the procedure.
 </important>
 

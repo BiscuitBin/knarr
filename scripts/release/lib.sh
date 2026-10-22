@@ -1,5 +1,5 @@
 # The release guards (Decision 0012), sourced by .github/workflows/release.yml
-# and pin-digest.sh; not run on its own. Moved from ticket 28's evidence, where
+# and preflight.sh; not run on its own. Moved from ticket 28's evidence, where
 # the dry run exercised them against a throwaway registry and ghcr.io.
 # lib_test.sh beside it tests every helper offline, probe_tag through a stub
 # curl, and runs in `just test-checkers-selected release`.

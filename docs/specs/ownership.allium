@@ -189,9 +189,9 @@ contract Ownership {
         -- else. Which paths a patch may name inside the pod is WriteMode's
         -- (metadata.annotations only, §6). Ticket 32 added this clause
         -- with tend on 2026-10-14 from the overview's decided rows
-        -- (Decision 0009). The manifest check proves the Role, a pytest in
-        -- scripts/checks/tests/test_deployment.py reading it, and the
-        -- operations tests prove the paths,
+        -- (Decision 0009). The chart check proves the Role, a pytest in
+        -- scripts/checks/tests/test_chart.py reading the chart's render,
+        -- and the operations tests prove the paths,
         -- patch_names_no_path_outside_the_annotations_test and a property
         -- over patch, yield and cleanup in test/ownership_test.gleam.
     @invariant Applied

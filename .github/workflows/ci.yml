@@ -60,7 +60,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           cluster: "true"
-      - run: just deployment-check
       - run: just cluster-up
       - run: just image-build
       - run: just image-check
@@ -119,7 +118,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           cluster: "true"
-      - run: just deployment-check
       - run: just cluster-up
       - run: just cluster-ready
       - if: failure()

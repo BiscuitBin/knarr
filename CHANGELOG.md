@@ -6,8 +6,13 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ### Changed
 
-- `deploy/release` pins the digest of 0.2.0.
 - The install guide, the worker, KEDA and configuration guides and the operations page name `v0.2.0` as the first release that publishes the chart and contains the controller they describe.
+- `just packaging-check` validates the fake worker's resources only, and `just image-check` reads knarr's memory budget from the chart's values. The wrong-CA patch moved to `fixtures/wrong-ca/patch.json`, and the chart tests carry every invariant the base's tests pinned.
+- The uninstall procedure, in `lifecycle.allium` `Uninstall` `Procedure` and the operations page, no longer has a `kubectl delete -k` route; `helm uninstall` and `kubectl delete -f` on the saved render stay.
+
+### Removed
+
+- The kustomize packaging (Decision 0015's ticket 06): `deploy/` (the base, the release overlay and the `e2e-fast` and `wrong-ca` variants), `just release-pin` and `scripts/release/pin-digest.sh`, `just deployment-check` and `deployment.py --render`, and `just chart-check`'s drift check against the base. Helm is the only supported install. 0.2.0 is the last release whose tag carries the overlay, and the next release is the first without it. An install still made from the overlay moves to Helm with the migration procedure in [the 0.2.0 install guide](https://github.com/steven-cutting/knarr/blob/v0.2.0/docs/how-to/install.md#migrate-from-the-kustomize-release-overlay).
 
 ## [0.2.0] - 2026-10-21
 
