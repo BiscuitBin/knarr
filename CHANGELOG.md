@@ -7,6 +7,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 ### Changed
 
 - `deploy/release` pins the digest of 0.2.0.
+- The install guide, the worker, KEDA and configuration guides and the operations page name `v0.2.0` as the first release that publishes the chart and contains the controller they describe.
 
 ## [0.2.0] - 2026-10-21
 

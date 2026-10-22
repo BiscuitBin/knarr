@@ -1,0 +1,58 @@
+2026-10-22T01:08:52Z
+++ mktemp -d
++ anon=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01
++ mkdir -p /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/home /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/docker /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/out
++ export HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/home DOCKER_CONFIG=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/docker
++ HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/home
++ DOCKER_CONFIG=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/docker
++ export HELM_CONFIG_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm HELM_CACHE_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm/cache HELM_DATA_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm/data
++ HELM_CONFIG_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm
++ HELM_CACHE_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm/cache
++ HELM_DATA_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm/data
++ export HELM_REGISTRY_CONFIG=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm/registry.json
++ HELM_REGISTRY_CONFIG=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/helm/registry.json
++ helm version --short
+v4.3.0+conda-forge
++ find /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01 -type f
++ helm pull oci://ghcr.io/steven-cutting/charts/knarr --version 0.2.0 --destination /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/out
+Pulled: ghcr.io/steven-cutting/charts/knarr:0.2.0
+Digest: sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
++ ls /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/out
+knarr-0.2.0.tgz
++ tar -tzf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/out/knarr-0.2.0.tgz
+knarr/Chart.yaml
+knarr/values.yaml
+knarr/values.schema.json
+knarr/templates/NOTES.txt
+knarr/templates/_helpers.tpl
+knarr/templates/deployment.yaml
+knarr/templates/role.yaml
+knarr/templates/rolebinding.yaml
+knarr/templates/serviceaccount.yaml
+knarr/.helmignore
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/out/knarr-0.2.0.tgz knarr/Chart.yaml
++ grep -E '^(version|appVersion):'
+appVersion: 0.2.0
+version: 0.2.0
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/out/knarr-0.2.0.tgz knarr/values.yaml
++ grep -E 'repository:|tag:|digest:|pullPolicy:'
+  repository: ghcr.io/steven-cutting/knarr
+  tag: "0.2.0"
+  digest: sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
+  pullPolicy: IfNotPresent
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/out/knarr-0.2.0.tgz knarr/templates/NOTES.txt
+knarr {{ .Chart.AppVersion }} is installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+It acts only on Deployments in namespace {{ .Release.Namespace }} that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace {{ .Release.Namespace }} knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v{{ .Chart.AppVersion }}/docs/how-to/install.md
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01/out/knarr-0.2.0.tgz knarr/values.yaml
++ grep -qF sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
++ echo 'stamped image digest present: 0'
+stamped image digest present: 0
++ rm -rf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.H7qXpOro01
+exit=0

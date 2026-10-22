@@ -8,7 +8,7 @@ requires: []
 
 # Prepare a worker for Knarr
 
-Knarr biases which pod a ReplicaSet removes during scale-down. Workers still need to finish work safely when selected. This guide describes the implemented controller; the published `v0.1.0` image is the walking skeleton, as the [install guide](install.md) explains. Scaling remains the autoscaler's job ([ownership.allium](../specs/ownership.allium), `Ownership` `Objects`; [reconcile.allium](../specs/reconcile.allium), `Loop` `Terminating`).
+Knarr biases which pod a ReplicaSet removes during scale-down. Workers still need to finish work safely when selected. This guide describes the implemented controller, first published in `v0.2.0`; the `v0.1.0` image is the walking skeleton, as the [install guide](install.md) explains. Scaling remains the autoscaler's job ([ownership.allium](../specs/ownership.allium), `Ownership` `Objects`; [reconcile.allium](../specs/reconcile.allium), `Loop` `Terminating`).
 
 ## Serve the status endpoint
 

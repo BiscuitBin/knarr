@@ -91,7 +91,7 @@ repos:
         types: [text]
         # Evidence transcripts are recorded tool output, kept byte for byte,
         # and the evidence scripts keep the layout they were verified with.
-        exclude: ^(\.scratch/bootstrap/evidence/|\.agents/skills/(allium|distill|elicit|propagate|tend|weed|witness)/|scripts/schemas/kubernetes/)
+        exclude: ^(\.scratch/(bootstrap|helm-chart)/evidence/|\.agents/skills/(allium|distill|elicit|propagate|tend|weed|witness)/|scripts/schemas/kubernetes/)
 
       - id: ruff-check
         name: ruff check

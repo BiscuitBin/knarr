@@ -8,7 +8,7 @@ requires: []
 
 # Pair Knarr with KEDA
 
-KEDA and its generated HPA decide how many replicas to run. Knarr changes only pod annotations, biasing ReplicaSet victim selection within each ReplicaSet. Prepare the [worker](worker.md), [install the controller](install.md), and apply the [Deployment opt-in](../reference/configuration.md#opt-in) before pairing them. These guides describe implemented behavior beyond the published `v0.1.0` skeleton ([ownership.allium](../specs/ownership.allium), `Ownership` `Objects`; [reconcile.allium](../specs/reconcile.allium), `Loop` `Rollout`).
+KEDA and its generated HPA decide how many replicas to run. Knarr changes only pod annotations, biasing ReplicaSet victim selection within each ReplicaSet. Prepare the [worker](worker.md), [install the controller](install.md), and apply the [Deployment opt-in](../reference/configuration.md#opt-in) before pairing them. These guides describe the controller that `v0.2.0` first published, beyond the `v0.1.0` skeleton ([ownership.allium](../specs/ownership.allium), `Ownership` `Objects`; [reconcile.allium](../specs/reconcile.allium), `Loop` `Rollout`).
 
 ## Choose a demand signal that exists at zero
 
