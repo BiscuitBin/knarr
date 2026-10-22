@@ -1,0 +1,62 @@
+date: 2026-10-22T23:18Z
+gh version 2.100.0 (2026-09-03)
+jq-1.7.1-apple
+org: biscuitbin
+
+== authenticated user: gh api user
+status: 200
+steven-cutting
+
+== membership: gh api orgs/biscuitbin/memberships/steven-cutting
+status: 200
+{
+  "role": "admin",
+  "state": "active"
+}
+
+== org: gh api orgs/biscuitbin
+status: 200
+{
+  "default_repository_permission": "read",
+  "login": "BiscuitBin",
+  "members_can_create_private_repositories": true,
+  "members_can_create_public_repositories": true,
+  "members_can_create_repositories": true,
+  "plan": "free",
+  "two_factor_requirement_enabled": false,
+  "web_commit_signoff_required": false
+}
+
+== actions permissions: gh api orgs/biscuitbin/actions/permissions
+status: 403 You must be an org admin or have the actions policies fine-grained permission.
+
+== default workflow permissions: gh api orgs/biscuitbin/actions/permissions/workflow
+status: 403 You must be an org admin or have the actions policies fine-grained permission.
+
+== rulesets: gh api orgs/biscuitbin/rulesets?per_page=100
+status: 404 Not Found
+
+== app installations: gh api orgs/biscuitbin/installations?per_page=100
+status: 200
+(empty)
+
+== actions the workflows use: .github/workflows/ and .github/actions/, read from 50c2e55
+./.github/actions/setup
+actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+
+org read complete
+
+== seen in the UI by the maintainer, 2026-10-22 (UTC), not by org.sh
+Settings → Actions → General → Policies: allow all actions and reusable workflows.
+Settings → Actions → General → Workflow permissions: read repository contents and packages permissions.
+Settings → Member privileges → Package creation: public allowed.
+Settings → Repository → Rulesets: none, under the banner "Organization rulesets won't be enforced until you upgrade this organization account to GitHub Team."
+github.com/settings/installations: no GitHub App reaches steven-cutting/knarr.
+
+== notes, 2026-10-22
+The two Actions reads above answered 403 although the membership is admin: gh's token holds read:org, and the Actions policy endpoints need admin:org. The UI answered instead.
+actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 (v4.2.2) is named only in a comment, release.yml:238, until bootstrap ticket 38 adds it; allow-all covers it.
+./.github/actions/setup is local to the repository and needs no policy.
+release.yml asks for packages: write on one job, line 107; an explicit permissions block overrides the read default.
+Settings → Actions → General → 'Require actions to be pinned to a full-length commit SHA' was not read. Every action the workflows use outside the repository is pinned by full SHA, so the requirement blocks nothing either way.
