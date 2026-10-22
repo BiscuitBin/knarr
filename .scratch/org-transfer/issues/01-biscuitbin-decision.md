@@ -50,6 +50,7 @@ Written on 2026-10-21 (UTC), from the maintainer's choices in that day's plannin
 
 - `validate_docs.py` (what `just docs-check` runs), run from this worktree with the main checkout's tools on `PATH`: "Validated 37 pages and 49 canonical topics." markdownlint-cli2 on every changed Markdown file: 0 issues.
 - `just check` ends with "All checks passed and the worktree is unchanged.", run after the maintainer ran `just initialize` in this worktree.
+- One gate run in between failed in `just test`, on a change that touched only this ticket's text; `just test` alone and the next `just check` passed. The failing test was not captured, so it is an unidentified flaky Gleam test, not this change.
 - Not done: the optional sources fetch. 0016 states the transfer's effects as expected and leaves the proof to 02 and 03. Nothing moved the repository, changed a setting or pushed a package.
 
 ### What each later ticket needs
