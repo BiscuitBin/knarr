@@ -12,7 +12,7 @@ echo 'kustomize patch, jmsingle.yaml, adding only the env entry ERL_AFLAGS="+JMs
 echo 'ERL_FLAGS; every helm install, upgrade and template passes --post-renderer jmsingle, which adds'
 echo 'the same entry. Helm still owns every field, and each pod runs its release image digest.'
 export HELM_PLUGINS="$wt/ai_tmp/helm-plugins"
-wait_for() { { set +x; } 2>/dev/null; n=$1; shift; i=0; until "$@" || [ $i -ge "$n" ]; do sleep 5; i=$((i+1)); done; echo "waited $((i*5)) s"; set -x; }
+wait_for() { { set +x; } 2>/dev/null; n=$1; shift; i=0; until "$@"; do if [ "$i" -ge "$n" ]; then echo "timed out after $((i*5)) s waiting for: $*"; exit 1; fi; sleep 5; i=$((i+1)); done; echo "waited $((i*5)) s"; set -x; }
 markers() { kubectl get pods -l app.kubernetes.io/name=fake-worker -o jsonpath='{range .items[*]}{.metadata.annotations.knarr\.io/applied}{"\n"}{end}' | grep -c .; }
 owned_three() { [ "$(markers)" -ge 3 ] && sh "$E"/metrics.sh | grep -q 'standing="owned"} 3'; }
 cleaned() { sh "$E"/metrics.sh | awk -v t="$optout" '

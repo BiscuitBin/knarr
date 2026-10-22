@@ -7,9 +7,9 @@ echo 'Host deviation: as in 15, the release was installed and upgraded with --po
 echo '(ERL_AFLAGS="+JMsingle true" only, for the amd64 image under Rosetta on this arm64 host).'
 echo 'helm uninstall needs no post-renderer. This runs on the cluster and release that 15 left.'
 worker_namespace=default
-# wait_for N CMD: rerun CMD every 5 s until it succeeds, for at most N tries,
-# without tracing each try.
-wait_for() { { set +x; } 2>/dev/null; n=$1; shift; i=0; until "$@" || [ $i -ge "$n" ]; do sleep 5; i=$((i+1)); done; echo "waited $((i*5)) s"; set -x; }
+# wait_for N CMD: rerun CMD every 5 s, without tracing each try, until it succeeds;
+# after N retries, exit the script so nothing after the wait runs unconfirmed.
+wait_for() { { set +x; } 2>/dev/null; n=$1; shift; i=0; until "$@"; do if [ "$i" -ge "$n" ]; then echo "timed out after $((i*5)) s waiting for: $*"; exit 1; fi; sleep 5; i=$((i+1)); done; echo "waited $((i*5)) s"; set -x; }
 markers() { kubectl get pods -l app.kubernetes.io/name=fake-worker -o jsonpath='{range .items[*]}{.metadata.annotations.knarr\.io/applied}{"\n"}{end}' | grep -c .; }
 owned_three() { [ "$(markers)" -ge 3 ] && sh "$E"/metrics.sh | grep -q 'standing="owned"} 3'; }
 cleaned() { sh "$E"/metrics.sh | awk -v t="$optout" '
