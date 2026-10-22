@@ -79,7 +79,7 @@ def test_workers_name_themselves_and_reach_the_collector():
     assert port["targetPort"] == "control"
 
 
-def test_packaging_check_validates_the_fixture_beside_the_base(tmp_path):
+def test_packaging_check_validates_the_fixture(tmp_path):
     binaries = tmp_path / "bin"
     binaries.mkdir()
     kubeconform = binaries / "kubeconform"
@@ -97,7 +97,4 @@ def test_packaging_check_validates_the_fixture_beside_the_base(tmp_path):
         check=True,
     )
     validated = log.read_text().split("\0")[:-1]
-    assert validated == [
-        (REPOSITORY / "deploy/base/resources.json").read_text(),
-        (FIXTURE / "resources.json").read_text(),
-    ]
+    assert validated == [(FIXTURE / "resources.json").read_text()]

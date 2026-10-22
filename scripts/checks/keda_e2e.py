@@ -57,7 +57,7 @@ READY = 180  # knarr's /readyz 200 after it is scaled back to 1
 WATCH = 300  # (a): no patch of the untouched Deployment for 300 s
 CLEANUP_BOUND = 120  # (b): two list intervals at the defaults
 REWRITE_BOUND = 93  # (c): poll interval 30 s, its 10 % jitter, patch interval 60 s
-RATE, BURST = 5, 10  # the defaults, which deploy/e2e-fast keeps
+RATE, BURST = 5, 10  # the defaults, which the e2e-fast values keep
 # The longest a segment may go without an answered scrape: cluster.py's 30 s
 # for a port forward to come up, so a longer gap is more than one reconnect.
 COVERAGE = 30
@@ -997,7 +997,7 @@ def main():
         line, outcome = verdict(baseline, knarr)
         print(line)
         # Judged before the restart, so a restart that fails keeps it.
-        rated = patch_rate([("deploy/e2e-fast", during)])
+        rated = patch_rate([("e2e-fast", during)])
         with timed(times, "restart"):
             restarted, after = restart(run)
         rated = patch_rate([("after the restart", after)]) and rated

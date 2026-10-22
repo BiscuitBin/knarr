@@ -353,9 +353,9 @@ def answered(*times: float) -> list[tuple[float, list[keda_e2e.Sample] | None]]:
 
 def test_scrapes_cover_a_segment_with_no_gap_over_the_bound() -> None:
     parsed = [(0.0, None), *answered(1.0, 2.0), (3.0, None), *answered(31.0, 32.0)]
-    assert keda_e2e.judge_coverage(parsed, 30, "deploy/e2e-fast") == (
+    assert keda_e2e.judge_coverage(parsed, 30, "e2e-fast") == (
         True,
-        "ok   coverage, deploy/e2e-fast: 4 of 6 scrapes answered, longest gap 29.0 s of 30 s",
+        "ok   coverage, e2e-fast: 4 of 6 scrapes answered, longest gap 29.0 s of 30 s",
     )
 
 
@@ -373,15 +373,15 @@ def test_scrapes_cover_a_segment_with_no_gap_over_the_bound() -> None:
 def test_a_segment_the_scrapes_do_not_cover_is_invalid(
     parsed: list[tuple[float, list[keda_e2e.Sample] | None]], line: str
 ) -> None:
-    ok, got = keda_e2e.judge_coverage(parsed, 30, "deploy/e2e-fast")
+    ok, got = keda_e2e.judge_coverage(parsed, 30, "e2e-fast")
     assert ok is False
-    assert got.startswith("INVALID coverage, deploy/e2e-fast: ")
+    assert got.startswith("INVALID coverage, e2e-fast: ")
     assert line in got
 
 
 def test_the_patch_rate_fails_a_segment_without_two_answered_scrapes() -> None:
-    assert keda_e2e.patch_rate([("deploy/e2e-fast", [(0.0, None), *answered(1.0)])]) is False
-    assert keda_e2e.patch_rate([("deploy/e2e-fast", answered(0.0, 1.0))]) is True
+    assert keda_e2e.patch_rate([("e2e-fast", [(0.0, None), *answered(1.0)])]) is False
+    assert keda_e2e.patch_rate([("e2e-fast", answered(0.0, 1.0))]) is True
 
 
 def test_a_window_over_the_bound_is_a_violation() -> None:

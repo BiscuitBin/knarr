@@ -46,12 +46,11 @@ The [local cluster guide](docs/how-to/local-cluster.md) covers the walking skele
 
 `just check` is read-only. It runs each recipe in the check group through `scripts/checks/run_project_check.py`, which snapshots every tracked and untracked-unignored file first. The gate fails on the first recipe that changes any of them, even when that recipe passed ([Decision 0004](docs/decisions/0004-gate-checkers.md)).
 
-Recipes may write ignored paths, such as `build/` and the `<title>.new` a failing snapshot test leaves; `just initialize` writes nothing else. Five recipes change tracked files on purpose, all outside the gate:
+Recipes may write ignored paths, such as `build/` and the `<title>.new` a failing snapshot test leaves; `just initialize` writes nothing else. Four recipes change tracked files on purpose, all outside the gate:
 
 - `just fix` repairs formatting and lint findings.
 - `just snapshots-review` and `just snapshots-accept` accept snapshot changes into `test/birdie_snapshots/`.
 - `just birdie` runs any other birdie command. `just birdie reject` and `just birdie stale delete` can change tracked snapshot files.
-- `just release-pin` pins the release overlay, `deploy/release/kustomization.yaml`, to the image digest a release published.
 
 The pre-commit hook runs the read-only config, `.pre-commit-config.yaml`. `just fix` runs `.pre-commit-fix.yaml`. The [testing reference](docs/reference/testing.md) covers the snapshot recipes and how `just check` stays read-only around them.
 

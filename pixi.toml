@@ -25,7 +25,8 @@ python = "==3.14.8"
 pytest = "==9.1.1"
 ruff = "==0.16.10"
 # The chart checks in scripts/checks/chart.py lint and render the Helm chart
-# and canonicalise its render against deploy/base (Decision 0015).
+# (Decision 0015); kustomize canonicalises the render for the chart tests and
+# patches it for the wrong-CA case.
 kubernetes-helm = "==4.3.0"
 kustomize = "==5.8.2"
 

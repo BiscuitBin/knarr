@@ -1,9 +1,8 @@
 """The Helm chart under charts/knarr (Decision 0015), rendered with the pinned helm.
 
-The base's invariants, which test_deployment.py pins on deploy/base, are
-asserted here on the chart's default render after kustomize has canonicalised
-it, so the text compares with the base's own render: kustomize sorts keys and
-drops helm's `# Source:` comments.
+The install's invariants are asserted on the chart's default render after
+kustomize has canonicalised it: kustomize sorts keys and drops helm's
+`# Source:` comments, so the expected text is stable.
 """
 
 import json
@@ -61,7 +60,7 @@ def test_the_chart_renders_the_four_resources_and_nothing_else(default):
     assert "replicaCount" not in (chart.CHART / "values.yaml").read_text()
 
 
-def test_the_names_are_knarr_and_the_selector_is_exactly_the_base(default):
+def test_the_names_are_knarr_and_the_selector_is_the_name_label_alone(default):
     names = [
         re.search(r"^metadata:\n(?:  .*\n)*?  name: (\S+)$", document, re.MULTILINE).group(1)
         for document in documents(default)
@@ -93,7 +92,12 @@ def test_one_replica_under_recreate(default):
 
 
 def test_the_token_is_projected_with_the_shortest_expiry_and_read_only(default):
-    assert default.count("automountServiceAccountToken: false\n") == 2
+    # Automount stays off at both levels: the projected volume is the only token.
+    service_account = documents(default)[0]
+    assert service_account.startswith("apiVersion: v1\nautomountServiceAccountToken: false\n")
+    assert "kind: ServiceAccount\n" in service_account
+    deployment = next(d for d in documents(default) if "\nkind: Deployment\n" in d)
+    assert "      automountServiceAccountToken: false\n" in deployment
     assert (
         "        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount\n"
         "          name: kube-api-access\n          readOnly: true\n"
@@ -127,6 +131,35 @@ def test_the_security_contexts_hold(default):
         "      securityContext:\n        runAsGroup: 10001\n        runAsNonRoot: true\n"
         "        runAsUser: 10001\n        seccompProfile:\n          type: RuntimeDefault\n"
     ) in default
+
+
+def test_the_probes_are_readyz_and_healthz(default):
+    assert (
+        "        livenessProbe:\n          httpGet:\n            path: /healthz\n"
+        "            port: http\n"
+    ) in default
+    assert (
+        "        readinessProbe:\n          httpGet:\n            path: /readyz\n"
+        "            port: http\n"
+    ) in default
+
+
+def test_the_wrong_ca_patch_only_redirects_the_ca_file():
+    # Ticket 14's wrong-CA case: an env var, its mount and its ConfigMap, nothing else.
+    patch = json.loads((ROOT / "fixtures/wrong-ca/patch.json").read_text())
+    assert set(patch) == {"apiVersion", "kind", "metadata", "spec"}
+    assert set(patch["spec"]) == {"template"}
+    assert set(patch["spec"]["template"]) == {"spec"}
+    pod = patch["spec"]["template"]["spec"]
+    assert set(pod) == {"containers", "volumes"}
+    assert [set(container) for container in pod["containers"]] == [{"name", "env", "volumeMounts"}]
+    assert pod["containers"][0]["env"] == [
+        {"name": "KNARR_CA_FILE", "value": "/etc/knarr/wrong-ca/ca.crt"}
+    ]
+    assert pod["containers"][0]["volumeMounts"] == [
+        {"name": "wrong-ca", "mountPath": "/etc/knarr/wrong-ca", "readOnly": True}
+    ]
+    assert pod["volumes"] == [{"name": "wrong-ca", "configMap": {"name": "knarr-wrong-ca"}}]
 
 
 def test_several_knarr_values_keep_discovery_first():
@@ -393,68 +426,6 @@ def test_notes_name_the_namespace_the_opt_in_label_and_the_install_guide():
     )
 
 
-# The drift check, on kustomize's render of the base and of the chart.
-
-
-@pytest.fixture(scope="module")
-def base():
-    return subprocess.check_output(["kustomize", "build", str(ROOT / "deploy/base")], text=True)
-
-
-def test_the_default_render_matches_the_base_apart_from_the_allowlist(base, default):
-    inserted = chart.drift(base, default)
-    assert sorted({line.strip().split(":")[0] for line in inserted}) == [
-        "app.kubernetes.io/instance",
-        "app.kubernetes.io/managed-by",
-        "app.kubernetes.io/name",
-        "app.kubernetes.io/version",
-        "helm.sh/chart",
-        "labels",
-        "namespace",
-    ]
-
-
-@pytest.mark.parametrize(
-    ("old", "new", "problem"),
-    [
-        ("  replicas: 1\n", "  replicas: 2\n", "replicas: 2"),
-        ("          periodSeconds: 5\n", "", "periodSeconds: 5"),
-        (
-            "    matchLabels:\n",
-            "    matchLabels:\n      app.kubernetes.io/instance: knarr\n",
-            "app.kubernetes.io/instance",
-        ),
-        (
-            "    metadata:\n      labels:\n",
-            "    metadata:\n      annotations:\n        x: y\n      labels:\n",
-            "annotations",
-        ),
-        (
-            "    metadata:\n      labels:\n",
-            "    metadata:\n      namespace: x\n      labels:\n",
-            "namespace",
-        ),
-        (
-            f"    helm.sh/chart: knarr-{VERSION}\n  name: knarr\n",
-            f"    helm.sh/chart: knarr-{VERSION}\n    team: a\n  name: knarr\n",
-            "team",
-        ),
-    ],
-    ids=[
-        "a changed line",
-        "a removed line",
-        "a selector label",
-        "pod annotations",
-        "a namespace in the template",
-        "a label key off the list",
-    ],
-)
-def test_drift_fails_outside_the_allowlist(base, default, old, new, problem):
-    assert old in default
-    with pytest.raises(ValueError, match=re.escape(problem)):
-        chart.drift(base, default.replace(old, new, 1))
-
-
 # The version lockstep.
 
 CHART_YAML = 'apiVersion: v2\nname: knarr\nversion: 0.1.0\nappVersion: "0.1.0"\n'
@@ -501,34 +472,26 @@ def test_the_checker_runs_every_check():
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    for check in ("lint", "render", "drift", "version"):
+    for check in ("lint", "render", "version"):
         assert f"chart {check}: ok" in result.stdout
 
 
-def settings(erl_flags):
-    """The `-knarr <key> <value>` pairs of an ERL_FLAGS value, by key."""
-    words = erl_flags.split()
-    pairs = [tuple(words[index + 1 : index + 3]) for index in range(0, len(words), 3)]
-    assert all(words[index] == "-knarr" for index in range(0, len(words), 3)), erl_flags
-    assert len(dict(pairs)) == len(pairs), erl_flags
-    return dict(pairs)
-
-
-def test_the_e2e_fast_values_set_the_intervals_of_deploy_e2e_fast():
+def test_the_e2e_fast_values_only_shorten_the_intervals():
     # The KEDA harness's comparison phase (ticket 33) installs the chart with these
-    # values (helm-chart ticket 03); deploy/e2e-fast keeps them until ticket 06.
-    patch = json.loads((ROOT / "deploy/e2e-fast/patch.json").read_text())
-    container = patch["spec"]["template"]["spec"]["containers"][0]
-    wanted = next(item["value"] for item in container["env"] if item["name"] == "ERL_FLAGS")
+    # values (helm-chart ticket 03). Rate and burst are not named, so they stay at
+    # the defaults budget's 5·W + 10 bound is stated for.
     got = erl_flags(chart.render("--values", str(ROOT / "fixtures/chart-values/e2e-fast.yaml")))
-    assert got.startswith("-knarr discovery true ")
-    assert settings(got) == settings(wanted)
+    # Exactly the four intervals, each once, in application_ffi.erl's key order.
+    assert got == (
+        "-knarr discovery true -knarr poll_interval 5 -knarr poll_timeout 4"
+        " -knarr patch_interval 10 -knarr list_interval 10"
+    )
 
 
 def test_a_patch_applies_in_any_namespace():
     # A patch file names no namespace; it still lands on its kind and name.
     rendered = chart.canonical(
-        chart.render(namespace="other"), patches=[ROOT / "deploy/wrong-ca/patch.json"]
+        chart.render(namespace="other"), patches=[ROOT / "fixtures/wrong-ca/patch.json"]
     )
     assert (
         "        - name: KNARR_CA_FILE\n          value: /etc/knarr/wrong-ca/ca.crt\n" in rendered

@@ -156,7 +156,7 @@ jobs:
       #   3. Check that the tagged commit is what
       #      docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' ghcr.io/steven-cutting/knarr@<digest>
       #      prints, and that helm show values of the chart names that digest.
-      #   4. Run just release-pin <digest>.
+      #      The chart already carries the digest, so nothing else is pinned.
       # - The image was pushed and the chart was not. Bump the version and
       #   release again, as Decision 0015 decides; never push a chart by hand
       #   for a version whose run failed. X.Y.Z stays an image with no chart.
@@ -228,7 +228,7 @@ jobs:
           {
             echo "## Published $IMAGE"
             echo
-            echo "Pin this in deploy/release: \`$IMAGE@$digest\`"
+            echo "Image digest, stamped into this run's chart: \`$IMAGE@$digest\`"
             echo
             for t in $(tags_for "$TAG" "$COMMIT"); do echo "- \`$IMAGE:$t\`"; done
           } >> "$GITHUB_STEP_SUMMARY"

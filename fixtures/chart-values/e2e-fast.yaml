@@ -2,7 +2,7 @@
 # so a scale-in round waits seconds rather than minutes for the load's
 # annotations. Rate and burst stay at the defaults, so budget's 5·W + 10 bound
 # holds as stated. `just deploy <image> e2e-fast` installs the chart with this
-# file; test_chart.py holds it to deploy/e2e-fast's intervals.
+# file; test_chart.py holds it to exactly these intervals.
 knarr:
   list_interval: 10
   poll_interval: 5

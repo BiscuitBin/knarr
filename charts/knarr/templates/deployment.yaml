@@ -1,5 +1,5 @@
-# deploy/base/resources.json's Deployment. One replica under Recreate with no
-# leader election (DEFERRED §4), so the chart offers no replica count.
+# knarr's Deployment. One replica under Recreate with no leader election
+# (DEFERRED §4), so the chart offers no replica count.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

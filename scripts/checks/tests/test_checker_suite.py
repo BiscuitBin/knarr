@@ -19,18 +19,21 @@ def test_every_module_has_exactly_one_owner():
         (["scripts/checks/tests/test_validate_docs.py"], ["docs"], [], []),
         (["src/knarr/config.gleam"], [], ["controller-process"], ["kind"]),
         (["fixtures/fake_worker/src/server.gleam"], [], ["worker-process"], ["worker"]),
-        (
-            ["deploy/base/deployment.yaml"],
-            ["chart", "cluster", "deployment"],
-            [],
-            ["kind", "kwok"],
-        ),
+        # Only the reconcile proof applies it, and its workflow has its own filter.
+        (["fixtures/wrong-ca/patch.json"], ["chart", "cluster"], [], []),
         # The local loop and CI install the chart (helm-chart ticket 03).
         (
             ["charts/knarr/templates/deployment.yaml"],
             ["chart", "cluster", "release"],
             [],
-            ["kind", "kwok"],
+            ["kind"],
+        ),
+        # The image check reads knarr's memory limit from the values.
+        (
+            ["charts/knarr/values.yaml"],
+            ["chart", "cluster", "packaging", "release"],
+            [],
+            ["kind"],
         ),
         # Only the KEDA harness installs it, and its workflow has no path filter.
         (["fixtures/chart-values/e2e-fast.yaml"], ["chart", "cluster"], [], []),
@@ -110,21 +113,17 @@ def test_unowned_test_module_fails(tmp_path, monkeypatch, unowned):
     ("path", "required"),
     [
         ("fixtures/fake_worker/Dockerfile", "packaging"),
-        ("deploy/base/resources.json", "packaging"),
+        ("charts/knarr/values.yaml", "packaging"),
         ("fixtures/fake_worker/deploy/resources.json", "packaging"),
         (".scratch/bootstrap/evidence/01/tls/tls_check.escript", "packaging"),
-        ("deploy/release/README.md", "release"),
-        ("deploy/base/resources.json", "chart"),
         ("charts/knarr/values.schema.json", "chart"),
         # stamp-chart_test.sh stamps and packages the tracked chart.
         ("charts/knarr/values.yaml", "release"),
         ("src/knarr/application_ffi.erl", "chart"),
         ("scripts/checks/deployment.py", "chart"),
-        # test_chart.py holds the e2e-fast values and the wrong-ca patch to these.
-        ("deploy/e2e-fast/patch.json", "chart"),
-        ("deploy/wrong-ca/patch.json", "chart"),
-        ("deploy/base/resources.json", "cluster"),
-        ("deploy/wrong-ca/kustomization.yaml", "cluster"),
+        ("fixtures/chart-values/e2e-fast.yaml", "chart"),
+        ("fixtures/wrong-ca/patch.json", "chart"),
+        ("fixtures/wrong-ca/patch.json", "cluster"),
         ("fixtures/fake_worker/deploy/resources.json", "cluster"),
         ("docs/specs/observability.allium", "cluster"),
         ("src/knarr/metrics_ffi.erl", "cluster"),
@@ -155,3 +154,5 @@ def test_reconcile_proof_runs_on_a_chart_only_change():
     assert suite.matches("charts/knarr/templates/deployment.yaml", paths)
     assert suite.matches("charts/knarr/values.yaml", paths)
     assert suite.matches("scripts/checks/chart.py", paths)
+    # It applies the wrong-CA patch (helm-chart ticket 06 moved it to fixtures/).
+    assert suite.matches("fixtures/wrong-ca/patch.json", paths)

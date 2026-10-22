@@ -91,7 +91,7 @@ With the cluster tools installed and a kind cluster up (see the [local cluster g
 3. `just fake-worker-deploy` loads the image and applies `fixtures/fake_worker/deploy/`: four workers, with a five-second drain and a twenty-second grace period, and the collector. It waits for CoreDNS, because workers reach the collector by name, and for both rollouts.
 4. `just fake-worker-smoke` waits up to two minutes for four workers that are Ready and not terminating, so a run straight after another never picks a pod the first deleted while it drains. It clears the collector and sets those four to idle, busy, draining and `not_found` through control, naming every member so a second run resets the first's. It reads each back from its status endpoint byte for byte, retrying for up to 15 seconds over a fresh port forward. It then deletes the busy worker, reads `accepting` false from it while it drains, deletes the idle worker, and finds both kill records at the collector by pod name. It ends once the Deployment has rolled out their replacements.
 
-The manifests live outside `deploy/`, which holds knarr's variants, and `just packaging-check` validates them against the pinned local schemas. CI's non-required "Kind fake worker smoke" job runs all four steps.
+The manifests are a fixture beside the fake worker, not part of knarr's packaging, and `just packaging-check` validates them against the pinned local schemas. CI's non-required "Kind fake worker smoke" job runs all four steps.
 
 ## Clauses and tests
 

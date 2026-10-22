@@ -1,7 +1,6 @@
 # knarr's values (Decision 0015, values surface v1). The tracked values are the
-# local ones, which render deploy/base: `just chart-check` holds the two equal
-# apart from the namespace and Helm's labels. The release stamps the published
-# image into the packaged chart.
+# local ones, which `just deploy` installs on a worktree cluster. The release
+# stamps the published image into the packaged chart.
 
 image:
   repository: knarr

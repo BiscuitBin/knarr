@@ -43,9 +43,8 @@ class Profile:
     """What differs between the two images this script checks."""
 
     entrypoint: list[str]
-    # The resources.json whose Deployment's memory limit is the run's budget.
-    resources: Path
-    deployment: str
+    # The memory limit the image runs under once installed: the run's budget.
+    memory_limit: Callable[[], str]
     ports: tuple[str, ...]
     # Given the image and the restricted `docker run` prefix.
     prepare: Callable[[str, list[str]], Session]
@@ -265,10 +264,42 @@ def verify_fake_worker(container, collector):
         raise RuntimeError("the kill record is missing from the logs")
 
 
+def chart_memory_limit():
+    """The memory limit in charts/knarr/values.yaml's `resources.limits`, read
+    by line as stamp-chart.sh reads the chart: a helm render here would run
+    through the subprocess the tests replace."""
+    values = (ROOT / "charts/knarr/values.yaml").read_text()
+    # Every line indented under `resources.limits`, then its memory key among them,
+    # quoted or not and with or without a comment.
+    limits = re.search(
+        r"^resources:\n(?:  .*\n)*?  limits:\n((?:    .*\n)*)", values, re.MULTILINE
+    )
+    match = limits and re.search(
+        r"^    memory: *[\"']?([^\"'\s#]+)[\"']? *(#.*)?$", limits.group(1), re.MULTILINE
+    )
+    if not match:
+        raise RuntimeError("image check found no memory limit in the chart's values")
+    return match.group(1)
+
+
+def manifest_memory_limit(resources, deployment):
+    """The memory limit of the named Deployment's first container in a List."""
+
+    def limit():
+        items = json.loads(resources.read_text())["items"]
+        found = next(
+            item
+            for item in items
+            if item["kind"] == "Deployment" and item["metadata"]["name"] == deployment
+        )
+        return found["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["memory"]
+
+    return limit
+
+
 KNARR = Profile(
     entrypoint=["/opt/knarr/container-entrypoint.sh", "/opt/knarr/shipment/entrypoint.sh"],
-    resources=ROOT / "deploy/base/resources.json",
-    deployment="knarr",
+    memory_limit=chart_memory_limit,
     ports=("8080",),
     prepare=prepare_knarr,
 )
@@ -277,8 +308,9 @@ FAKE_WORKER = Profile(
         "/opt/fake_worker/container-entrypoint.sh",
         "/opt/fake_worker/shipment/entrypoint.sh",
     ],
-    resources=ROOT / "fixtures/fake_worker/deploy/resources.json",
-    deployment="fake-worker",
+    memory_limit=manifest_memory_limit(
+        ROOT / "fixtures/fake_worker/deploy/resources.json", "fake-worker"
+    ),
     ports=("8080", "8081"),
     prepare=prepare_fake_worker,
 )
@@ -303,15 +335,7 @@ def main():
         raise RuntimeError("image must declare USER 10001:10001")
     if config.get("Entrypoint") != profile.entrypoint:
         raise RuntimeError("image must use the descriptor-bounding entrypoint")
-    resources = json.loads(profile.resources.read_text())
-    deployment = next(
-        item
-        for item in resources["items"]
-        if item["kind"] == "Deployment" and item["metadata"]["name"] == profile.deployment
-    )
-    memory = deployment["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"][
-        "memory"
-    ]
+    memory = profile.memory_limit()
     if not memory.endswith("Mi"):
         raise RuntimeError("image check expects the deployment memory limit in Mi")
     budget = int(memory.removesuffix("Mi")) * 1024 * 1024

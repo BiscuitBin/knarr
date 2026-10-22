@@ -69,7 +69,10 @@ VARIANTS = {
     "e2e-fast": ("--values", str(ROOT / "fixtures/chart-values/e2e-fast.yaml")),
     "wrong-ca": (),
 }
-WRONG_CA = ROOT / "deploy/wrong-ca/patch.json"
+# Ticket 14's wrong-CA case: the reconciler is given a CA the apiserver does not
+# chain to, from the ConfigMap knarr-wrong-ca that wrong-ca.sh creates from a
+# throwaway certificate, so it sees unknown_ca and never succeeds.
+WRONG_CA = ROOT / "fixtures/wrong-ca/patch.json"
 # Helm 4 installs and upgrades by server-side apply as this field manager.
 HELM_MANAGER = "helm"
 
@@ -301,7 +304,7 @@ def chart_values(image, image_id):
 
 
 def wrong_ca(values):
-    """The chart's render with deploy/wrong-ca's patch, every resource marked as
+    """The chart's render with fixtures/wrong-ca's patch, every resource marked as
     the release's, as Helm marks what it installs."""
     return chart.canonical(
         chart.render(*values, namespace=NAMESPACE),
