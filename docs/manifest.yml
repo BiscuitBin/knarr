@@ -347,6 +347,19 @@
       "requires": []
     },
     {
+      "path": "decisions/0016-biscuitbin-org.md",
+      "title": "Decision 0016: knarr's home is the biscuitbin org",
+      "kind": "decision",
+      "audience": [
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "decision_biscuitbin_org"
+      ],
+      "requires": []
+    },
+    {
       "path": "how-to/local-cluster.md",
       "title": "Run the walking skeleton locally",
       "kind": "how-to",

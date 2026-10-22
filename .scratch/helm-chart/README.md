@@ -16,6 +16,7 @@ flowchart TD
     H08["08 Artifact Hub listing"]:::human
     REL["Next release after 04<br/>(bootstrap 40 or a patch)"]:::human
     B38["Bootstrap 38: attestations<br/>(external)"]:::human
+    O05["Org transfer 05: first release<br/>under biscuitbin (external)"]:::human
 
     H01 --> H02
     H02 --> H03
@@ -27,6 +28,7 @@ flowchart TD
     H04 --> H07
     B38 --> H07
     H05 --> H08
+    O05 --> H08
 
     classDef human stroke:#d97706,stroke-width:2px,stroke-dasharray:5 5
     classDef offpath stroke:#9e9e9e,stroke-dasharray:2 2,color:#757575
@@ -48,6 +50,6 @@ A wave is the earliest point a ticket can start if every lane runs in parallel: 
 | 3 | [05](issues/05-install-first-published-chart.md), [07](issues/07-attest-published-chart.md) |
 | 4 | [06](issues/06-retire-kustomize-packaging.md), [08](issues/08-artifact-hub-listing.md) |
 
-The longest chain is five tickets: 01, 02, 04, 05, then 06 or 08. Ticket 07 also waits for bootstrap ticket [38](../bootstrap/issues/38-attestations-sbom-arm64.md). None of these tickets is on the MVP critical path: the MVP installs through Decision 0012's kustomize route.
+The longest chain is five tickets: 01, 02, 04, 05, then 06 or 08. Ticket 07 also waits for bootstrap ticket [38](../bootstrap/issues/38-attestations-sbom-arm64.md), and ticket 08 for org transfer ticket [05](../org-transfer/issues/05-first-release-under-org.md), so that the listing is registered under the org ([Decision 0016](../../docs/decisions/0016-biscuitbin-org.md)). None of these tickets is on the MVP critical path: the MVP installs through Decision 0012's kustomize route.
 
 When a ticket's **Blocked by** line changes, update both the diagram and this table.
