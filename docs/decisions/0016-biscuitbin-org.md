@@ -43,7 +43,7 @@ Tickets 01 to 05 in [`.scratch/org-transfer/issues/`](../../.scratch/org-transfe
 ## Verification
 
 - `just docs-check` and `just check` pass on the change that adds this record.
-- The transfer's effects are verified by ticket 03's settings diff against ticket 02's snapshot, and by a green CI run on a pull request under the org.
+- The transfer's effects are verified by ticket 03's settings diff against ticket 02's snapshot, and by ticket 03's runs under the org: the required `check` on a pull request, and successful (not skipped) `keda-e2e`, `reconcile-proof` and `audit` runs.
 - The new registry paths are verified by ticket 05's release run summary, the anonymous pulls by digest and the `helm upgrade` from a `v0.2.0` install on kind.
 
 ## Consequences
@@ -51,7 +51,7 @@ Tickets 01 to 05 in [`.scratch/org-transfer/issues/`](../../.scratch/org-transfe
 The tickets that carry this record out are in [`.scratch/org-transfer/issues/`](../../.scratch/org-transfer/README.md):
 
 - **[02](../../.scratch/org-transfer/issues/02-org-readiness-snapshot.md)** records the repository's settings and checks that the org lets the workflows run and publish.
-- **[03](../../.scratch/org-transfer/issues/03-transfer-repository.md)** transfers the repository, diffs the settings, updates the remotes and runs CI under the org.
+- **[03](../../.scratch/org-transfer/issues/03-transfer-repository.md)** transfers the repository, diffs the settings, updates the remotes and runs every workflow under the org.
 - **[04](../../.scratch/org-transfer/issues/04-rename-live-references.md)** renames the live references, test first, and documents the move in the install guide.
 - **[05](../../.scratch/org-transfer/issues/05-first-release-under-org.md)** releases `v0.3.0` under the org, makes both packages public, and migrates a `v0.2.0` install.
 

@@ -19,7 +19,8 @@
   - the Actions permissions: whether Actions is enabled, the allowed-actions policy, and the default `GITHUB_TOKEN` permissions;
   - private vulnerability reporting, and the security features (Dependabot alerts, secret scanning, push protection, code scanning default setup);
   - the GitHub App installations with access to the repository, among them Renovate;
-  - the repository's visibility, default branch, merge settings and topics.
+  - the repository's visibility, default branch, merge settings and topics;
+  - the repository's labels by name, among them `keda-e2e` and `cluster-s1`, which gate the cluster workflows.
 
   Bootstrap ticket 37's [settings.sh](../../bootstrap/evidence/37/settings.sh) is the starting shape. The script reads the same endpoints with the owner as a parameter, so 03 reruns it unchanged against `biscuitbin`.
 - [ ] The maintainer checks the org, and `.scratch/org-transfer/evidence/02/org.txt` records what they saw:

@@ -4,7 +4,7 @@
 
 Between this ticket and [04](04-rename-live-references.md)'s merge, `release.yml` still names `ghcr.io/steven-cutting/…`, which the org repository's `GITHUB_TOKEN` cannot push to. Nobody pushes a release tag in that window.
 
-**What to build:** The transferred repository, a settings diff that shows nothing was lost, every local remote pointing at the new URL, and a green CI run under the org.
+**What to build:** The transferred repository, a settings diff that shows nothing was lost, every local remote pointing at the new URL, and a successful run of every workflow under the org.
 
 **Non-goals:** Renaming a reference in a tracked file (04). Any release (05). Creating a repository named `steven-cutting/knarr`, ever: it would break the redirects.
 
@@ -19,6 +19,7 @@ Between this ticket and [04](04-rename-live-references.md)'s merge, `release.yml
 - [ ] Anything that did not carry over is restored, for instance private vulnerability reporting or Renovate's access, and a final rerun of `settings.sh` shows it.
 - [ ] **Authorization required:** the network. `https://github.com/steven-cutting/knarr` and `git ls-remote git@github.com:steven-cutting/knarr.git` both still reach the repository through GitHub's redirect, and `redirect.txt` records it.
 - [ ] `git remote set-url origin git@github.com:biscuitbin/knarr.git` in the main checkout. The linked worktrees share its `.git`, so that one change covers them all; `git -C <worktree> remote get-url origin` in one of them shows it. Any separate clone is listed in the hand-back with its remote updated.
-- [ ] **Authorization required:** a push and `gh`. A trivial pull request runs the full CI under the org (`ci.yml`, `audit.yml`, `keda-e2e.yml` and `reconcile-proof.yml`) green, the required checks still gate its merge, and the hand-back records the run URLs.
+- [ ] **Authorization required:** a push and `gh`. A trivial pull request under the org shows that the required check `check` runs and gates the merge: a merge attempt before it finishes is blocked. The hand-back records the run URL.
+- [ ] **Authorization required:** labels, a dispatch and `gh`. Adding the `keda-e2e` and `cluster-s1` labels to that pull request runs `keda-e2e.yml` and `reconcile-proof.yml`, and `gh workflow run audit.yml --ref main` runs the audit. Each run ends in `success`, not `skipped`, and the hand-back records each run URL. `ci.yml`'s path-selected kind jobs are skipped on a trivial pull request by design; the hand-back says so, and the cluster coverage comes from the two labelled workflows.
 
 ## Hand-back notes
