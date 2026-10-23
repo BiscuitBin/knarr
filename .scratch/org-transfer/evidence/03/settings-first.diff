@@ -1,0 +1,97 @@
+1c1
+< date: 2026-10-22T23:18Z
+---
+> date: 2026-10-23T03:22Z
+4c4
+< repository: steven-cutting/knarr
+---
+> repository: biscuitbin/knarr
+6c6
+< == repository: gh api repos/steven-cutting/knarr
+---
+> == repository: gh api repos/biscuitbin/knarr
+17c17
+<   "full_name": "steven-cutting/knarr",
+---
+>   "full_name": "BiscuitBin/knarr",
+24,25c24,25
+<   "owner": "steven-cutting",
+<   "owner_type": "User",
+---
+>   "owner": "BiscuitBin",
+>   "owner_type": "Organization",
+31c31
+<       "status": "enabled"
+---
+>       "status": "disabled"
+37c37
+<       "status": "enabled"
+---
+>       "status": "disabled"
+51c51
+< == rulesets: gh api repos/steven-cutting/knarr/rulesets?per_page=100
+---
+> == rulesets: gh api repos/biscuitbin/knarr/rulesets?per_page=100
+62c62
+< == ruleset 25048585: gh api repos/steven-cutting/knarr/rulesets/25048585
+---
+> == ruleset 25048585: gh api repos/biscuitbin/knarr/rulesets/25048585
+87c87
+< == branch protection on main: gh api repos/steven-cutting/knarr/branches/main/protection
+---
+> == branch protection on main: gh api repos/biscuitbin/knarr/branches/main/protection
+137c137
+< == release environment: gh api repos/steven-cutting/knarr/environments/release
+---
+> == release environment: gh api repos/biscuitbin/knarr/environments/release
+154c154
+< == repository secret names: gh api repos/steven-cutting/knarr/actions/secrets?per_page=100
+---
+> == repository secret names: gh api repos/biscuitbin/knarr/actions/secrets?per_page=100
+158c158
+< == repository variable names: gh api repos/steven-cutting/knarr/actions/variables?per_page=100
+---
+> == repository variable names: gh api repos/biscuitbin/knarr/actions/variables?per_page=100
+162c162
+< == release secret names: gh api repos/steven-cutting/knarr/environments/release/secrets?per_page=100
+---
+> == release secret names: gh api repos/biscuitbin/knarr/environments/release/secrets?per_page=100
+166c166
+< == release variable names: gh api repos/steven-cutting/knarr/environments/release/variables?per_page=100
+---
+> == release variable names: gh api repos/biscuitbin/knarr/environments/release/variables?per_page=100
+170c170
+< == actions permissions: gh api repos/steven-cutting/knarr/actions/permissions
+---
+> == actions permissions: gh api repos/biscuitbin/knarr/actions/permissions
+178c178
+< == default workflow permissions: gh api repos/steven-cutting/knarr/actions/permissions/workflow
+---
+> == default workflow permissions: gh api repos/biscuitbin/knarr/actions/permissions/workflow
+185c185
+< == private vulnerability reporting: gh api repos/steven-cutting/knarr/private-vulnerability-reporting
+---
+> == private vulnerability reporting: gh api repos/biscuitbin/knarr/private-vulnerability-reporting
+191c191
+< == dependabot alerts (204 on, 404 off): gh api repos/steven-cutting/knarr/vulnerability-alerts
+---
+> == dependabot alerts (204 on, 404 off): gh api repos/biscuitbin/knarr/vulnerability-alerts
+194c194
+< == dependabot security updates: gh api repos/steven-cutting/knarr/automated-security-fixes
+---
+> == dependabot security updates: gh api repos/biscuitbin/knarr/automated-security-fixes
+201c201
+< == code scanning default setup: gh api repos/steven-cutting/knarr/code-scanning/default-setup
+---
+> == code scanning default setup: gh api repos/biscuitbin/knarr/code-scanning/default-setup
+219,220c219,221
+< == app installations on the owner: gh api orgs/steven-cutting/installations?per_page=100
+< status: 404 Not Found
+---
+> == app installations on the owner: gh api orgs/biscuitbin/installations?per_page=100
+> status: 200
+> (empty)
+225c226
+< == labels: gh api repos/steven-cutting/knarr/labels?per_page=100
+---
+> == labels: gh api repos/biscuitbin/knarr/labels?per_page=100
