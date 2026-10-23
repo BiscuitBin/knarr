@@ -25,7 +25,7 @@ has() { # description, text, line that must appear in it exactly
 work=$(mktemp -d)
 trap 'rm -rf "${work:?}"' EXIT
 
-image=ghcr.io/steven-cutting/knarr
+image=ghcr.io/biscuitbin/knarr
 digest=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 version=$(sed -n 's/^version: *//p' "$chart/Chart.yaml")
 before=$(cksum < "$chart/values.yaml")$(cksum < "$chart/Chart.yaml")
@@ -43,6 +43,8 @@ if [ "$rc" -eq 0 ] && [ -f "$package" ]; then
   has 'values: image.pullPolicy is IfNotPresent' "$values" '  pullPolicy: IfNotPresent'
   has 'values: image.tag is the version, not local' "$values" "  tag: \"$version\""
   shown=$(helm show chart "$package")
+  has 'chart: home is the org repository' "$shown" 'home: https://github.com/biscuitbin/knarr'
+  has 'chart: source is the org repository' "$shown" '- https://github.com/biscuitbin/knarr'
   has 'chart: version is the release version' "$shown" "version: $version"
   has 'chart: appVersion is the release version' "$shown" "appVersion: $version"
   has 'chart: the artifacthub.io/images annotation names the digest' "$shown" "      image: $image@$digest"

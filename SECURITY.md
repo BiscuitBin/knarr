@@ -11,7 +11,7 @@ Knarr is pre-MVP and has no supported published releases yet. Security fixes tar
 
 ## Report a vulnerability privately
 
-Use [GitHub's private vulnerability reporting form](https://github.com/steven-cutting/knarr/security/advisories/new) for this repository. You can also reach it from the repository's Security tab by selecting **Report a vulnerability**. Private reporting is enabled; do not publish vulnerability details in a public issue or pull request.
+Use [GitHub's private vulnerability reporting form](https://github.com/biscuitbin/knarr/security/advisories/new) for this repository. You can also reach it from the repository's Security tab by selecting **Report a vulnerability**. Private reporting is enabled; do not publish vulnerability details in a public issue or pull request.
 
 Include the affected commit or version, the impact, the conditions needed to trigger the problem, and a minimal reproduction when possible. Describe the relevant environment and dependencies, but remove credentials, tokens and other private data from examples and logs.
 

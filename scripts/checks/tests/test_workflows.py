@@ -283,7 +283,7 @@ IMAGE_GUARD = [
 CHART_GUARD = [
     'probe_tag https://ghcr.io "$chart_repo" "$VERSION" -H x',
     "case $verdict in",
-    'out=$(helm push "$package" oci://ghcr.io/steven-cutting/charts 2>&1)',
+    'out=$(helm push "$package" oci://ghcr.io/biscuitbin/charts 2>&1)',
 ]
 
 
@@ -546,3 +546,10 @@ def test_audit_scans_the_runtime_environment_after_a_red_image_scan_but_not_with
     guard = steps.index("- if: ${{ !cancelled() && steps.build.outcome == 'success' }}")
     assert steps[guard + 1] == "run: just runtime-scan"
     assert build < steps.index("- run: just image-scan") < guard
+
+
+def test_release_publishes_under_the_biscuitbin_org() -> None:
+    text = RELEASE.read_text()
+    assert "  IMAGE: ghcr.io/biscuitbin/knarr" in top_level(text, "env")
+    assert "  CHART: ghcr.io/biscuitbin/charts/knarr" in top_level(text, "env")
+    assert '--label "org.opencontainers.image.source=https://github.com/biscuitbin/knarr"' in text

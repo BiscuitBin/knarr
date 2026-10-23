@@ -1,0 +1,114 @@
+Command: rg -n --hidden -g '!.git/**' -g '!.scratch/**' steven-cutting
+
+Each match is followed by the reason it remains.
+
+CHANGELOG.md:9:- Decision 0016: knarr's home moves to `github.com/biscuitbin/knarr` by GitHub's repository transfer, and releases from 0.3.0 publish to `ghcr.io/biscuitbin/knarr` and `oci://ghcr.io/biscuitbin/charts/knarr`. 0.1.0 and 0.2.0 stay at `ghcr.io/steven-cutting/…`, unchanged. Decisions 0012 and 0015 carry amendment notes; the live release, chart, security and install references now name `biscuitbin/knarr` and `ghcr.io/biscuitbin/…`. `v0.3.0` is the first release under the new registry namespace; the install guide documents upgrading an existing `v0.2.0` release in place.
+Reason: Historical release/package or migration record; old published artifacts stay unchanged.
+
+CHANGELOG.md:16:- The kustomize packaging (Decision 0015's ticket 06): `deploy/` (the base, the release overlay and the `e2e-fast` and `wrong-ca` variants), `just release-pin` and `scripts/release/pin-digest.sh`, `just deployment-check` and `deployment.py --render`, and `just chart-check`'s drift check against the base. Helm is the only supported install. 0.2.0 is the last release whose tag carries the overlay, and the next release is the first without it. An install still made from the overlay moves to Helm with the migration procedure in [the 0.2.0 install guide](https://github.com/steven-cutting/knarr/blob/v0.2.0/docs/how-to/install.md#migrate-from-the-kustomize-release-overlay).
+Reason: Historical release/package or migration record; old published artifacts stay unchanged.
+
+CHANGELOG.md:23:- Releases publish the chart: after the image push, `release.yml` stamps the pushed digest, the published repository, `IfNotPresent` and the version into a packaged copy of the chart with `scripts/release/stamp-chart.sh`, which refuses a `Chart.yaml` that disagrees with the tag, and pushes it to `oci://ghcr.io/steven-cutting/charts/knarr` behind its own existence guard, which also runs before the image push, so a chart version that exists or cannot be probed stops the run with nothing published. The run summary shows the chart by digest beside the image and the `helm install` command. A run that pushed the image and not the chart is recovered by a version bump (Decision 0015).
+Reason: Historical release/package or migration record; old published artifacts stay unchanged.
+
+CHANGELOG.md:39:- Decision 0015: knarr ships a Helm chart, published to `oci://ghcr.io/steven-cutting/charts/knarr` with the release's image digest stamped in, for ease of adoption, and Helm becomes the only supported install once 0015's ticket 06 retires the kustomize route. It amends Decision 0012's kustomize-only packaging; the kustomize release overlay stays documented until then.
+Reason: Historical release/package or migration record; old published artifacts stay unchanged.
+
+CHANGELOG.md:56:- A release workflow: a pushed version tag publishes the image to `ghcr.io/steven-cutting/knarr` once the maintainer approves the `release` environment, and `deploy/release` installs it pinned by digest.
+Reason: Historical release/package or migration record; old published artifacts stay unchanged.
+
+docs/decisions/0004-gate-checkers.md:11:Adapted on 2026-10-07 from libpawdoku's [Decision 0004: Hook runner and checkers](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0004-hook-runner-and-checkers.md) at commit `51d8b55`. There the checkers came from the `biscuit-games-tooling` package, pinned as a git dependency. Here that pin is reversed: knarr copies what it keeps, and depends on no package.
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0004-gate-checkers.md:15:libpawdoku's gate ran six console scripts from [biscuit_games_tooling](https://github.com/steven-cutting/biscuit_games_tooling):
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0004-gate-checkers.md:57:The source is [github.com/steven-cutting/biscuit_games_tooling](https://github.com/steven-cutting/biscuit_games_tooling) at tag `v0.3.0`, commit `6c5c07f6bec86e86b3930dfa41392e4b440e8c85` (2026-09-22). Upstream `main` (`6245d5d`) changes only `README.md` and `CHANGELOG.md` after the tag, so `v0.3.0` is the newest source ([provenance.txt](../../.scratch/bootstrap/evidence/02/provenance.txt)).
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0004-gate-checkers.md:270:- libpawdoku [Decision 0004: Hook runner and checkers](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0004-hook-runner-and-checkers.md)
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0004-gate-checkers.md:271:- [biscuit_games_tooling at v0.3.0](https://github.com/steven-cutting/biscuit_games_tooling/tree/6c5c07f6bec86e86b3930dfa41392e4b440e8c85)
+Reason: Upstream provenance; this repository did not move.
+
+docs/how-to/install.md:13:From `v0.3.0`, images and charts publish under `ghcr.io/biscuitbin/…` ([Decision 0016](../decisions/0016-biscuitbin-org.md)). The `v0.1.0` and `v0.2.0` images remain at `ghcr.io/steven-cutting/knarr`; the `v0.2.0` chart remains at `oci://ghcr.io/steven-cutting/charts/knarr`. Those published packages stay unchanged. Use the old chart path when installing `v0.2.0`; `v0.1.0` has no chart. The commands below use the new path for `v0.3.0` onward.
+Reason: Required old-package paths for v0.1.0 and v0.2.0 installs.
+
+docs/decisions/0016-biscuitbin-org.md:13:knarr lives at `github.com/steven-cutting/knarr`, under the maintainer's personal account. [Decision 0012](0012-release-and-packaging.md) publishes its image to `ghcr.io/steven-cutting/knarr`, and [Decision 0015](0015-helm-chart.md) publishes its chart to `oci://ghcr.io/steven-cutting/charts/knarr`. `v0.1.0` and `v0.2.0` are published there. The maintainer wants `github.com/biscuitbin/knarr` to be knarr's home, with future releases published under `ghcr.io/biscuitbin/…`.
+Reason: Transfer decision context, old-name reservation, or retained-package policy.
+
+docs/decisions/0016-biscuitbin-org.md:22:- **The old name is never reused.** Nobody ever creates a new repository named `steven-cutting/knarr`. GitHub's redirects from the old URLs hold only while that name is free, and a clone, a link or a GHCR package link that still names it depends on them.
+Reason: Transfer decision context, old-name reservation, or retained-package policy.
+
+docs/decisions/0016-biscuitbin-org.md:27:- **`v0.1.0` and `v0.2.0` stay where they are.** Their image and chart at `ghcr.io/steven-cutting/…` are left unchanged and are never deleted, because 0012 publishes a release once and an install pinned to their digests must keep pulling. Nothing pushes to the old namespace again.
+Reason: Transfer decision context, old-name reservation, or retained-package policy.
+
+docs/decisions/0016-biscuitbin-org.md:32:After ticket 03's transfer, `release.yml` still names `ghcr.io/steven-cutting/…`, which the org's `GITHUB_TOKEN` cannot write. A tag pushed in that window would fail at the image push. Nobody pushes a release tag until [ticket 04](../../.scratch/org-transfer/issues/04-rename-live-references.md) merges.
+Reason: Transfer decision context, old-name reservation, or retained-package policy.
+
+docs/decisions/0016-biscuitbin-org.md:37:- **What stays, on purpose:** everything under `.scratch/**/evidence/` and the hand-back notes of done tickets, because a recorded fact is not rewritten; the historical `CHANGELOG.md` entries; the provenance links to `steven-cutting/libpawdoku` and `steven-cutting/biscuit_games_tooling`, in the decision records and in the headers of copied scripts, which name where the code came from and are not knarr's; and the bodies of 0012 and 0015. Those two records carry an "Amended by Decision 0016" note on the bullets that name the old paths rather than being rewritten.
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0016-biscuitbin-org.md:62:- **Someone creates `steven-cutting/knarr`,** breaking the redirects: every remaining reference to the old URLs must then be found and changed.
+Reason: Transfer decision context, old-name reservation, or retained-package policy.
+
+docs/decisions/0003-tool-manager.md:11:Adapted on 2026-10-07 from libpawdoku's [Decision 0011: Tool manager](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0011-tool-manager.md) at commit `51d8b55`. There pixi owned the tools and rustup kept the compiler. Here pixi owns the compiler too.
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0003-tool-manager.md:279:- libpawdoku [Decision 0011: Tool manager](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0011-tool-manager.md)
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0012-release-and-packaging.md:29:- **Registry and name.** `ghcr.io/steven-cutting/knarr`, pushed from the workflow with `GITHUB_TOKEN`, which links the package to the repository. The package does not inherit the repository's public visibility (`sources.txt`), so ticket 37 makes it public once by hand (**authorization required**); a public package pulls anonymously, which is what a GKE node does. Amended by ticket 37: no hand change was needed. The maintainer never changed the package's visibility, yet ghcr.io granted an anonymous pull token at 04:33Z ([public-private.txt](../../.scratch/bootstrap/evidence/37/public-private.txt)), and the package's settings then showed it public and linked to the repository: it was public from the workflow's first push. With that token every tag and the digest answer 200 with the run's digest ([public.txt](../../.scratch/bootstrap/evidence/37/public.txt)). Why GHCR created it public is not established; `sources.txt` records what the documentation said on 2026-10-09. Amended by [Decision 0016](0016-biscuitbin-org.md): from `v0.3.0` the image is `ghcr.io/biscuitbin/knarr`, published from `github.com/biscuitbin/knarr` after the repository's transfer; `v0.1.0` and `v0.2.0` stay at `ghcr.io/steven-cutting/knarr`, unchanged.
+Reason: Historical decision body retained with its Decision 0016 amendment.
+
+docs/decisions/0012-release-and-packaging.md:31:- **Digest.** The workflow reads the pushed digest from buildx's `--metadata-file` and prints `ghcr.io/steven-cutting/knarr@sha256:…` in its step summary. Every install pins that digest. The image carries `org.opencontainers.image.source`, `.version`, `.revision` and `.created` labels, so an image found in a cluster says which release it is. Amended by [Decision 0016](0016-biscuitbin-org.md): from `v0.3.0` the image is `ghcr.io/biscuitbin/knarr`, published from `github.com/biscuitbin/knarr` after the repository's transfer; `v0.1.0` and `v0.2.0` stay at `ghcr.io/steven-cutting/knarr`, unchanged.
+Reason: Historical decision body retained with its Decision 0016 amendment.
+
+docs/decisions/0012-release-and-packaging.md:42:Amended by [Decision 0015](0015-helm-chart.md): knarr ships a Helm chart, published to `oci://ghcr.io/steven-cutting/charts/knarr`, for ease of adoption, and Helm becomes the only supported install once 0015's ticket 06 retires `deploy/` and `just release-pin`. The kustomize route below stays the documented install until 0015's ticket 05 installs the published chart, and stays documented, as deprecated, until ticket 06. Amended by 0015's [ticket 06](../../.scratch/helm-chart/issues/06-retire-kustomize-packaging.md) on 2026-10-21: the kustomize route is retired. `deploy/` (the base, the release overlay and the `e2e-fast` and `wrong-ca` variants), `just release-pin`, `pin-digest.sh` and the overlay checks are gone, and Helm is the only supported install. `v0.2.0` is the last release whose tag carries the overlay; an install still made from it moves to Helm with that tag's install guide. The bullets below keep the original record.
+Reason: Historical decision body retained with its Decision 0016 amendment.
+
+docs/decisions/0012-release-and-packaging.md:45:- **A release overlay, `deploy/release/`,** built by ticket 36 from the design under [`evidence/28/overlay/`](../../.scratch/bootstrap/evidence/28/overlay/kustomization.yaml). It changes two things and nothing else: the `images` field renames the image to `ghcr.io/steven-cutting/knarr` pinned by digest, and one JSON patch sets `imagePullPolicy: IfNotPresent`. [overlay-render.txt](../../.scratch/bootstrap/evidence/28/overlay-render.txt) renders it with the dry run's digest, validates all three resources against the vendored schemas, and diffs it against the base render: two lines differ.
+Reason: Historical decision body retained with its Decision 0016 amendment.
+
+docs/decisions/0012-release-and-packaging.md:70:| [overlay-render.txt](../../.scratch/bootstrap/evidence/28/overlay-render.txt) | The committed overlay renders with its placeholder; with the dry run's digest it renders `ghcr.io/steven-cutting/knarr@sha256:…` and `IfNotPresent`; kubeconform validates 3 of 3 resources each time; the Role's rules stay `[]` and no token is mounted; the diff against the base is two lines | Confirmed |
+Reason: Historical decision body retained with its Decision 0016 amendment.
+
+docs/decisions/0012-release-and-packaging.md:120:- **Ticket 37 runs the first release, `v0.1.0`,** every step authorized by the maintainer: ruleset, tag push, approval, visibility, and a pull by digest from a machine that never built the image. It is the rehearsal of the pull path on the walking skeleton, a pre-MVP image, and records its digest as evidence. Amended by ticket 37: published as `ghcr.io/steven-cutting/knarr@sha256:97262e02b6326b73ac414fa1bb01b6f557b1c352b7d647a30d7835e4a59e22c7`, which `deploy/release` now pins. No visibility change was needed (above).
+Reason: Historical decision body retained with its Decision 0016 amendment.
+
+scripts/checks/_project.py:3:Copied from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0001-specs-decide-behaviour.md:11:Adapted on 2026-10-07 from libpawdoku’s [0002-specs-are-the-source-of-truth.md](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0002-specs-are-the-source-of-truth.md) at commit `51d8b55ac4f769a6a4d66abacb9642a7d4062127`. The source record remains in its original repository.
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0002-sans-io-boundaries.md:11:Adapted on 2026-10-07 from libpawdoku’s [0003-effects-behind-traits.md](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0003-effects-behind-traits.md) at commit `51d8b55ac4f769a6a4d66abacb9642a7d4062127`. The source record remains in its original repository.
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0005-project-managed-allium-cli.md:11:Adapted on 2026-10-07 from libpawdoku’s [0005-project-managed-allium-cli.md](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0005-project-managed-allium-cli.md) at commit `51d8b55ac4f769a6a4d66abacb9642a7d4062127`. The source record remains in its original repository.
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0006-apache-2-0.md:11:Adapted on 2026-10-07 from libpawdoku’s [0006-apache-2-0.md](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0006-apache-2-0.md) at commit `51d8b55ac4f769a6a4d66abacb9642a7d4062127`. The source record remains in its original repository.
+Reason: Upstream provenance; this repository did not move.
+
+docs/decisions/0015-helm-chart.md:31:- **The reference is `oci://ghcr.io/steven-cutting/charts/knarr`.** `helm push` of the packaged chart to `oci://ghcr.io/steven-cutting/charts` publishes `ghcr.io/steven-cutting/charts/knarr:<version>`; Helm requires the `oci://` prefix and takes the chart name from the package. A chart also installs by digest (`…/knarr@sha256:…`), which Helm's documentation calls "more secure than a tag because digests are immutable". cert-manager names its OCI charts "the source of truth"; Kyverno and prometheus-community push to `ghcr.io/<owner>/charts` the same way. Amended by [Decision 0016](0016-biscuitbin-org.md): from `v0.3.0` the chart is `oci://ghcr.io/biscuitbin/charts/knarr` and the stamped image repository `ghcr.io/biscuitbin/knarr`; `v0.2.0`'s chart and image stay at the `steven-cutting` paths, unchanged.
+Reason: Historical decision body retained with its Decision 0016 amendment.
+
+docs/decisions/0015-helm-chart.md:36:- **The release stamps the image.** The chart's tracked `values.yaml` keeps the local values that match `deploy/base` (`image.repository: knarr`, `tag: local`, `pullPolicy: Never`), so the drift check (ticket 02) and the local loop (ticket 03) render the base. The release workflow packages the chart after the image push and stamps three values together in the packaged chart: `image.repository: ghcr.io/steven-cutting/knarr`, `image.pullPolicy: IfNotPresent` and `image.digest` set to the digest that push printed. These are the overlay's image name, digest pin and pull-policy patch (0012), which go with the overlay. Ticket 04 also stamps `image.tag` to the version, so a user who clears `image.digest` installs the released tag rather than the local build's `local`. The stamped chart renders `image: ghcr.io/steven-cutting/knarr@sha256:<digest>` with `imagePullPolicy: IfNotPresent`, so `helm install … --version X.Y.Z` installs exactly the released image, by digest, with no tracked-file edit after the run. Ticket 04's stamping test asserts that rendered `image:` line and `imagePullPolicy`, not only `image.digest`. `just release-pin` and the overlay's digest pin, which exist only because the overlay at a release's own tag cannot hold that release's digest (0012, amended by ticket 37), go with the overlay (ticket 06). When bootstrap ticket 38 switches the release to an index digest, the digest it stamps switches in the same step. Amended by [Decision 0016](0016-biscuitbin-org.md): from `v0.3.0` the chart is `oci://ghcr.io/biscuitbin/charts/knarr` and the stamped image repository `ghcr.io/biscuitbin/knarr`; `v0.2.0`'s chart and image stay at the `steven-cutting` paths, unchanged.
+Reason: Historical decision body retained with its Decision 0016 amendment.
+
+scripts/checks/validate_agents.py:8:Copied from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
+Reason: Upstream provenance; this repository did not move.
+
+scripts/checks/run_project_check.py:6:Copied from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
+Reason: Upstream provenance; this repository did not move.
+
+scripts/checks/run_allium.py:3:Copied from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
+Reason: Upstream provenance; this repository did not move.
+
+scripts/checks/validate_docs.py:7:Copied from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
+Reason: Upstream provenance; this repository did not move.
+
+scripts/checks/ripsecrets-redacted.sh:6:# Rewritten from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
+Reason: Upstream provenance; this repository did not move.

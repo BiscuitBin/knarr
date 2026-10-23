@@ -6,4 +6,4 @@ It acts only on Deployments in namespace {{ .Release.Namespace }} that opt in wi
 
 Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
 
-  https://github.com/steven-cutting/knarr/blob/v{{ .Chart.AppVersion }}/docs/how-to/install.md
+  https://github.com/biscuitbin/knarr/blob/v{{ .Chart.AppVersion }}/docs/how-to/install.md

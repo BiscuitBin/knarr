@@ -13,7 +13,7 @@
 # tag. This workflow verifies the tag, waits for the maintainer's approval
 # through the release environment, and pushes the image tags X.Y.Z, X.Y and
 # sha-<7> (and X for a major above 0; never latest), then
-# the chart ghcr.io/steven-cutting/charts/knarr:X.Y.Z with that push's digest
+# the chart ghcr.io/biscuitbin/charts/knarr:X.Y.Z with that push's digest
 # stamped into it (Decision 0015; scripts/release/stamp-chart.sh, tested by
 # stamp-chart_test.sh beside it). It refuses to push over an image tag or a
 # chart version that exists, so a release is published once. Helm chart ticket
@@ -42,8 +42,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: ghcr.io/steven-cutting/knarr
-  CHART: ghcr.io/steven-cutting/charts/knarr
+  IMAGE: ghcr.io/biscuitbin/knarr
+  CHART: ghcr.io/biscuitbin/charts/knarr
 
 jobs:
   verify:
@@ -145,16 +145,16 @@ jobs:
       # A re-run of a run that failed after the image push meets `present` here
       # and stops, before the chart is stamped or pushed: a release is published
       # once (Decisions 0012 and 0015). Which push the failed run reached
-      # decides the recovery; helm show chart oci://ghcr.io/steven-cutting/charts/knarr --version X.Y.Z
+      # decides the recovery; helm show chart oci://ghcr.io/biscuitbin/charts/knarr --version X.Y.Z
       # tells whether the chart exists.
       # - The image and the chart were both pushed, and only the summary is
       #   missing. Recover the digest by hand:
       #   1. Read the digest from the Digest: line of
-      #      docker buildx imagetools inspect ghcr.io/steven-cutting/knarr:X.Y.Z
+      #      docker buildx imagetools inspect ghcr.io/biscuitbin/knarr:X.Y.Z
       #      (digest_of_inspect in lib.sh parses it).
-      #   2. Pull ghcr.io/steven-cutting/knarr@<digest>.
+      #   2. Pull ghcr.io/biscuitbin/knarr@<digest>.
       #   3. Check that the tagged commit is what
-      #      docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' ghcr.io/steven-cutting/knarr@<digest>
+      #      docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' ghcr.io/biscuitbin/knarr@<digest>
       #      prints, and that helm show values of the chart names that digest.
       #      The chart already carries the digest, so nothing else is pinned.
       # - The image was pushed and the chart was not. Bump the version and
@@ -219,7 +219,7 @@ jobs:
           # docker has (registry.txt). Ticket 38 turns attestations on and
           # pins the index digest instead.
           docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
-            --label "org.opencontainers.image.source=https://github.com/steven-cutting/knarr" \
+            --label "org.opencontainers.image.source=https://github.com/biscuitbin/knarr" \
             --label "org.opencontainers.image.version=$VERSION" \
             --label "org.opencontainers.image.revision=$COMMIT" \
             --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -237,10 +237,10 @@ jobs:
       # Ticket 38 adds, with id-token: write and attestations: write on this job:
       #   - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
       #     with:
-      #       subject-name: ghcr.io/steven-cutting/knarr
+      #       subject-name: ghcr.io/biscuitbin/knarr
       #       subject-digest: ${{ env.DIGEST }}
       #       push-to-registry: true
-      # and verifies with: gh attestation verify oci://ghcr.io/steven-cutting/knarr@<digest> --repo steven-cutting/knarr
+      # and verifies with: gh attestation verify oci://ghcr.io/biscuitbin/knarr@<digest> --repo biscuitbin/knarr
       # When 38 pins the index digest, DIGEST is that digest, so the chart below
       # stamps it in the same step (helm chart ticket 04).
       # Decision 0015: the chart's version and appVersion are the release's,
