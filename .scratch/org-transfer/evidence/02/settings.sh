@@ -25,8 +25,6 @@ get repository "repos/$repo" '{full_name, owner: .owner.login, owner_type: .owne
   topics: (.topics | sort), security_and_analysis}'
 # Every later answer means something only if the repository itself answered.
 [ "$status" = 200 ] || fail "repos/$repo answered $status, not 200"
-# Every other answer means something only if the repository itself answered.
-[ "$status" = 200 ] || fail "repos/$repo answered $status, not 200"
 
 get rulesets "repos/$repo/rulesets?per_page=100" \
   '[.[] | {name, target, enforcement, source_type}] | sort_by(.name)'
@@ -91,9 +89,10 @@ get 'app installations the user can reach' 'user/installations?per_page=100' \
 if [ "$status" = 200 ]; then
   pairs=$(jq -r '.installations[] | select(.repository_selection == "selected") | "\(.id):\(.app_slug)"' "$tmp/body") ||
     fail 'reading installations failed'
+  # Owner logins are case-insensitive, and GitHub answers with the canonical case (BiscuitBin).
   for pair in $pairs; do
     get "app ${pair#*:}: does it reach $repo" "user/installations/${pair%%:*}/repositories?per_page=100" \
-      "if any(.repositories[].full_name; . == \"$repo\") then \"yes\" else \"no\" end"
+      "if any(.repositories[].full_name; ascii_downcase == (\"$repo\" | ascii_downcase)) then \"yes\" else \"no\" end"
   done
 fi
 

@@ -26,7 +26,7 @@ On 2026-10-22 (UTC), each separately: `just initialize`, run by the maintainer; 
 
 The scripts were first run against a stub `gh` in `ai_tmp/`, with canned 200, 204, 403 and 404 answers, a missing response, a 401, a 500, a rate limit and a second page, and variable values that must not reach the output. That stub is scratch and is not part of the change.
 
-After both runs, the review of this branch made three changes to the scripts. `settings.sh` and `org.sh` now stop unless the repository or org read answers 200. The environment projection reads missing protection rules as none. `gh --version` and the workflow `grep` are now checked on their own, not through a pipeline. On the answers recorded here, none of these changes alters a line of output, so the transcripts were not retaken. The stub tests were rerun after the changes.
+After both runs, the review of this branch made three changes to the scripts. `settings.sh` and `org.sh` now stop unless the repository or org read answers 200. The environment projection reads missing protection rules as none. `gh --version` and the workflow `grep` are now checked on their own, not through a pipeline. On the answers recorded here, none of these changes alters a line of output, so the transcripts were not retaken. The stub tests were rerun after the changes. PR review then made `settings.sh` match app access to the repository case-insensitively, since GitHub answers with the org's canonical login (`BiscuitBin`). That change is output-neutral here too, because the user installation listing answered 403 and the match never ran.
 
 ## Rerun
 

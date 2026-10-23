@@ -40,7 +40,7 @@ Done on 2026-10-22 (UTC) with the maintainer. [The evidence README](../evidence/
 
 **What was verified:**
 
-- Before any network call, both scripts ran against a stub `gh` with canned answers. The stub checked that 403, 404 and 204 answers are recorded and the run continues, and that no response, a 401, a 500, a rate limit or a second page stops it. It also checked that a variable's value never reaches the output. `shellcheck` 0.11.0 is clean, with and without `-x`.
+- Before any network call, both scripts ran against a stub `gh` with canned answers. The stub checked that 403, 404 and 204 answers are recorded and the run continues, and that no response, a 401, a 500, a rate limit or a second page stops it. It also checked that a variable's value never reaches the output. After PR review, it also checked that an app reaching the repository under a differently cased owner login is recorded as `yes`. `shellcheck` 0.11.0 is clean, with and without `-x`.
 - [settings.txt](../evidence/02/settings.txt) has every section this ticket lists. `main` requires `check` through classic branch protection. The `release tags` ruleset protects `refs/tags/v*`. `release` requires the reviewer `User:steven-cutting` and has no deployment branch or tag policy. There are no secrets or variables. Both labels are present.
 - In [org.txt](../evidence/02/org.txt), the maintainer's role in `biscuitbin` is `admin` (owner). The base permission is `read`, 2FA is not required, and no app is installed. The UI shows that all actions are allowed (so `actions/checkout` and `prefix-dev/setup-pixi`, each pinned by SHA, can run), that the default workflow permissions are read, and that members can create public packages.
 
