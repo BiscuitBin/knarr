@@ -6,6 +6,6 @@ description: Biases Deployment scale-down away from busy worker pods by setting 
 type: application
 version: 0.2.0
 appVersion: "0.2.0"
-home: https://github.com/steven-cutting/knarr
+home: https://github.com/biscuitbin/knarr
 sources:
-  - https://github.com/steven-cutting/knarr
+  - https://github.com/biscuitbin/knarr

@@ -174,7 +174,7 @@ PATH=$stub:$PATH
 # shellcheck disable=SC2154  # probe_tag sets all four; the gate runs shellcheck without -x
 probe() { # http code, curl exit status: the verdict, its status, the code and curl's status
   CURL_STUB="$1 $2"; export CURL_STUB
-  probe_tag https://ghcr.io steven-cutting/knarr 0.1.0 -H 'Authorization: Bearer stub'
+  probe_tag https://ghcr.io biscuitbin/knarr 0.1.0 -H 'Authorization: Bearer stub'
   printf '%s; %s; %s; %s\n' "$verdict" "$verdict_rc" "$code" "$curl_rc"
 }
 eq 'probe_tag: 404 is absent, 0 (the only verdict that pushes)' "$(probe 404 0)" 'absent; 0; 404; 0'
@@ -184,7 +184,7 @@ eq 'probe_tag: a failed connection (curl 7, code 000) is unknown, 2' "$(probe 00
 # Every probe above makes the same request; the log holds the last one's.
 # shellcheck disable=SC2154  # manifest_accept is lib.sh's
 eq 'probe_tag: one HEAD with the manifest Accept header and the extra curl args' "$(cat "$CURL_LOG")" \
-  "$(lines -sS -I --max-time 20 -w '\n%{http_code}' -H "$manifest_accept" -H 'Authorization: Bearer stub' https://ghcr.io/v2/steven-cutting/knarr/manifests/0.1.0)"
+  "$(lines -sS -I --max-time 20 -w '\n%{http_code}' -H "$manifest_accept" -H 'Authorization: Bearer stub' https://ghcr.io/v2/biscuitbin/knarr/manifests/0.1.0)"
 PATH=${PATH#"$stub":}; unset CURL_STUB CURL_LOG
 
 # ancestor_verdict <ref> <base>, first through a stub git on PATH. GIT_STUB

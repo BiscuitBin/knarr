@@ -2,7 +2,7 @@
 
 **Context:** Bootstrap ticket [38](../../bootstrap/issues/38-attestations-sbom-arm64.md) adds `actions/attest-build-provenance` to the publish job for the image, with `push-to-registry`, and documents `gh attestation verify`. [Decision 0015](01-helm-chart-decision.md) defers signing and attestation of the chart until that lands, so that the image and the chart are attested the same way, by one mechanism.
 
-**What to build:** On the publish job from [04](04-release-publishes-chart.md), an `attest-build-provenance` step on the chart's digest that matches 38's image step. The install guide gains `gh attestation verify oci://ghcr.io/steven-cutting/charts/knarr@<digest> --repo steven-cutting/knarr`.
+**What to build:** On the publish job from [04](04-release-publishes-chart.md), an `attest-build-provenance` step on the chart's digest that matches 38's image step. The install guide gains `gh attestation verify oci://ghcr.io/biscuitbin/charts/knarr@<digest> --repo biscuitbin/knarr`.
 
 **Non-goals:** cosign keyless signing or a Helm `.prov` file, unless a consumer asks. Any permission beyond those 38 adds.
 

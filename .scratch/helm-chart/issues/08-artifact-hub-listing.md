@@ -2,7 +2,7 @@
 
 **Context:** Artifact Hub indexes OCI Helm repositories. It reads an `artifacthub.io` metadata layer pushed beside the chart, and the chart's `artifacthub.io/*` annotations ([Artifact Hub Helm repositories](https://artifacthub.io/docs/topics/repositories/helm-charts/)). A listing helps adoption, which is why [Decision 0015](01-helm-chart-decision.md) exists, but it is not needed to install.
 
-**What to build:** The `artifacthub.io` metadata layer pushed with oras to `ghcr.io/steven-cutting/charts/knarr:artifacthub.io`, the repository registered on Artifact Hub, and the static chart annotations it reads: license, links and changes. `artifacthub.io/images` is not static. 04's packaging step stamps it from the pushed digest, so this ticket merges the annotations, then cuts a release that carries them before the repository is registered. That release is part of this ticket's work, not a blocker.
+**What to build:** The `artifacthub.io` metadata layer pushed with oras to `ghcr.io/biscuitbin/charts/knarr:artifacthub.io`, the repository registered on Artifact Hub, and the static chart annotations it reads: license, links and changes. `artifacthub.io/images` is not static. 04's packaging step stamps it from the pushed digest, so this ticket merges the annotations, then cuts a release that carries them before the repository is registered. That release is part of this ticket's work, not a blocker.
 
 **Non-goals:** Verified-publisher or official status. Any change to the chart's templates or values.
 

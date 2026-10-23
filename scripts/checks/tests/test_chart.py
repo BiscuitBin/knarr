@@ -326,11 +326,11 @@ def test_an_optional_value_set_to_null_renders(key):
         (
             [
                 "--set",
-                "image.repository=ghcr.io/steven-cutting/knarr",
+                "image.repository=ghcr.io/biscuitbin/knarr",
                 "--set",
                 f"image.digest={DIGEST}",
             ],
-            f"ghcr.io/steven-cutting/knarr@{DIGEST}",
+            f"ghcr.io/biscuitbin/knarr@{DIGEST}",
         ),
     ],
     ids=["local", "appVersion", "a tag", "a digest", "the published image"],
@@ -421,9 +421,7 @@ def test_notes_name_the_namespace_the_opt_in_label_and_the_install_guide():
     notes = result.stdout.split("\nNOTES:\n", 1)[1]
     assert "namespace other" in notes
     assert "knarr.io/enabled=true" in notes
-    assert (
-        f"https://github.com/steven-cutting/knarr/blob/v{VERSION}/docs/how-to/install.md" in notes
-    )
+    assert f"https://github.com/biscuitbin/knarr/blob/v{VERSION}/docs/how-to/install.md" in notes
 
 
 # The version lockstep.

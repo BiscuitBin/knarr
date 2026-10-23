@@ -22,7 +22,7 @@ here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 # shellcheck source=lib.sh disable=SC1091  # the gate runs without -x
 . "$here/lib.sh"
 fail() { printf 'FAIL: %s\n' "$*"; exit 1; }
-image=ghcr.io/steven-cutting/knarr
+image=ghcr.io/biscuitbin/knarr
 placeholder=sha256:0000000000000000000000000000000000000000000000000000000000000000
 today=$(date -u +%Y-%m-%d)
 
