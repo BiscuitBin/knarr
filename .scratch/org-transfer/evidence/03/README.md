@@ -1,6 +1,6 @@
 # Org-transfer ticket 03 evidence
 
-Evidence for [ticket 03](../../issues/03-transfer-repository.md): the settings of `biscuitbin/knarr` after [Decision 0016](../../../../docs/decisions/0016-biscuitbin-org.md)'s transfer, diffed against [02's record](../02/settings.txt), the old URLs' redirects, and the workflows' first runs under the org. Gathered on 2026-10-23 (UTC) with gh 2.100.0, jq 1.7.1, curl 8.7.1 and git 2.50.1, logged in as `steven-cutting`, the same token as 02. Every step that left the worktree was authorized by the maintainer, one action at a time.
+Evidence for [ticket 03](../../issues/03-transfer-repository.md): the settings of `biscuitbin/knarr` after [Decision 0016](../../../../docs/decisions/0016-biscuitbin-org.md)'s transfer, diffed against [02's record](../02/settings.txt), the old URLs' redirects, and the workflows' first runs under the org. Gathered on 2026-10-23 (UTC) with gh 2.100.0, jq 1.7.1, curl 8.7.1 and git 2.50.1, logged in as `steven-cutting`, the same token as 02. Every step that left the worktree was authorized by the maintainer, one action at a time, except the read-only calls [the network section](#network-the-maintainer-authorized-for-this-ticket) names.
 
 The maintainer transferred the repository on 2026-10-22, local time, and did not note the time. The record can only bound it: the transfer happened before 2026-10-23T03:22Z, when the first settings rerun found `biscuitbin/knarr`.
 

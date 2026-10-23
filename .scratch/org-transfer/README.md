@@ -24,7 +24,7 @@ flowchart TD
 
 Each ticket is worked on its own branch, in its own git worktree, as the root [README](../../README.md#branches-and-worktrees) states. The branch name is the ticket's file name without `.md`, so [04](issues/04-rename-live-references.md) is worked on `04-rename-live-references`. Numbers are per directory: this round's 04 is not helm chart ticket 04 or bootstrap ticket 04. When a ticket here names another round's ticket, it names the round.
 
-02 and 03 change no tracked file except their own ticket and evidence. They are sessions with the maintainer, and their branches carry only the record.
+02 and 03 change no tracked file except their own ticket and evidence, and, for 03, the bootstrap ticket it drafted for the audit's findings (52) with its row in the bootstrap README. They are sessions with the maintainer, and their branches carry only the record and that follow-up.
 
 ## No release between 03 and 04
 
