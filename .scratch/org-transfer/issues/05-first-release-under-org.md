@@ -20,3 +20,10 @@
 - [ ] `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes
+
+### Prepared, before any authorized step (2026-10-24 UTC)
+
+- The release commit: `gleam.toml` and `charts/knarr/Chart.yaml` (`version`, `appVersion`) move from 0.2.0 to 0.3.0, and `CHANGELOG.md` moves `[Unreleased]` under `## [0.3.0] - 2026-10-24`, with an empty `[Unreleased]` above. The intro names 0.3.0 as the first release from `github.com/biscuitbin/knarr`, and the kustomize removal entry says 0.3.0, not "the next release", is the first without the overlay. No test pins the version: 40 made `metrics_test` and `reconciler_test` read it from `gleam.toml`. If the tag is not pushed on 2026-10-24 UTC, a pull request re-dates the heading first, as 40's #53 did; `just release-preflight` refuses a stale one.
+- [`evidence/05/`](../evidence/05/README.md) holds the scripts for each remaining box, adapted from 40's and helm chart 05's, with no transcript yet. `public.sh` stops with a named not-public outcome on a refused anonymous token, and checks that 0.2.0 still answers under `steven-cutting`. `settings.sh packages` reads each package's visibility and linked repository from the API. The packages check and the refused-token branch were run offline against a stubbed `gh` and `curl`; nothing reached the network.
+- TDD had no seam here: the change is a version bump and evidence scripts under `.scratch/`, which no test runs. `just check` ended with "All checks passed and the worktree is unchanged." on the staged tree.
+- Next, each step only when the maintainer authorizes it: the release pull request and its merge; `git fetch`; `settings.sh before 25048585`; `just release-preflight v0.3.0 <merge commit>`; the tag push; the `release` approval; `run.sh`, `public.sh`, `settings.sh packages`, `pull.sh`, `anonymous-pull.sh`; then `just fake-worker-image-build` and `upgrade.sh` on kind.

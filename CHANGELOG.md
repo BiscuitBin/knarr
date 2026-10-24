@@ -1,8 +1,10 @@
 # Changelog
 
-Notable changes to Knarr are recorded here, by release. This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). 0.1.0 is the walking skeleton, published to rehearse the release route. 0.2.0 is the first release of the controller, the MVP, and the first to publish the Helm chart. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides versioning and the release workflow: a release pull request moves the `[Unreleased]` section under `## [X.Y.Z] - YYYY-MM-DD`, and the release workflow refuses a tag whose version has no such heading.
+Notable changes to Knarr are recorded here, by release. This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). 0.1.0 is the walking skeleton, published to rehearse the release route. 0.2.0 is the first release of the controller, the MVP, and the first to publish the Helm chart. 0.3.0 is the first release from `github.com/biscuitbin/knarr`, published under `ghcr.io/biscuitbin/…`. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides versioning and the release workflow: a release pull request moves the `[Unreleased]` section under `## [X.Y.Z] - YYYY-MM-DD`, and the release workflow refuses a tag whose version has no such heading.
 
 ## [Unreleased]
+
+## [0.3.0] - 2026-10-24
 
 ### Changed
 
@@ -13,7 +15,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ### Removed
 
-- The kustomize packaging (Decision 0015's ticket 06): `deploy/` (the base, the release overlay and the `e2e-fast` and `wrong-ca` variants), `just release-pin` and `scripts/release/pin-digest.sh`, `just deployment-check` and `deployment.py --render`, and `just chart-check`'s drift check against the base. Helm is the only supported install. 0.2.0 is the last release whose tag carries the overlay, and the next release is the first without it. An install still made from the overlay moves to Helm with the migration procedure in [the 0.2.0 install guide](https://github.com/steven-cutting/knarr/blob/v0.2.0/docs/how-to/install.md#migrate-from-the-kustomize-release-overlay).
+- The kustomize packaging (Decision 0015's ticket 06): `deploy/` (the base, the release overlay and the `e2e-fast` and `wrong-ca` variants), `just release-pin` and `scripts/release/pin-digest.sh`, `just deployment-check` and `deployment.py --render`, and `just chart-check`'s drift check against the base. Helm is the only supported install. 0.2.0 is the last release whose tag carries the overlay, and 0.3.0 is the first without it. An install still made from the overlay moves to Helm with the migration procedure in [the 0.2.0 install guide](https://github.com/biscuitbin/knarr/blob/v0.2.0/docs/how-to/install.md#migrate-from-the-kustomize-release-overlay).
 
 ## [0.2.0] - 2026-10-21
 
