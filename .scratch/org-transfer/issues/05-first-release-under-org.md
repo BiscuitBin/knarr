@@ -36,7 +36,7 @@ Every step that left the worktree was authorized by the maintainer: the merge of
 
 - Tag `v0.3.0`, annotated with message `v0.3.0` (object `03172b2`), on the merge commit `7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb`, after `settings.sh before 25048585` and `just release-preflight` passed.
 - Run [40068527393](https://github.com/BiscuitBin/knarr/actions/runs/40068527393) published the image `ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84` (tags `0.3.0`, `0.3`, `sha-7c88ec9`) and the chart `ghcr.io/biscuitbin/charts/knarr:0.3.0` at `sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7`.
-- Both packages were private from their first push. The maintainer changed an org-level setting, then made each public by hand. Both are linked to `BiscuitBin/knarr`.
+- Both packages were private from their first push. Under Settings → Member privileges → Package creation, the maintainer allowed org members to create public and internal packages, then made each package public by hand. Ticket 02's UI reading ([org.txt](../evidence/02/org.txt), line 53) recorded that setting as "public allowed", but public visibility was not available here until the maintainer changed it. This evidence cannot tell whether 02's reading was wrong or the setting changed after it. Both are linked to `BiscuitBin/knarr`.
 - `anonymous-pull.sh` reads the one file `helm pull` writes: Helm 4 names a chart pulled by digest `knarr@sha256-<hex>.tgz`.
 - The transcripts beside each script in `evidence/05/`.
 - `.pre-commit-config.yaml`: editorconfig-checker skips `.scratch/org-transfer/evidence/` as it already skips bootstrap's and helm chart's evidence, since transcripts are recorded tool output kept byte for byte. `upgrade.txt` failed it on trailing whitespace from `kubectl` and `helm` tables.
@@ -55,6 +55,6 @@ Every step that left the worktree was authorized by the maintainer: the merge of
 #### For later tickets
 
 - Helm chart 08 (Artifact Hub) can start: the chart is public at `oci://ghcr.io/biscuitbin/charts/knarr`.
-- A new package under the org starts private. The next package the release creates needs the same manual visibility step.
+- A new package under the org started private here. The next package the release creates needs the same manual visibility step.
 - `settings.sh packages` needs a token with `read:packages`.
 - The optional box, the `steven-cutting` package descriptions, is left to the maintainer.

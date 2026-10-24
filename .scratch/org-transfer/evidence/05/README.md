@@ -13,7 +13,7 @@ Each script exits non-zero on an unexpected result. Lines beginning `ok` are che
 - [anonymous-pull.sh](anonymous-pull.sh) `0.3.0 <chart digest> <image digest>`, under `sh -x`, pulls the chart by digest with empty Helm and Docker configuration, into `anonymous-pull.txt`.
 - [upgrade.sh](upgrade.sh) `<image digest>`, under `sh -x`, on a fresh kind cluster: `v0.2.0` from `oci://ghcr.io/steven-cutting/charts/knarr`, fake workers opted in, then `helm upgrade knarr oci://ghcr.io/biscuitbin/charts/knarr --version 0.3.0`, into `upgrade.txt`. It needs the fake worker image (`just fake-worker-image-build`).
 
-The org allows members to create public packages ([org.txt](../02/org.txt)), and `release.yml`'s `publish` job asks for `packages: write`.
+The org allows members to create public packages ([org.txt](../02/org.txt); see the network section for the change this ticket needed), and `release.yml`'s `publish` job asks for `packages: write`.
 
 ## Network the maintainer authorized for this ticket
 
@@ -22,7 +22,7 @@ Each separately, on 2026-10-24 UTC: the merge of pull request #61, by the mainta
 Then, with read-only `gh` calls and anonymous reads of ghcr.io:
 
 - `run.sh` ([run.txt](run.txt)).
-- `public.sh` twice ([public.txt](public.txt) is the second). The first stopped at the named not-public outcome: ghcr.io refused an anonymous token for `biscuitbin/knarr` with http 401, and a direct anonymous token request for `biscuitbin/charts/knarr` was refused the same way. Both packages were private from their first push, unlike 37's. The maintainer changed an org-level setting so that both could be made public, then made each public by hand; the second run passed.
+- `public.sh` twice ([public.txt](public.txt) is the second). The first stopped at the named not-public outcome: ghcr.io refused an anonymous token for `biscuitbin/knarr` with http 401, and a direct anonymous token request for `biscuitbin/charts/knarr` was refused the same way. Both packages were private from their first push, unlike 37's. Under Settings → Member privileges → Package creation, the maintainer allowed org members to create public and internal packages, then made each package public by hand. Ticket 02's UI reading ([org.txt](../02/org.txt), line 53) recorded that setting as "public allowed", but public visibility was not available here until the maintainer changed it. This evidence cannot tell whether 02's reading was wrong or the setting changed after it. The second run passed.
 - `settings.sh packages` twice ([packages.txt](packages.txt) is the second). The first failed with http 403: the gh token lacked `read:packages`. The maintainer added it with `gh auth refresh -s read:packages`.
 - `pull.sh` ([pull.txt](pull.txt)), in a fresh `docker:29.4.0-dind` container already on the host.
 - `anonymous-pull.sh` three times ([anonymous-pull.txt](anonymous-pull.txt) is the third). The first ran without the worktree pixi PATH and found no `helm`. The second pulled the chart at its digest, then failed: Helm 4 names a chart pulled by digest `knarr@sha256-<hex>.tgz`, not `knarr-<version>.tgz`. The script now reads the one file the pull wrote, as its header says.
