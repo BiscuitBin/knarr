@@ -1,5 +1,5 @@
 name = "knarr"
-version = "0.2.0"
+version = "0.3.0"
 description = "A Kubernetes controller that biases Deployment scale-down away from busy worker pods."
 licences = ["Apache-2.0"]
 target = "erlang"
