@@ -8,6 +8,8 @@
 # the chart digest and the stamped image digest are arguments; set -eu stops
 # the script at the first failure, and the stamped values are checked rather
 # than only printed. The anonymous pull of the image by digest is pull.sh's.
+# Helm 4 names a chart pulled by digest knarr@sha256-<hex>.tgz, so the one
+# file the pull wrote is read rather than knarr-<version>.tgz.
 # Run with sh -x, the worktree pixi PATH, from the worktree root.
 # Usage: sh -x anonymous-pull.sh <version> <sha256:chart-digest> <sha256:image-digest> > anonymous-pull.txt 2>&1
 set -eu
@@ -27,7 +29,9 @@ helm version --short
 test -z "$(find "$anon" -type f)"
 helm pull "oci://ghcr.io/biscuitbin/charts/knarr@$chart_digest" --destination "$anon/out"
 ls "$anon/out"
-tgz="$anon/out/knarr-$version.tgz"
+test "$(find "$anon/out" -type f | wc -l)" -eq 1
+tgz=$(find "$anon/out" -type f -name '*.tgz')
+test -n "$tgz"
 tar -tzf "$tgz"
 tar -xzOf "$tgz" knarr/Chart.yaml | grep -E '^(version|appVersion|home):'
 tar -xzOf "$tgz" knarr/values.yaml | grep -E 'repository:|tag:|digest:|pullPolicy:'

@@ -1,0 +1,101 @@
+date: 2026-10-24T06:26:50Z
+curl 8.7.1 (x86_64-apple-darwin25.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.68.0
+image: ghcr.io/biscuitbin/knarr
+chart: ghcr.io/biscuitbin/charts/knarr
+tag: v0.3.0
+commit: 7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb
+digest: sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+chart digest: sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+
+== the image: an anonymous pull token, GET https://ghcr.io/token?scope=repository:biscuitbin/knarr:pull&service=ghcr.io
+ok   token for biscuitbin/knarr: http 200
+token for biscuitbin/knarr: granted (not printed)
+info HEAD 0.3.0 with no token: http 401
+
+== the manifest by each tag release.yml pushed, and by digest
+ok   HEAD 0.3.0: http, Docker-Content-Digest: 200 sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+     content-type: application/vnd.docker.distribution.manifest.v2+json
+ok   HEAD 0.3: http, Docker-Content-Digest: 200 sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+     content-type: application/vnd.docker.distribution.manifest.v2+json
+ok   HEAD sha-7c88ec9: http, Docker-Content-Digest: 200 sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+     content-type: application/vnd.docker.distribution.manifest.v2+json
+ok   HEAD sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84: http, Docker-Content-Digest: 200 sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+     content-type: application/vnd.docker.distribution.manifest.v2+json
+ok   HEAD latest: http: 404
+
+== GET https://ghcr.io/v2/biscuitbin/knarr/tags/list
+{"name":"biscuitbin/knarr","tags":["0.3.0","0.3","sha-7c88ec9"]}
+ok   tags: 0.3,0.3.0,sha-7c88ec9
+
+== a second push of v0.3.0, reasoned dry: the image's existence guard against the real registry
+ok   probe_tag 0.3.0: present (1, http 200)
+
+== the chart: an anonymous pull token, GET https://ghcr.io/token?scope=repository:biscuitbin/charts/knarr:pull&service=ghcr.io
+ok   token for biscuitbin/charts/knarr: http 200
+token for biscuitbin/charts/knarr: granted (not printed)
+info HEAD 0.3.0 with no token: http 401
+
+== the chart manifest by version, and by digest
+ok   HEAD 0.3.0: http, Docker-Content-Digest: 200 sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+     content-type: application/vnd.oci.image.manifest.v1+json
+ok   HEAD sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7: http, Docker-Content-Digest: 200 sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+     content-type: application/vnd.oci.image.manifest.v1+json
+ok   HEAD latest: http: 404
+
+== GET https://ghcr.io/v2/biscuitbin/charts/knarr/tags/list
+{"name":"biscuitbin/charts/knarr","tags":["0.3.0"]}
+ok   tags: 0.3.0
+
+== GET the chart manifest by digest, and its chart layer
+ok   GET manifest: http: 200
+{"schemaVersion":2,"config":{"mediaType":"application/vnd.cncf.helm.config.v1+json","digest":"sha256:0e48ad77aafe3b1157d645d297a96311f4c114388e85d63132f6f99ca34d15c7","size":469},"layers":[{"mediaType":"application/vnd.cncf.helm.chart.content.v1.tar+gzip","digest":"sha256:96fa9f8c3eed6a91777a1c3cafcbeb77b458b65f98fe0895d268f78a2934bf46","size":4306}],"annotations":{"artifacthub.io/images":"- name: knarr\n  image: ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84\n","org.opencontainers.image.created":"2026-10-24T06:02:32Z","org.opencontainers.image.description":"Biases Deployment scale-down away from busy worker pods by setting pod-deletion-cost on live pods.","org.opencontainers.image.source":"https://github.com/biscuitbin/knarr","org.opencontainers.image.title":"knarr","org.opencontainers.image.url":"https://github.com/biscuitbin/knarr","org.opencontainers.image.version":"0.3.0"}}
+ok   the manifest's sha256: sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+ok   config media type: application/vnd.cncf.helm.config.v1+json
+ok   layer media types: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+ok   GET chart layer: http (after redirects): 200
+ok   the chart layer's sha256: sha256:96fa9f8c3eed6a91777a1c3cafcbeb77b458b65f98fe0895d268f78a2934bf46
+
+== the packaged Chart.yaml and values.yaml, read from the layer
+annotations:
+  artifacthub.io/images: |
+    - name: knarr
+      image: ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+apiVersion: v2
+appVersion: 0.3.0
+description: Biases Deployment scale-down away from busy worker pods by setting pod-deletion-cost
+  on live pods.
+home: https://github.com/biscuitbin/knarr
+name: knarr
+sources:
+- https://github.com/biscuitbin/knarr
+type: application
+version: 0.3.0
+-- values.yaml, the image block
+image:
+  repository: ghcr.io/biscuitbin/knarr
+  tag: "0.3.0"
+  # A digest wins over the tag; with neither, the tag is the chart's appVersion.
+  digest: sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+ok   Chart.yaml: version: 0.3.0
+ok   Chart.yaml: appVersion: 0.3.0
+ok   Chart.yaml:       image: ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+ok   values.yaml:   repository: ghcr.io/biscuitbin/knarr
+ok   values.yaml:   tag: "0.3.0"
+ok   values.yaml:   digest: sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+ok   values.yaml:   pullPolicy: IfNotPresent
+
+== a second push of the chart, reasoned dry: the chart's existence guard against the real registry
+ok   probe_tag 0.3.0: present (1, http 200)
+
+== the packages under steven-cutting: 0.2.0 as bootstrap ticket 40 published it
+ok   token for steven-cutting/knarr: http 200
+token for steven-cutting/knarr: granted (not printed)
+ok   HEAD steven-cutting/knarr:0.2.0: http, Docker-Content-Digest: 200 sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
+ok   token for steven-cutting/charts/knarr: http 200
+token for steven-cutting/charts/knarr: granted (not printed)
+ok   HEAD steven-cutting/charts/knarr:0.2.0: http, Docker-Content-Digest: 200 sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
+
+public: every image tag pulls anonymously at the run digest, and chart 0.3.0 at the chart digest names it

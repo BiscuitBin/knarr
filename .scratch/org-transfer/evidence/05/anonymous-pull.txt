@@ -1,0 +1,78 @@
++ set -eu
++ usage='usage: anonymous-pull.sh <version> <sha256:chart-digest> <sha256:image-digest>'
++ version=0.3.0
++ chart_digest=sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
++ digest=sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
++ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-10-24T06:28:19Z
+++ mktemp -d
++ anon=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22
++ trap 'rm -rf "${anon:?}"' EXIT
++ mkdir -p /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/home /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/docker /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out
++ export HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/home DOCKER_CONFIG=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/docker
++ HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/home
++ DOCKER_CONFIG=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/docker
++ export HELM_CONFIG_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm HELM_CACHE_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm/cache HELM_DATA_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm/data
++ HELM_CONFIG_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm
++ HELM_CACHE_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm/cache
++ HELM_DATA_HOME=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm/data
++ export HELM_REGISTRY_CONFIG=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm/registry.json
++ HELM_REGISTRY_CONFIG=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/helm/registry.json
++ helm version --short
+v4.3.0+conda-forge
+++ find /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22 -type f
++ test -z ''
++ helm pull oci://ghcr.io/biscuitbin/charts/knarr@sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7 --destination /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out
+Pulled: ghcr.io/biscuitbin/charts/knarr@sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+Digest: sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
++ ls /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out
+knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz
+++ find /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out -type f
+++ wc -l
++ test '       1' -eq 1
+++ find /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out -type f -name '*.tgz'
++ tgz=/var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz
++ test -n /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz
++ tar -tzf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz
+knarr/Chart.yaml
+knarr/values.yaml
+knarr/values.schema.json
+knarr/templates/NOTES.txt
+knarr/templates/_helpers.tpl
+knarr/templates/deployment.yaml
+knarr/templates/role.yaml
+knarr/templates/rolebinding.yaml
+knarr/templates/serviceaccount.yaml
+knarr/.helmignore
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz knarr/Chart.yaml
++ grep -E '^(version|appVersion|home):'
+appVersion: 0.3.0
+home: https://github.com/biscuitbin/knarr
+version: 0.3.0
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz knarr/values.yaml
++ grep -E 'repository:|tag:|digest:|pullPolicy:'
+  repository: ghcr.io/biscuitbin/knarr
+  tag: "0.3.0"
+  digest: sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+  pullPolicy: IfNotPresent
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz knarr/templates/NOTES.txt
+knarr {{ .Chart.AppVersion }} is installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+It acts only on Deployments in namespace {{ .Release.Namespace }} that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace {{ .Release.Namespace }} knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/biscuitbin/knarr/blob/v{{ .Chart.AppVersion }}/docs/how-to/install.md
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz knarr/Chart.yaml
++ grep -qxF 'version: 0.3.0'
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz knarr/Chart.yaml
++ grep -qxF 'appVersion: 0.3.0'
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz knarr/values.yaml
++ grep -qxF '  repository: ghcr.io/biscuitbin/knarr'
++ tar -xzOf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22/out/knarr@sha256-1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7.tgz knarr/values.yaml
++ grep -qxF '  digest: sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84'
++ echo 'anonymous pull by digest: chart 0.3.0 names ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84'
+anonymous pull by digest: chart 0.3.0 names ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
++ rm -rf /var/folders/x3/_1vnt8qn6t35q6gngl9fn3s00000gn/T/tmp.efOBRO7X22

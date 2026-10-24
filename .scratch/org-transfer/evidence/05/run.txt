@@ -1,0 +1,75 @@
+date: 2026-10-24T06:02Z
+gh version 2.100.0 (2026-09-03)
+repository: biscuitbin/knarr
+tag: v0.3.0
+commit: 7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb
+
+== run 40068527393
+url: https://github.com/BiscuitBin/knarr/actions/runs/40068527393
+created: 2026-10-24T06:01:09Z
+ok   workflow: Release
+ok   event: push
+ok   ref: v0.3.0
+ok   head sha: 7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb
+ok   status, conclusion: completed success
+-- jobs
+Verify the tag (job 120796757382): success, 2026-10-24T06:01:11Z to 2026-10-24T06:01:15Z
+Publish to ghcr.io (job 120796776330): success, 2026-10-24T06:01:40Z to 2026-10-24T06:02:38Z
+ok   job conclusions: Publish to ghcr.io=success,Verify the tag=success
+
+== the release environment's approval: gh api repos/biscuitbin/knarr/actions/runs/40068527393/approvals
+approved by steven-cutting (user 8365892) for release (23921538204), comment: "Release v0.3.0"
+ok   approvals (state:user:environment): approved:8365892:23921538204
+
+== Verify the tag (job 120796757382): the guards' line
+tag v0.3.0 at 7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb: version 0.3.0, an ancestor of origin/main, in the changelog
+ok   verify's line: tag v0.3.0 at 7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb: version 0.3.0, an ancestor of origin/main, in the changelog
+ok   error lines (::error:: or ##[error]): 0
+
+== Publish to ghcr.io (job 120796776330): the chart check, logins, the existence guards, the image push and digest, the chart stamp and push
+/home/runner/work/_temp/chart-check/knarr-0.3.0.tgz
+Login Succeeded
+ghcr.io/biscuitbin/knarr:0.3.0 is absent (http 404): pushing
+ghcr.io/biscuitbin/charts/knarr:0.3.0 is absent (http 404): pushing the image
+#27 naming to ghcr.io/biscuitbin/knarr:0.3.0 done
+#27 naming to ghcr.io/biscuitbin/knarr:0.3 done
+#27 naming to ghcr.io/biscuitbin/knarr:sha-7c88ec9 done
+#29 pushing ghcr.io/biscuitbin/knarr:0.3.0 with docker
+#30 pushing ghcr.io/biscuitbin/knarr:0.3 with docker
+#31 pushing ghcr.io/biscuitbin/knarr:sha-7c88ec9 with docker
+digest=sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+packaged /home/runner/work/_temp/chart/knarr-0.3.0.tgz with ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+ghcr.io/biscuitbin/charts/knarr:0.3.0 is absent (http 404): pushing
+Login Succeeded
+Pushed: ghcr.io/biscuitbin/charts/knarr:0.3.0
+Digest: sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+chart_digest=sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+-- checks: the image
+ok   Login Succeeded lines (docker login, helm registry login): 2
+ok   the image's existence guard: ghcr.io/biscuitbin/knarr:0.3.0 is absent (http 404): pushing
+ok   tags buildx named: 0.3,0.3.0,sha-7c88ec9
+ok   tags buildx pushed: 0.3,0.3.0,sha-7c88ec9
+ok   error lines (::error:: or ##[error]): 0
+ok   digest= lines: 1
+ok   the digest is sha256: and 64 hex digits: 1
+-- checks: the chart
+ok   the chart packaged with the placeholder digest, before any push: 1
+     ghcr.io/biscuitbin/charts/knarr:0.3.0 is absent (http 404): pushing the image
+     ghcr.io/biscuitbin/charts/knarr:0.3.0 is absent (http 404): pushing
+ok   the chart's existence guards, before the image push and before the chart push: ghcr.io/biscuitbin/charts/knarr:0.3.0 is absent (http 404): pushing the image|ghcr.io/biscuitbin/charts/knarr:0.3.0 is absent (http 404): pushing
+ok   the stamped package names the image digest: 1
+ok   helm's Pushed: line: Pushed: ghcr.io/biscuitbin/charts/knarr:0.3.0
+ok   Digest: lines: 1
+ok   the chart digest is sha256: and 64 hex digits: 1
+ok   chart_digest= agrees with the Digest: line: sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+
+== the git tag
+ok   git cat-file -t v0.3.0: tag
+ok   v0.3.0^{commit}: 7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb
+03172b2a26c2203d83f1ef20112e68e163af512f	refs/tags/v0.3.0
+7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb	refs/tags/v0.3.0^{}
+ok   remote v0.3.0 object: 03172b2a26c2203d83f1ef20112e68e163af512f
+ok   remote v0.3.0^{}: 7c88ec9c982b8eee33cc8d38f34e327c7b2f9acb
+
+digest: sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+chart digest: sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
