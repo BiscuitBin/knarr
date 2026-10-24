@@ -1,0 +1,245 @@
++ set -eu
++ digest=sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
++ H=.scratch/helm-chart/evidence/05
++ W=ai_tmp/org-05-upgrade
++ PATH=/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org/.pixi/envs/default/bin:/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org/.pixi/envs/cluster/bin:/Users/scutting/.local/bin:/Users/scutting/.cargo/bin:/Users/scutting/.pixi/bin:/Users/scutting/.local/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/opt/homebrew/bin:/Users/scutting/.pixi/bin:/Applications/supacode.app/Contents/Resources/bin/:/Users/scutting/.orbstack/bin:/Applications/supacode.app/Contents/MacOS
++ KUBECONFIG=/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org/.cluster/kubeconfig
++ export PATH KUBECONFIG
++ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-10-24T06:32:56Z
++ echo 'Host deviation, as in helm chart ticket 05: this host is arm64 (OrbStack) and the release image'
+Host deviation, as in helm chart ticket 05: this host is arm64 (OrbStack) and the release image
++ echo 'amd64 only. Under Rosetta the BEAM needs the JIT single mapping, so every helm install and'
+amd64 only. Under Rosetta the BEAM needs the JIT single mapping, so every helm install and
++ echo 'upgrade passes --post-renderer jmsingle, which adds only the env entry ERL_AFLAGS="+JMsingle true"'
+upgrade passes --post-renderer jmsingle, which adds only the env entry ERL_AFLAGS="+JMsingle true"
++ echo 'before ERL_FLAGS. Helm still owns every field, and the pod still runs the published image digest.'
+before ERL_FLAGS. Helm still owns every field, and the pod still runs the published image digest.
++ mkdir -p ai_tmp/org-05-upgrade ai_tmp/helm-plugins
++ rm -rf ai_tmp/helm-plugins/jmsingle
++ cp -R .scratch/helm-chart/evidence/05/jmsingle ai_tmp/helm-plugins/
++ export HELM_PLUGINS=/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org/ai_tmp/helm-plugins
++ HELM_PLUGINS=/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org/ai_tmp/helm-plugins
++ cat ai_tmp/helm-plugins/jmsingle/render.sh
+#!/bin/sh
+# Host workaround only: the amd64 release image runs under Rosetta on an arm64
+# host only with the BEAM JIT's single memory mapping. Adds ERL_AFLAGS before
+# the chart's ERL_FLAGS; ERL_AFLAGS is prepended to the emulator's arguments.
+set -eu
+perl -pe 's/^(\s*)- name: ERL_FLAGS$/$1- name: ERL_AFLAGS\n$1  value: "+JMsingle true"\n$1- name: ERL_FLAGS/'
++ worker_namespace=default
++ old_digest=sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
++ old_chart_digest=sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
++ just cluster-down
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py down "/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org"
+Deleting cluster "05-first-release-under-b5dcfda8" ...
++ just cluster-up
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py up "/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org"
+Creating cluster "05-first-release-under-b5dcfda8" ...
+ • Ensuring node image (kindest/node:v1.35.8) 🖼️  ...
+ ✓ Ensuring node image (kindest/node:v1.35.8) 🖼️
+ • Preparing nodes 📦   ...
+ ✓ Preparing nodes 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing CNI 🔌  ...
+ ✓ Installing CNI 🔌
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Waiting ≤ 3m0s for control-plane = Ready ⏳  ...
+ ✓ Waiting ≤ 3m0s for control-plane = Ready ⏳
+ • Ready after 17s 💚
+Set kubectl context to "kind-05-first-release-under-b5dcfda8"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-05-first-release-under-b5dcfda8 --kubeconfig /Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org/.cluster/kubeconfig
+
+Not sure what to do next? 😅  Check out https://kind.sigs.k8s.io/docs/user/quick-start/
+node/05-first-release-under-b5dcfda8-control-plane condition met
++ kubectl config current-context
+kind-05-first-release-under-b5dcfda8
++ helm install knarr oci://ghcr.io/steven-cutting/charts/knarr@sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016 --namespace default --wait --post-renderer jmsingle
+Pulled: ghcr.io/steven-cutting/charts/knarr@sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
+Digest: sha256:3f29bcaccaf932c492ec9bb06db53c2f0e273232fdbea50aa6bdba681caa9016
+NAME: knarr
+LAST DEPLOYED: Fri Oct 23 23:33:28 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+knarr 0.2.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/steven-cutting/knarr/blob/v0.2.0/docs/how-to/install.md
++ kubectl -n default rollout status deployment/knarr
+deployment "knarr" successfully rolled out
+++ kubectl -n default get deployment knarr -o 'jsonpath={.spec.template.spec.containers[0].image}'
++ image=ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
++ test ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9 = ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
++ knarr_pods
++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[0].ready}{"\t"}{.status.containerStatuses[0].imageID}{"\n"}{end}'
+knarr-567b6fc55-6h54r	true	ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
++ just smoke
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org"
+ok /healthz
+ok /readyz
+ok /metrics
++ just fake-worker-deploy
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py fake-worker-deploy "/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org" "$1"
+Image: "fake-worker:05-first-release-under-b5dcfda8" with ID "sha256:e842bddc60af5f333f27830f58ada9dee9c39bc5d6836c998240a5580be2b939" not yet present on node "05-first-release-under-b5dcfda8-control-plane", loading...
+service/fake-worker-collector created
+deployment.apps/fake-worker created
+deployment.apps/fake-worker-collector created
+deployment "coredns" successfully rolled out
+Waiting for deployment "fake-worker-collector" rollout to finish: 0 of 1 updated replicas are available...
+deployment "fake-worker-collector" successfully rolled out
+deployment "fake-worker" successfully rolled out
+++ kubectl get pods -l app.kubernetes.io/name=fake-worker -o 'jsonpath={.items[*].metadata.name}'
++ set -- fake-worker-69975f68bc-b6jrg fake-worker-69975f68bc-hw892 fake-worker-69975f68bc-kbz27 fake-worker-69975f68bc-t5wjl
++ for pod in '"$2"' '"$3"' '"$4"'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-69975f68bc-hw892 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ for pod in '"$2"' '"$3"' '"$4"'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-69975f68bc-kbz27 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ for pod in '"$2"' '"$3"' '"$4"'
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-69975f68bc-t5wjl 1800
+{"cost":1800,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ kubectl label deployment fake-worker knarr.io/enabled=true
+deployment.apps/fake-worker labeled
++ wait_for 60 owned_three
+waited 110 s
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	1       	2026-10-23 23:33:28.231432 -0700 PDT	deployed	knarr-0.2.0	0.2.0      
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply
+Role knarr managed-by=Helm release=knarr managers=helm/Apply
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kube-controller-manager/Update
+deployment image: ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
+== knarr pods
+knarr-567b6fc55-6h54r uid 0350c8ec-9727-461a-a6b5-184ab84dbd52 phase Running ready true image ghcr.io/steven-cutting/knarr@sha256:989cb9e44df4b97960e68371c1ae8bddcd29db99d65bbd09b663776665c01bc9
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
+fake-worker-69975f68bc-b6jrg		
+fake-worker-69975f68bc-hw892	1800	{"at":"2026-10-24T06:34:48Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-24T06:34:48Z"}}
+fake-worker-69975f68bc-kbz27	1800	{"at":"2026-10-24T06:34:47Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-24T06:34:47Z"}}
+fake-worker-69975f68bc-t5wjl	1800	{"at":"2026-10-24T06:34:54Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-24T06:34:54Z"}}
++ sh .scratch/helm-chart/evidence/05/metrics.sh
+knarr_last_discovery_timestamp_seconds 1792823734
+knarr_annotations{deployment="fake-worker",annotation="pod-deletion-cost",standing="owned"} 3
+knarr_targets{kind="deployments"} 1
+knarr_targets{kind="pods"} 4
+++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={.items[0].metadata.name}'
++ before=knarr-567b6fc55-6h54r
++ helm upgrade knarr oci://ghcr.io/biscuitbin/charts/knarr --version 0.3.0 --namespace default --wait --post-renderer jmsingle
+Pulled: ghcr.io/biscuitbin/charts/knarr:0.3.0
+Digest: sha256:1500c5139ff5fbff7c658d2f001d9b7e421ff9435333ad28df7aa5f86d6bb2b7
+Release "knarr" has been upgraded. Happy Helming!
+NAME: knarr
+LAST DEPLOYED: Fri Oct 23 23:35:37 2026
+NAMESPACE: default
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+knarr 0.3.0 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/biscuitbin/knarr/blob/v0.3.0/docs/how-to/install.md
++ kubectl -n default rollout status deployment/knarr
+deployment "knarr" successfully rolled out
++ kubectl -n default wait --for=delete pod/knarr-567b6fc55-6h54r --timeout=120s
+++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={.items[*].metadata.name}'
++ after=knarr-5674bf645c-kh256
++ test -n knarr-5674bf645c-kh256
++ test knarr-567b6fc55-6h54r '!=' knarr-5674bf645c-kh256
++ echo 'pod rolled: knarr-567b6fc55-6h54r -> knarr-5674bf645c-kh256'
+pod rolled: knarr-567b6fc55-6h54r -> knarr-5674bf645c-kh256
++ helm history knarr --namespace default
+REVISION	UPDATED                 	STATUS    	CHART      	APP VERSION	DESCRIPTION     
+1       	Fri Oct 23 23:33:28 2026	superseded	knarr-0.2.0	0.2.0      	Install complete
+2       	Fri Oct 23 23:35:37 2026	deployed  	knarr-0.3.0	0.3.0      	Upgrade complete
++ helm list --namespace default -o json
+[{"name":"knarr","namespace":"default","revision":"2","updated":"2026-10-23 23:35:37.298678 -0700 PDT","status":"deployed","chart":"knarr-0.3.0","app_version":"0.3.0"}]
+++ helm list --namespace default -q
++ test knarr = knarr
+++ helm history knarr --namespace default -o json
+++ python3 -c 'import json, sys; print(",".join(r["chart"] + ":" + r["status"] for r in json.load(sys.stdin)))'
++ test knarr-0.2.0:superseded,knarr-0.3.0:deployed = knarr-0.2.0:superseded,knarr-0.3.0:deployed
+++ kubectl -n default get deployment knarr -o 'jsonpath={.spec.template.spec.containers[0].image}'
++ image=ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
++ test ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84 = ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
++ knarr_pods
++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[0].ready}{"\t"}{.status.containerStatuses[0].imageID}{"\n"}{end}'
+knarr-5674bf645c-kh256	true	ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
++ knarr_pods
++ kubectl -n default get pods -l app.kubernetes.io/name=knarr -o 'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[0].ready}{"\t"}{.status.containerStatuses[0].imageID}{"\n"}{end}'
++ grep -qF @sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
++ wait_for 60 owned_three
+waited 0 s
+++ cost_of fake-worker-69975f68bc-hw892
+++ kubectl get pod fake-worker-69975f68bc-hw892 -o 'jsonpath={.metadata.annotations.controller\.kubernetes\.io/pod-deletion-cost}'
++ was=1800
++ test -n 1800
++ sh .scratch/helm-chart/evidence/05/control.sh fake-worker-69975f68bc-hw892 3600
+{"cost":3600,"accepting":true,"latency_ms":0,"failure":"none","invalid_body":"{\"cost\":\"high\",\"accepting\":true}","terminating":false}
++ wait_for 60 cost_moved fake-worker-69975f68bc-hw892 1800
+waited 15 s
+++ cost_of fake-worker-69975f68bc-hw892
+++ kubectl get pod fake-worker-69975f68bc-hw892 -o 'jsonpath={.metadata.annotations.controller\.kubernetes\.io/pod-deletion-cost}'
++ test -n 3600
+++ cost_of fake-worker-69975f68bc-hw892
+++ kubectl get pod fake-worker-69975f68bc-hw892 -o 'jsonpath={.metadata.annotations.controller\.kubernetes\.io/pod-deletion-cost}'
++ echo 'fake-worker-69975f68bc-hw892 pod-deletion-cost: 1800 -> 3600'
+fake-worker-69975f68bc-hw892 pod-deletion-cost: 1800 -> 3600
++ sh .scratch/helm-chart/evidence/05/state.sh
+== helm releases
+NAME 	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART      	APP VERSION
+knarr	default  	2       	2026-10-23 23:35:37.298678 -0700 PDT	deployed	knarr-0.3.0	0.3.0      
+== knarr resources
+ServiceAccount knarr managed-by=Helm release=knarr managers=helm/Apply
+Role knarr managed-by=Helm release=knarr managers=helm/Apply
+RoleBinding knarr managed-by=Helm release=knarr managers=helm/Apply
+Deployment knarr managed-by=Helm release=knarr managers=helm/Apply,kube-controller-manager/Update
+deployment image: ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+== knarr pods
+knarr-5674bf645c-kh256 uid 78aad7eb-2ea0-4ff9-b292-f43c5083c61a phase Running ready true image ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84
+== worker annotations (pod, pod-deletion-cost, knarr.io/applied)
+fake-worker-69975f68bc-b6jrg		
+fake-worker-69975f68bc-hw892	3600	{"at":"2026-10-24T06:35:58Z","pod-deletion-cost":{"applied":"3600","at":"2026-10-24T06:35:58Z"}}
+fake-worker-69975f68bc-kbz27	1800	{"at":"2026-10-24T06:34:47Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-24T06:34:47Z"}}
+fake-worker-69975f68bc-t5wjl	1800	{"at":"2026-10-24T06:34:54Z","pod-deletion-cost":{"applied":"1800","at":"2026-10-24T06:34:54Z"}}
++ sh .scratch/helm-chart/evidence/05/metrics.sh
+knarr_last_discovery_timestamp_seconds 1792823744
+knarr_annotations{deployment="fake-worker",annotation="pod-deletion-cost",standing="owned"} 3
+knarr_targets{kind="deployments"} 1
+knarr_targets{kind="pods"} 4
++ just smoke
+test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+python3 scripts/checks/cluster.py smoke "/Users/scutting/.supacode/repos/knarr/ticket/05-first-release-under-org"
+ok /healthz
+ok /readyz
+ok /metrics
++ echo 'upgraded in place from v0.2.0 to 0.3.0 at ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84, still patching'
+upgraded in place from v0.2.0 to 0.3.0 at ghcr.io/biscuitbin/knarr@sha256:a0758098d2e2a28ea528ac8bf4b8f675b61f2a75d375e60995afb6a82d22db84, still patching
