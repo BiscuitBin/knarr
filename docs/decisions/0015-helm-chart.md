@@ -84,7 +84,7 @@ Left out on purpose:
 
 ### Deferred
 
-- **Signing and attesting the chart** wait for bootstrap ticket 38's image attestations and are ticket 07. Ticket 07 attests the chart's digest with GitHub artifact attestations (`actions/attest-build-provenance`, verified with `gh attestation verify`), the mechanism 38 uses for the image, so the image and the chart are attested one way. Kyverno's `cosign sign` and a Helm `.prov` file stay deferred until a consumer asks, as [DEFERRED §8](../DEFERRED.md#8-other-future-targets) says of the image.
+- **Signing and attesting the chart** wait for bootstrap ticket 38's image attestations and are ticket 07. Ticket 07 attests the chart's digest with GitHub artifact attestations (`actions/attest-build-provenance`, verified with `gh attestation verify`), the mechanism 38 uses for the image, so the image and the chart are attested one way. Kyverno's `cosign sign` and a Helm `.prov` file stay deferred until a consumer asks, as [DEFERRED §8](../DEFERRED.md#8-other-future-targets) says of the image. Amended by ticket 07: the chart's attest step landed with 38's image step in the same change, both with `create-storage-record: false` so that 38's two permissions suffice ([Decision 0012](0012-release-and-packaging.md), cosign, SBOM and build provenance).
 - **An Artifact Hub listing** is ticket 08. Artifact Hub lists OCI chart repositories by their `oci://registry/namespace/chart-name` URL, with an `artifacthub.io` metadata layer.
 
 ## Findings

@@ -16,8 +16,8 @@
 
 **Status:** ready-for-agent, round 2
 
-- [ ] The publish job gains `id-token: write` and `attestations: write` and nothing else; `actions/attest-build-provenance` is pinned by SHA and attests the pushed digest with `push-to-registry: true`.
-- [ ] `gh attestation verify oci://ghcr.io/biscuitbin/knarr@<digest> --repo biscuitbin/knarr` passes on the next release, and the install guide shows the command.
+- [x] The publish job gains `id-token: write` and `attestations: write` and nothing else; `actions/attest-build-provenance` is pinned by SHA and attests the pushed digest with `push-to-registry: true`. Done by [helm-chart 07](../../helm-chart/issues/07-attest-published-chart.md), with `create-storage-record: false`, since a storage record needs `artifact-metadata: write` too. Open here: whether the org wants storage records, which would take that third permission and a decision.
+- [ ] `gh attestation verify oci://ghcr.io/biscuitbin/knarr@<digest> --repo biscuitbin/knarr` passes on the next release, and the install guide shows the command. The guide shows it since helm-chart 07; the verify waits for the next release, which 07's box 2 records.
 - [ ] With `--provenance=mode=min --sbom=true`, the overlay, or after helm-chart 06 the chart's stamped `image.digest`, pins the index digest, `imagetools inspect` shows the attestation manifest, and the install guide says which digest to pin.
 - [ ] arm64, only if a target node pool needs it: `linux-aarch64` added and the lock re-solved with 27's process, an `ubuntu-24.04-arm` build job, `imagetools create` merging the two manifests under the release tags, and the kind-on-arm64 runtime smoke 13 could not run. The re-lock and the kind-on-arm64 smoke are done by [50](50-local-arm64-image.md), which moved kubectl to 1.36.0 because 1.34.3 has no linux-aarch64 build; the runner job and the merged index remain here.
 - [ ] The hand-back records the extra time each change adds to the release run, and `CHANGELOG.md` says which release first carried attestations.

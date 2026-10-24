@@ -18,7 +18,11 @@
 # stamp-chart_test.sh beside it). It refuses to push over an image tag or a
 # chart version that exists, so a release is published once. Helm chart ticket
 # 04 added the chart's publish steps and dry-ran them against a throwaway
-# registry (.scratch/helm-chart/evidence/04/).
+# registry (.scratch/helm-chart/evidence/04/). Once both are pushed, it attests
+# each digest with actions/attest-build-provenance and pushes the attestation to
+# ghcr.io beside it, so the image and the chart are attested one way and each
+# verifies with gh attestation verify oci://<name>@<digest> --repo biscuitbin/knarr
+# (helm chart ticket 07, with bootstrap 38's image step).
 name: Release
 
 on:
@@ -102,9 +106,13 @@ jobs:
     # reviewer and "Prevent self-review" off (one maintainer approves their own
     # tag). A v* tag ruleset must exist before the first tag is pushed.
     environment: release
+    # id-token and attestations are attest-build-provenance's. They are the
+    # job's, so any step could mint an OIDC token; only the attest steps do.
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -160,6 +168,10 @@ jobs:
       # - The image was pushed and the chart was not. Bump the version and
       #   release again, as Decision 0015 decides; never push a chart by hand
       #   for a version whose run failed. X.Y.Z stays an image with no chart.
+      # - Both were pushed and an attest step failed. The release is whole
+      #   but that digest, and any attested after it, has no attestation, and
+      #   a re-run stops at this guard. Bump the version and release again; the release without an
+      #   attestation stays as it is.
       # - The chart's first guard, after this one, refused. Nothing was pushed:
       #   fix the cause and re-run.
       - name: Refuse to push over an existing tag
@@ -216,8 +228,8 @@ jobs:
           for t in $(tags_for "$TAG" "$COMMIT"); do set -- "$@" --tag "$IMAGE:$t"; done
           # --provenance=false --sbom=false: one image manifest, whose digest
           # is the one the overlay pins, whatever image store the runner's
-          # docker has (registry.txt). Ticket 38 turns attestations on and
-          # pins the index digest instead.
+          # docker has (registry.txt). Ticket 38 turns BuildKit's SBOM and
+          # provenance on and pins the index digest instead.
           docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
             --label "org.opencontainers.image.source=https://github.com/biscuitbin/knarr" \
             --label "org.opencontainers.image.version=$VERSION" \
@@ -234,15 +246,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "DIGEST=$digest" >> "$GITHUB_ENV"
           echo "digest=$digest"
-      # Ticket 38 adds, with id-token: write and attestations: write on this job:
-      #   - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-      #     with:
-      #       subject-name: ghcr.io/biscuitbin/knarr
-      #       subject-digest: ${{ env.DIGEST }}
-      #       push-to-registry: true
-      # and verifies with: gh attestation verify oci://ghcr.io/biscuitbin/knarr@<digest> --repo biscuitbin/knarr
-      # When 38 pins the index digest, DIGEST is that digest, so the chart below
-      # stamps it in the same step (helm chart ticket 04).
+      # When 38 pins the index digest, DIGEST is that digest, so the chart
+      # below stamps it and the attest step takes it (helm chart ticket 04).
       # Decision 0015: the chart's version and appVersion are the release's,
       # and the copy that is packaged carries the published repository,
       # IfNotPresent and the digest just pushed. The tracked chart is not
@@ -295,4 +300,25 @@ jobs:
             echo
             echo "Install: \`helm install knarr oci://$CHART --version $VERSION --namespace <worker-namespace>\`"
           } >> "$GITHUB_STEP_SUMMARY"
+          echo "CHART_DIGEST=$chart_digest" >> "$GITHUB_ENV"
           echo "chart_digest=$chart_digest"
+      # Attest the image and then the chart, each by the digest its push
+      # printed, with one pinned action (helm chart ticket 07, Decision 0015),
+      # and push each attestation to ghcr.io with the docker login above. Both
+      # come after the chart push, so a failed attestation never leaves an
+      # image with no chart. A storage record (create-storage-record, on by
+      # default for an organization's repository) needs artifact-metadata:
+      # write, a scope this job does not take, so it is off; the attestations
+      # still verify with gh attestation verify.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ env.DIGEST }}
+          push-to-registry: true
+          create-storage-record: false
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.CHART }}
+          subject-digest: ${{ env.CHART_DIGEST }}
+          push-to-registry: true
+          create-storage-record: false
