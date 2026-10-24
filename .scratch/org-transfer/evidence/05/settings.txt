@@ -1,0 +1,35 @@
+date: 2026-10-24T06:00Z
+gh version 2.100.0 (2026-09-03)
+repository: biscuitbin/knarr
+
+== the release environment: gh api repos/biscuitbin/knarr/environments/release
+read at 2026-10-24T06:00:17Z
+{"id":23921538204,"node_id":"EN_kwDOVAMqy88AAAAFkdW0nA","name":"release","url":"https://api.github.com/repos/BiscuitBin/knarr/environments/release","html_url":"https://github.com/BiscuitBin/knarr/deployments/activity_log?environments_filter=release","created_at":"2026-10-09T22:44:50Z","updated_at":"2026-10-09T22:44:50Z","can_admins_bypass":true,"protection_rules":[{"id":68296717,"node_id":"GA_kwDOVAMqy84EEiAN","type":"required_reviewers","prevent_self_review":false,"reviewers":[{"type":"User","reviewer":{"login":"steven-cutting","id":8365892,"node_id":"MDQ6VXNlcjgzNjU4OTI=","avatar_url":"https://avatars.githubusercontent.com/u/8365892?v=4","gravatar_id":"","url":"https://api.github.com/users/steven-cutting","html_url":"https://github.com/steven-cutting","followers_url":"https://api.github.com/users/steven-cutting/followers","following_url":"https://api.github.com/users/steven-cutting/following{/other_user}","gists_url":"https://api.github.com/users/steven-cutting/gists{/gist_id}","starred_url":"https://api.github.com/users/steven-cutting/starred{/owner}{/repo}","subscriptions_url":"https://api.github.com/users/steven-cutting/subscriptions","organizations_url":"https://api.github.com/users/steven-cutting/orgs","repos_url":"https://api.github.com/users/steven-cutting/repos","events_url":"https://api.github.com/users/steven-cutting/events{/privacy}","received_events_url":"https://api.github.com/users/steven-cutting/received_events","type":"User","user_view_type":"public","site_admin":false}}]}],"deployment_branch_policy":null}
+
+ok   environment id: 23921538204
+ok   protection rules: required_reviewers
+ok   required reviewers: User:8365892
+ok   prevent self-review: false
+info can_admins_bypass, deployment_branch_policy: true null (GitHub defaults; 0012 decides neither)
+
+== rulesets: gh api repos/biscuitbin/knarr/rulesets?includes_parents=false
+read at 2026-10-24T06:00:19Z
+[{"id":25048585,"name":"release tags","target":"tag","source_type":"Repository","source":"BiscuitBin/knarr","enforcement":"active","node_id":"RRS_lACqUmVwb3NpdG9yec5UAyrLzgF-Ngk","_links":{"self":{"href":"https://api.github.com/repos/BiscuitBin/knarr/rulesets/25048585"},"html":{"href":"https://github.com/BiscuitBin/knarr/rules/25048585"}},"created_at":"2026-10-13T20:30:37.197-07:00","updated_at":"2026-10-13T20:30:37.236-07:00"}]
+
+ok   ruleset ids: 25048585
+
+== the tag ruleset: gh api repos/biscuitbin/knarr/rulesets/25048585
+read at 2026-10-24T06:00:20Z
+{"id":25048585,"name":"release tags","target":"tag","source_type":"Repository","source":"BiscuitBin/knarr","enforcement":"active","conditions":{"ref_name":{"exclude":[],"include":["refs/tags/v*"]}},"rules":[{"type":"update"},{"type":"deletion"}],"node_id":"RRS_lACqUmVwb3NpdG9yec5UAyrLzgF-Ngk","created_at":"2026-10-13T20:30:37.197-07:00","updated_at":"2026-10-13T20:30:37.236-07:00","bypass_actors":[],"current_user_can_bypass":"never","_links":{"self":{"href":"https://api.github.com/repos/BiscuitBin/knarr/rulesets/25048585"},"html":{"href":"https://github.com/BiscuitBin/knarr/rules/25048585"}}}
+
+ok   name, target, enforcement: release tags | tag | active
+ok   ref names: include=refs/tags/v* exclude=
+ok   rules: deletion,update
+ok   bypass actors: 0
+
+== tags and releases
+read at 2026-10-24T06:00:22Z
+ok   tags: v0.1.0,v0.2.0
+ok   releases: 0
+
+settings as expected
