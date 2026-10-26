@@ -1,8 +1,10 @@
 # Changelog
 
-Notable changes to Knarr are recorded here, by release. This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). 0.1.0 is the walking skeleton, published to rehearse the release route. 0.2.0 is the first release of the controller, the MVP, and the first to publish the Helm chart. 0.3.0 is the first release from `github.com/biscuitbin/knarr`, published under `ghcr.io/biscuitbin/…`. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides versioning and the release workflow: a release pull request moves the `[Unreleased]` section under `## [X.Y.Z] - YYYY-MM-DD`, and the release workflow refuses a tag whose version has no such heading.
+Notable changes to Knarr are recorded here, by release. This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). 0.1.0 is the walking skeleton, published to rehearse the release route. 0.2.0 is the first release of the controller, the MVP, and the first to publish the Helm chart. 0.3.0 is the first release from `github.com/biscuitbin/knarr`, published under `ghcr.io/biscuitbin/…`. 0.3.1-rc.1 is a prerelease that proves the image and chart attestations on ghcr.io before a stable release carries them; a prerelease moves no `X.Y` tag. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides versioning and the release workflow: a release pull request moves the `[Unreleased]` section under `## [X.Y.Z] - YYYY-MM-DD`, and the release workflow refuses a tag whose version has no such heading.
 
 ## [Unreleased]
+
+## [0.3.1-rc.1] - 2026-10-26
 
 ### Added
 
