@@ -41,8 +41,8 @@ verify 'chart, from GitHub' "oci://$chart@$chart_digest"
 verify 'chart, from ghcr.io' "oci://$chart@$chart_digest" --bundle-from-oci
 
 printf '\n== the chart pins the verified image\n'
-stamped=$(helm show values "oci://$chart@$chart_digest" | sed -nE 's/^  digest: *"?(sha256:[0-9a-f]{64})"?$/\1/p') ||
-  fail 'helm show values failed'
+values=$(helm show values "oci://$chart@$chart_digest") || fail 'helm show values failed'
+stamped=$(printf '%s\n' "$values" | sed -nE 's/^  digest: *"?(sha256:[0-9a-f]{64})"?$/\1/p')
 [ "$stamped" = "$image_digest" ] || fail "the chart's image.digest is '$stamped', not $image_digest"
 printf 'ok   image.digest: %s\n' "$stamped"
 echo; echo 'verify passed'
