@@ -16,6 +16,22 @@ From `v0.3.0`, images and charts publish under `ghcr.io/biscuitbin/…` ([Decisi
 
 Use an amd64 Linux cluster, kubectl access to the intended namespace, and Helm 4. The chart is tested with Helm 4 and uses no Helm-4-only feature; Helm expects such charts to install with Helm 3, which knarr does not test. The release image is amd64 only and public, so it needs no `imagePullSecrets`. Install one Knarr release per namespace, in the same namespace as its worker Deployments; the packaged Role is namespaced. Check [PodDeletionCost](../operations/controller.md#verify-poddeletioncost) before expecting any bias ([Decision 0015](../decisions/0015-helm-chart.md), Helm 3 and Helm 4; [lifecycle.allium](../specs/lifecycle.allium), `Restart` `Replica`; [config.allium](../specs/config.allium), `Configuration` `Discovery`).
 
+## Verify a release
+
+Releases after `v0.3.0` attest the image and the chart they push with GitHub artifact attestations, and push each attestation to ghcr.io beside its digest; `v0.3.0` and earlier carry none. Before installing, check that each digest was attested by knarr's release workflow. The successful release workflow run's summary for the chosen tag prints the image digest and the chart by digest, `oci://ghcr.io/biscuitbin/charts/knarr@sha256:…`; copy the part after each `@`. `gh` must be authenticated (`gh auth status`). Each command fails unless it finds an attestation for that digest signed by `release.yml` in `biscuitbin/knarr` ([Decision 0012](../decisions/0012-release-and-packaging.md), cosign, SBOM and build provenance; [Decision 0015](../decisions/0015-helm-chart.md), publishing):
+
+```sh
+image_digest=sha256:...   # the image digest from the run summary
+chart_digest=sha256:...   # the chart digest from the run summary
+gh attestation verify "oci://ghcr.io/biscuitbin/knarr@$image_digest" --repo biscuitbin/knarr \
+  --signer-workflow biscuitbin/knarr/.github/workflows/release.yml
+gh attestation verify "oci://ghcr.io/biscuitbin/charts/knarr@$chart_digest" --repo biscuitbin/knarr \
+  --signer-workflow biscuitbin/knarr/.github/workflows/release.yml
+helm show values "oci://ghcr.io/biscuitbin/charts/knarr@$chart_digest" | grep 'digest:'
+```
+
+The last line must print `$image_digest`: the chart installs the image by the digest stamped into it, so that is the image you verified. Then install by the chart digest you verified, as below, so the chart installed is the one checked.
+
 ## Install with Helm
 
 The successful release workflow run's summary for the chosen tag prints the chart by digest, `oci://ghcr.io/biscuitbin/charts/knarr@sha256:…`, the image digest stamped into it, and the `helm install` command. Set `chart_version` to the release version and `worker_namespace` to an existing namespace you intend to manage. Installing changes your selected cluster; check the context first ([Decision 0015](../decisions/0015-helm-chart.md), publishing):

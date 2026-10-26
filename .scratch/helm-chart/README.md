@@ -50,6 +50,6 @@ A wave is the earliest point a ticket can start if every lane runs in parallel: 
 | 3 | [05](issues/05-install-first-published-chart.md), [07](issues/07-attest-published-chart.md) |
 | 4 | [06](issues/06-retire-kustomize-packaging.md), [08](issues/08-artifact-hub-listing.md) |
 
-The longest chain is five tickets: 01, 02, 04, 05, then 06 or 08. Ticket 07 also waits for bootstrap ticket [38](../bootstrap/issues/38-attestations-sbom-arm64.md), and ticket 08 for org transfer ticket [05](../org-transfer/issues/05-first-release-under-org.md), so that the listing is registered under the org ([Decision 0016](../../docs/decisions/0016-biscuitbin-org.md)). None of these tickets is on the MVP critical path: the MVP installs through Decision 0012's kustomize route.
+The longest chain is five tickets: 01, 02, 04, 05, then 06 or 08. Ticket 07 also waited for bootstrap ticket [38](../bootstrap/issues/38-attestations-sbom-arm64.md), and carried 38's attestation slice itself when 38 had not started. Ticket 08 waits for org transfer ticket [05](../org-transfer/issues/05-first-release-under-org.md), so that the listing is registered under the org ([Decision 0016](../../docs/decisions/0016-biscuitbin-org.md)). None of these tickets is on the MVP critical path: the MVP installs through Decision 0012's kustomize route.
 
 When a ticket's **Blocked by** line changes, update both the diagram and this table.

@@ -5,7 +5,9 @@ the standard library has no YAML parser and knarr installs no PyPI package.
 The rules for release.yml are Decision 0012's: it runs on a version tag only,
 its token can write packages only in the job behind the release environment,
 and the existence guard pushes only when the tag is absent. publish also builds
-only the commit verify checked, and stops if the tag has moved since.
+only the commit verify checked, and stops if the tag has moved since, and attests
+each push it makes, the image and then the chart, with one pinned action
+(helm-chart ticket 07, Decision 0015).
 """
 
 from __future__ import annotations
@@ -217,7 +219,14 @@ def test_release_jobs_get_only_the_scopes_they_need() -> None:
     assert set(found) == {"verify", "publish"}
     assert permissions(found["verify"]) == {"contents": "read"}
     assert environment(found["verify"]) is None
-    assert permissions(found["publish"]) == {"contents": "read", "packages": "write"}
+    # id-token and attestations are attest-build-provenance's, and no more: storage
+    # records would need artifact-metadata too, so both attest steps turn them off.
+    assert permissions(found["publish"]) == {
+        "contents": "read",
+        "packages": "write",
+        "id-token": "write",
+        "attestations": "write",
+    }
     assert environment(found["publish"]) == "release"
 
 
@@ -463,6 +472,201 @@ def test_a_rerun_after_a_partial_publish_stops_at_the_image_guard() -> None:
         ]
     )
     assert stops_at_the_image_guard(jobs(RELEASE.read_text())["publish"])
+
+
+def attestations(lines: list[str]) -> list[tuple[int, str, dict[str, str]]]:
+    """Each attest-build-provenance step in a job's unstripped lines, as (index, its
+    `uses:` value, its `with:` inputs), whether `uses:` opens the step or follows its
+    `- name:`. The step's keys sit at the depth of `uses:`, and it ends at the first
+    line shallower than them."""
+    found: list[tuple[int, str, dict[str, str]]] = []
+    for index, line in enumerate(lines):
+        match = re.fullmatch(r"( *)(- )?uses: (actions/attest-build-provenance@.*)", line)
+        if not match:
+            continue
+        key = len(match.group(1)) + len(match.group(2) or "")
+        inputs: dict[str, str] = {}
+        within = False
+        for later in lines[index + 1 :]:
+            depth = len(later) - len(later.lstrip())
+            if depth < key:
+                break
+            if depth == key:
+                within = later.strip() == "with:"
+            elif within:
+                name, _, value = later.strip().partition(":")
+                inputs[name] = value.strip()
+        found.append((index, match.group(3), inputs))
+    return found
+
+
+# The subject each push's attestation names, by the repository its guard probes.
+SUBJECTS = {
+    '"$repo"': ("${{ env.IMAGE }}", "${{ env.DIGEST }}"),
+    '"$chart_repo"': ("${{ env.CHART }}", "${{ env.CHART_DIGEST }}"),
+}
+
+
+def attests_each_push(lines: list[str]) -> bool:
+    """After the last push, one attest step per push, in push order, each on that
+    push's name and digest, pushing the attestation to the registry and creating no
+    storage record (that needs artifact-metadata: write, a scope 38 does not add).
+    Attesting only once both are pushed means a failed attestation never leaves an
+    image with no chart. Every attest step uses the same pin, so the image and the
+    chart are attested one way (Decision 0015)."""
+    pushes = [(i, target) for i, line in enumerate(lines) if (target := push_target(line))]
+    steps = attestations(lines)
+    if not pushes or len({uses for _, uses, _ in steps}) != 1:
+        return False
+    if any(at < pushes[-1][0] for at, _, _ in steps):
+        return False
+    expected = [
+        {
+            "subject-name": SUBJECTS[target][0],
+            "subject-digest": SUBJECTS[target][1],
+            "push-to-registry": "true",
+            "create-storage-record": "false",
+        }
+        for _, target in pushes
+    ]
+    return [inputs for _, _, inputs in steps] == expected
+
+
+ATTEST_PIN = "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2"
+REGISTRY_ONLY = ("push-to-registry: true", "create-storage-record: false")
+
+
+def attest_step(
+    name: str,
+    digest: str,
+    *,
+    inputs: tuple[str, ...] = REGISTRY_ONLY,
+    pin: str = ATTEST_PIN,
+    named: bool = False,
+) -> list[str]:
+    """An attest step as release.yml writes it, or, `named`, with `- name:` first."""
+    opening = (
+        ["      - name: Attest", f"        uses: {pin}"] if named else [f"      - uses: {pin}"]
+    )
+    return [
+        *opening,
+        "        with:",
+        f"          subject-name: ${{{{ env.{name} }}}}",
+        f"          subject-digest: ${{{{ env.{digest} }}}}",
+        *(f"          {line}" for line in inputs),
+    ]
+
+
+IMAGE_PUSH = [
+    "      - name: Build and push",
+    "        run: |",
+    "          docker buildx build --push .",
+]
+CHART_PUSH = [
+    "      - name: Push the chart",
+    "        run: |",
+    f"          {CHART_GUARD[2]}",
+]
+IMAGE_ATTEST = attest_step("IMAGE", "DIGEST")
+CHART_ATTEST = attest_step("CHART", "CHART_DIGEST")
+IMAGE_INPUTS = {
+    "subject-name": "${{ env.IMAGE }}",
+    "subject-digest": "${{ env.DIGEST }}",
+    "push-to-registry": "true",
+    "create-storage-record": "false",
+}
+
+
+@pytest.mark.parametrize(
+    ("lines", "uses_at"),
+    [
+        ([*IMAGE_ATTEST, "      - name: next", "        with:", "          other: input"], 0),
+        ([*attest_step("IMAGE", "DIGEST", named=True), "      - name: next", "        with:"], 1),
+    ],
+    ids=["uses first", "name first"],
+)
+def test_the_attestations_reader_reads_one_step(lines: list[str], uses_at: int) -> None:
+    assert attestations(lines) == [(uses_at, ATTEST_PIN, IMAGE_INPUTS)]
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        [*IMAGE_PUSH, *CHART_PUSH, *IMAGE_ATTEST],
+        [*IMAGE_PUSH, *CHART_PUSH, *CHART_ATTEST],
+        [*IMAGE_PUSH, *CHART_PUSH, *CHART_ATTEST, *IMAGE_ATTEST],
+        [*IMAGE_PUSH, *IMAGE_ATTEST, *CHART_PUSH, *CHART_ATTEST],
+        [*IMAGE_ATTEST, *IMAGE_PUSH, *CHART_PUSH, *CHART_ATTEST],
+        [*IMAGE_PUSH, *CHART_PUSH, *IMAGE_ATTEST, *IMAGE_ATTEST, *CHART_ATTEST],
+        [*IMAGE_PUSH, *CHART_PUSH, *IMAGE_ATTEST, *attest_step("IMAGE", "CHART_DIGEST")],
+        [*IMAGE_PUSH, *CHART_PUSH, *IMAGE_ATTEST, *attest_step("CHART", "DIGEST")],
+        [
+            *IMAGE_PUSH,
+            *CHART_PUSH,
+            *IMAGE_ATTEST,
+            *attest_step("CHART", "CHART_DIGEST", inputs=("create-storage-record: false",)),
+        ],
+        [
+            *IMAGE_PUSH,
+            *CHART_PUSH,
+            *IMAGE_ATTEST,
+            *attest_step("CHART", "CHART_DIGEST", inputs=("push-to-registry: true",)),
+        ],
+        [
+            *IMAGE_PUSH,
+            *CHART_PUSH,
+            *IMAGE_ATTEST,
+            *attest_step(
+                "CHART",
+                "CHART_DIGEST",
+                pin="actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0",
+            ),
+        ],
+        [
+            *IMAGE_PUSH,
+            *CHART_PUSH,
+            *IMAGE_ATTEST,
+            *CHART_ATTEST,
+            *attest_step("CHART", "CHART_DIGEST", inputs=(), named=True),
+        ],
+        [*IMAGE_ATTEST, *CHART_ATTEST],
+    ],
+    ids=[
+        "no chart attestation",
+        "no image attestation",
+        "the chart attested first",
+        "the image attested before the chart is pushed",
+        "the image attested before its push",
+        "the image attested twice",
+        "a chart attestation naming the image",
+        "a chart attestation on the image digest",
+        "no push to the registry",
+        "storage records left on",
+        "two pins",
+        "a third step under a name",
+        "no push at all",
+    ],
+)
+def test_the_attest_rule_refuses_a_push_it_does_not_attest(steps: list[str]) -> None:
+    assert not attests_each_push(steps)
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        [*IMAGE_PUSH, *CHART_PUSH, *IMAGE_ATTEST, *CHART_ATTEST],
+        [*IMAGE_PUSH, *CHART_PUSH, *attest_step("IMAGE", "DIGEST", named=True), *CHART_ATTEST],
+    ],
+    ids=["as release.yml writes them", "one step under a name"],
+)
+def test_the_attest_rule_accepts_both_attested_after_both_pushes(steps: list[str]) -> None:
+    assert attests_each_push(steps)
+
+
+def test_release_attests_the_image_and_then_the_chart() -> None:
+    found = jobs(RELEASE.read_text())
+    assert attests_each_push(found["publish"])
+    assert attestations(found["verify"]) == []
 
 
 def test_verify_hands_publish_the_commit_it_checked() -> None:

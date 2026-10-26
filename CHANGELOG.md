@@ -4,6 +4,10 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ## [Unreleased]
 
+### Added
+
+- Releases attest what they publish (helm-chart ticket 07, with bootstrap ticket 38's image step): after the chart push, `release.yml` runs `actions/attest-build-provenance` on the image's digest and then on the chart's, and pushes each attestation to ghcr.io beside it. The publish job gains `id-token: write` and `attestations: write` and nothing else, so both steps set `create-storage-record: false`, since a storage record needs `artifact-metadata: write` too. Both are attested once both are pushed, so a failed attestation never leaves an image with no chart. The install guide verifies them before installing, with `gh attestation verify oci://ghcr.io/biscuitbin/knarr@<digest> --repo biscuitbin/knarr --signer-workflow biscuitbin/knarr/.github/workflows/release.yml` and the same command for `oci://ghcr.io/biscuitbin/charts/knarr`, and checks that the chart's stamped digest is the image's. This is the first release to carry image and chart attestations; `v0.3.0` and earlier have none.
+
 ## [0.3.0] - 2026-10-24
 
 ### Changed
