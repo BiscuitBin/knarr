@@ -30,7 +30,7 @@ gh attestation verify "oci://ghcr.io/biscuitbin/charts/knarr@$chart_digest" --re
 helm show values "oci://ghcr.io/biscuitbin/charts/knarr@$chart_digest" | grep 'digest:'
 ```
 
-The last line must print `$image_digest`: the chart installs the image by the digest stamped into it, so that is the image you verified. Then install by the chart digest you verified, as below, so the chart installed is the one checked.
+Helm first prints `Pulled:` and `Digest:` for the chart itself; that `Digest:` is the chart's digest. The last line, `digest:` from the chart's values, must print `$image_digest`: the chart installs the image by the digest stamped into it, so that is the image you verified. Then install by the chart digest you verified, as below, so the chart installed is the one checked.
 
 ## Install with Helm
 
