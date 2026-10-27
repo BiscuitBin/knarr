@@ -10,10 +10,10 @@
 
 **MVP critical path:** no.
 
-**Status:** in progress: the workflow, guide and changelog are done; box 2 waits for the next release.
+**Status:** done: `v0.3.1-rc.1` attested both, and both verify.
 
 - [x] The publish job attests the chart digest with the same pinned action and the same permissions 38 added, and `test_workflows.py` pins that the chart step exists.
-- [ ] **Authorization required:** the next release and the network. `gh attestation verify` passes on the published chart's digest, and the hand-back records the output.
+- [x] **Authorization required:** the next release and the network. `gh attestation verify` passes on the published chart's digest, and the hand-back records the output.
 - [x] The [install guide](../../../docs/how-to/install.md) shows the verify command for the chart beside the image's, and `CHANGELOG.md` says which release first carried a chart attestation.
 - [x] `just check` ends with "All checks passed and the worktree is unchanged."
 
@@ -48,3 +48,7 @@ Bootstrap 38 had not started, so, by the maintainer's decision, this branch carr
 ### Box 2: the prerelease
 
 Box 2 runs on `v0.3.1-rc.1`, a prerelease cut for it, so that if ghcr.io or `gh` refuses the chart's attestation, a prerelease takes the version bump and no stable release does. A prerelease pushes the image tags `0.3.1-rc.1` and `sha-<7>` only, and moves no `0.3`. Its release pull request bumps `gleam.toml` and the chart, dates the changelog heading, and adds [verify.sh](../evidence/07/verify.sh). After the run, `verify.sh <image digest> <chart digest>` verifies each digest from GitHub's attestations API and, with `--bundle-from-oci`, from ghcr.io, and checks the chart's stamped `image.digest`, into `verify.txt` beside it.
+
+The run, on 2026-10-27 with the maintainer's authorization for the tag, the `release` environment and the network ([the evidence](../evidence/07/README.md)): release run 40437088789 pushed the image `sha256:747f9fc7…b8b004c` and the chart `sha256:4870df80…349a6b2`, and both attest steps uploaded to GitHub, Rekor and ghcr.io. `verify.sh` passed: each digest verifies from GitHub and from ghcr.io with `--bundle-from-oci`, signed by `release.yml`, and the chart's stamped `image.digest` is the image's. ghcr.io and `gh` take an attestation on a Helm chart's OCI artifact, so Decision 0015 needs no change.
+
+**Finding: the guide's verify failed as written.** `--signer-workflow` matches the certificate's workflow URI with case, and the certificate spells the owner `BiscuitBin`, so the lowercase `biscuitbin/knarr/.github/workflows/release.yml` this ticket put in the guide (see "What changed") failed with only `Error: verifying with issuer "sigstore.dev"`; `--repo` alone passed. The evidence pull request spells the owner `BiscuitBin` in the guide and `verify.sh`, and adds an `[Unreleased]` `Fixed` entry; 0.3.1-rc.1's own changelog entry, already tagged, keeps the lowercase command. [signer-case.txt](../evidence/07/signer-case.txt) has both spellings and the certificate's URI. The run also showed that `helm show values` first prints the chart's own `Digest:`, beside the stamped `digest:` the guide checks, so the guide now says which is which. The publish job ran 79 s against 0.3.0's 58 s; the attest steps took 11 s and 8 s.
