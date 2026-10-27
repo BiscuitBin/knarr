@@ -4,6 +4,10 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ## [Unreleased]
 
+### Fixed
+
+- The install guide's `gh attestation verify` commands spell the owner `BiscuitBin` (helm-chart ticket 07). `--signer-workflow` matches the signing certificate's workflow URI letter for letter, and the certificate names `https://github.com/BiscuitBin/knarr/.github/workflows/release.yml`, so the lowercase `biscuitbin/knarr/.github/workflows/release.yml` that 0.3.1-rc.1's entry quotes fails on every release with `Error: verifying with issuer "sigstore.dev"`. `--repo` and the image and chart names are unaffected.
+
 ## [0.3.1-rc.1] - 2026-10-27
 
 ### Added

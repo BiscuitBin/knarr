@@ -5,19 +5,23 @@
 # which the attestations: write scope fed, and with --bundle-from-oci, from
 # the copy push-to-registry stored on ghcr.io beside the digest. The chart's
 # second read is the one no source checked before the release says ghcr.io
-# accepts. Every verify requires release.yml in biscuitbin/knarr as the
-# signer. Then the chart's stamped image.digest must be the image digest.
+# accepts. Every verify requires release.yml in BiscuitBin/knarr as the
+# signer. --signer-workflow matches the certificate's workflow URI with case,
+# and the certificate spells the owner BiscuitBin: the lowercase owner fails
+# with only 'Error: verifying with issuer "sigstore.dev"'. Registry names stay
+# lowercase. Then the chart's stamped image.digest must be the image digest.
 # gh and helm read only. Needs an authenticated gh. gh reads an oci://
 # subject with the registry credentials docker would use; both packages are
 # public, but if a verify fails on authentication, docker login ghcr.io and
-# rerun: that failure is not the chart finding.
+# rerun: that failure is not the chart finding. helm is the project's, from
+# the pixi environment: put .pixi/envs/default/bin first on PATH.
 # Usage: sh verify.sh <image digest> <chart digest> > verify.txt 2>&1
 set -eu
 usage='usage: verify.sh <image digest> <chart digest>'
 image_digest=${1:?$usage}
 chart_digest=${2:?$usage}
-repo=biscuitbin/knarr
-workflow=biscuitbin/knarr/.github/workflows/release.yml
+repo=BiscuitBin/knarr
+workflow=BiscuitBin/knarr/.github/workflows/release.yml
 image=ghcr.io/biscuitbin/knarr
 chart=ghcr.io/biscuitbin/charts/knarr
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }

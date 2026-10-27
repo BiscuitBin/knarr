@@ -1,0 +1,13 @@
+date: 2026-10-27T02:46Z
+gh version 2.100.0 (2026-09-03)
+
+$ gh attestation verify oci://ghcr.io/biscuitbin/knarr@sha256:747f9fc7f61982a3caac6de01355e40e1e0cc15db12aefeca13f68045b8b004c --repo biscuitbin/knarr --signer-workflow biscuitbin/knarr/.github/workflows/release.yml
+
+Error: verifying with issuer "sigstore.dev"
+exit 1
+
+$ gh attestation verify oci://ghcr.io/biscuitbin/knarr@sha256:747f9fc7f61982a3caac6de01355e40e1e0cc15db12aefeca13f68045b8b004c --repo biscuitbin/knarr --signer-workflow BiscuitBin/knarr/.github/workflows/release.yml
+exit 0
+
+$ gh attestation verify oci://ghcr.io/biscuitbin/knarr@sha256:747f9fc7f61982a3caac6de01355e40e1e0cc15db12aefeca13f68045b8b004c --repo biscuitbin/knarr --format json | jq .[0].verificationResult.signature.certificate.subjectAlternativeName
+"https://github.com/BiscuitBin/knarr/.github/workflows/release.yml@refs/tags/v0.3.1-rc.1"
