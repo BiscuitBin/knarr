@@ -143,7 +143,7 @@ def test_other_environments_and_platforms_are_ignored(project: Path) -> None:
 def test_the_committed_lock_is_readable_for_each_platform(platform: str) -> None:
     locked = env_check.locked(REPOSITORY / "pixi.lock", platform)
     assert any(name.startswith("gleam-1.19.0-") for name in locked)
-    assert any(name.startswith("erlang-29.1.1-") for name in locked)
+    assert any(name.startswith("erlang-29.1.2-") for name in locked)
 
 
 @pytest.mark.parametrize(

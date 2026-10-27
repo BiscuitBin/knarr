@@ -1,0 +1,24 @@
+date: 2026-10-27T07:58Z
+revision: 17d16d5
+image: knarr:52-otp-and-base-image-a-3f954095, arm64
+== 1. just image-check
+openssl: OpenSSL 3.6.5 29 Sep 2026 (Library: OpenSSL 3.6.5 29 Sep 2026) (/opt/knarr/.pixi/envs/runtime/bin/openssl)
+otp_release 29, erts 17.1.1
+ssl:versions() ['tlsv1.3','tlsv1.2']
+ok   right CA, by name localhost                  want ok
+ok   right CA, by IP tuple (IP SAN)               want ok
+ok   wrong CA (ca-b), by name                     want unknown_ca
+ok   wrong CA (ca-b), by IP tuple                 want unknown_ca
+ok   right CA, wrong name (SNI wrong.example)     want hostname
+ok   right CA, IP tuple, cert has no IP SAN       want hostname
+tls_check: all 6 cases matched
+image: OTP 29, numeric user and read-only runtime verified
+== 2. just image-scan and just runtime-scan
+  No vulnerabilities found
+  image-scan exit 0
+  No vulnerabilities found
+  runtime-scan: grype catalogued 12 conda packages in /opt/knarr/.pixi/envs/runtime of knarr:52-otp-and-base-image-a-3f954095 and found no fixable high or critical vulnerability in the copy
+  runtime-scan exit 0
+== 3. erlang in the image scan
+  erlang 29.1.2: binary-classifier-cataloger, type binary, cpe:2.3:a:erlang:erlang\/otp:29.1.2:*:*:*:*:*:*:*
+  from /opt/knarr/.pixi/envs/runtime/lib/erlang/erts-17.1.1/bin/beam.smp

@@ -1,0 +1,24 @@
+== ci.yml
+run: https://github.com/BiscuitBin/knarr/actions/runs/40470638639
+event: pull_request on ticket/52-otp-and-base-image-advisories at e7eb105, 2026-10-27T08:00:51Z
+status: completed, success
+-- jobs
+Repository gate: success, 2026-10-27T08:00:54Z to 2026-10-27T08:03:11Z
+Kind smoke (non-required): success, 2026-10-27T08:03:13Z to 2026-10-27T08:04:52Z
+Kind fake worker smoke (non-required): success, 2026-10-27T08:03:13Z to 2026-10-27T08:04:52Z
+Kwok readiness (non-required): success, 2026-10-27T08:03:13Z to 2026-10-27T08:03:47Z
+Selected checker regressions: success, 2026-10-27T08:03:14Z to 2026-10-27T08:06:21Z
+check: success, 2026-10-27T08:06:23Z to 2026-10-27T08:06:26Z
+-- Kind smoke: just image-check (the TLS check on the new pin)
+openssl: OpenSSL 3.6.5 29 Sep 2026 (Library: OpenSSL 3.6.5 29 Sep 2026) (/opt/knarr/.pixi/envs/runtime/bin/openssl)
+escript: /opt/knarr/.pixi/envs/runtime/bin/escript
+otp_release 29, erts 17.1.1
+ssl:versions() ['tlsv1.3','tlsv1.2']
+ok   right CA, by name localhost                  want ok         got {ok,[{protocol,'tlsv1.3'}, {selected_cipher_suite,#{prf => sha384,cipher => aes_256_gcm, key_exchange => any,mac => aead}}]}
+ok   right CA, by IP tuple (IP SAN)               want ok         got {ok,[{protocol,'tlsv1.3'}, {selected_cipher_suite,#{prf => sha384,cipher => aes_256_gcm, key_exchange => any,mac => aead}}]}
+ok   wrong CA (ca-b), by name                     want unknown_ca got {error,{tls_alert,{unknown_ca,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2308 generated CLIENT ALERT: Fatal - Unknown CA\n"}}}
+ok   wrong CA (ca-b), by IP tuple                 want unknown_ca got {error,{tls_alert,{unknown_ca,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2308 generated CLIENT ALERT: Fatal - Unknown CA\n"}}}
+ok   right CA, wrong name (SNI wrong.example)     want hostname   got {error,{tls_alert,{bad_certificate,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2316 generated CLIENT ALERT: Fatal - Bad Certificate\n {bad_cert,\n {hostname_check_failed,\n {requested,\"wrong.example\"},\n {received,[{dNSName,\"localhost\"},{iPAddress,<<127,0,0,1>>}]}}}"}}}
+ok   right CA, IP tuple, cert has no IP SAN       want hostname   got {error,{tls_alert,{bad_certificate,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2316 generated CLIENT ALERT: Fatal - Bad Certificate\n {bad_cert,{hostname_check_failed,{requested,{127,0,0,1}},\n {received,[{dNSName,\"localhost\"}]}}}"}}}
+tls_check: all 6 cases matched
+image: OTP 29, numeric user and read-only runtime verified

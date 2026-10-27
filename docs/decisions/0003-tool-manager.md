@@ -52,7 +52,7 @@ shellcheck = "==0.11.0"
 # The single owner of the OTP version: pixi, CI and both Dockerfile stages read
 # this pin through pixi.lock.
 [feature.otp.dependencies]
-erlang = "==29.1.1"
+erlang = "==29.1.2"
 
 # Local-cluster tooling, kept out of the default environment so the gate jobs
 # do not install it.
@@ -80,12 +80,12 @@ There are three environments, and one solve group gives all three the same build
 
 ### Pins (conda-forge, confirmed 2026-10-07)
 
-Each version is conda-forge's newest on both platforms on that date ([search.txt](../../.scratch/bootstrap/evidence/01/search.txt)).
+Each version is conda-forge's newest on both platforms on that date ([search.txt](../../.scratch/bootstrap/evidence/01/search.txt)). Amended by [ticket 52](../../.scratch/bootstrap/issues/52-otp-and-base-image-advisories.md): erlang is 29.1.2. Four OTP advisories apply to 29.1.1, all fixed in 29.1.2, and conda-forge built 29.1.2 for all three locked platforms on 2026-10-14 ([probe.txt](../../.scratch/bootstrap/evidence/52/probe.txt)). Its erts is 17.1.1 and its ssl 11.7.8. The snippet, the `erlang` row and the solve bullet state the new pin; the original record was 29.1.1 with erts 17.1. The other rows keep the original record. [Decision 0014](0014-dependency-updates-and-audit.md) has the advisories.
 
 | Package | Binary | Pin | Environment |
 | --- | --- | --- | --- |
 | `gleam` | `gleam` | 1.19.0 | default |
-| `erlang` | `erl`, `escript`, `erlc` | 29.1.1 (OTP 29, erts 17.1) | default, cluster, runtime |
+| `erlang` | `erl`, `escript`, `erlc` | 29.1.2 (OTP 29, erts 17.1.1) | default, cluster, runtime |
 | `just` | `just` | 1.58.0 | default |
 | `prek` | `prek` | 0.5.5 | default |
 | `typos` | `typos` | 1.51.1 | default |
@@ -211,7 +211,7 @@ Each script exits non-zero on an unexpected result. [README](../../.scratch/boot
 **Search and solve.** [search.txt](../../.scratch/bootstrap/evidence/01/search.txt) shows all fifteen packages on both platforms at the pinned versions. It also shows the eight tools absent from conda-forge and the k3d mismatch. [solve.txt](../../.scratch/bootstrap/evidence/01/solve.txt) shows these results:
 
 - Both platforms solve. `pixi install --locked --all` installs all three environments.
-- Every environment on a platform has the same erlang and openssl build. On linux-64 that is `erlang 29.1.1 pl5321h8f2c242_0` and `openssl 3.6.5 h781a0a9_0`.
+- Every environment on a platform has the same erlang and openssl build. On linux-64 that is `erlang 29.1.2 pl5321h8f2c242_0` and `openssl 3.6.5 h781a0a9_0`. Amended by ticket 52: the solve locked `erlang 29.1.1` with the same build string; the relock moved erlang alone.
 - No cluster binary is in `default`, and there is no `gleam` in `runtime`.
 - Every tool runs through a `PATH` export alone.
 - The drift table:

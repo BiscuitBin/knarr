@@ -1,0 +1,64 @@
+date: 2026-10-27T07:58Z
+revision: 17d16d5
+erlang pin: 29.1.2
+== 1. OSV.dev records
+-- CVE-2026-105236 (EEF-CVE-2026-105236, GHSA-2g23-cgjh-34gq)
+  TLS 1.2 session resumption in ssl crosses SNI virtual-host client-certificate trust boundaries
+  published 2026-10-14, modified 2026-10-24
+  OTP 29 fixed in: 29.1.2
+  tags: OTP-29.1.1 listed, OTP-29.1.2 not listed (82 enumerated)
+-- CVE-2026-42789 (EEF-CVE-2026-42789, GHSA-c99q-jmpx-v8qq)
+  Non-CA certificate accepted as intermediate issuer in public_key path validation
+  published 2026-05-27, modified 2026-10-22
+  OTP 29 fixed in: 29.1.2
+  tags: OTP-29.1.1 listed, OTP-29.1.2 not listed (86 enumerated)
+-- EEF-CVE-2026-42789 (CVE-2026-42789, GHSA-c99q-jmpx-v8qq)
+  Non-CA certificate accepted as intermediate issuer in public_key path validation
+  published 2026-05-27, modified 2026-10-14
+  OTP 29 fixed in: 29.1.2
+  tags: OTP-29.1.1 listed, OTP-29.1.2 not listed (97 enumerated)
+-- CVE-2026-96596 (EEF-CVE-2026-96596, GHSA-phm5-m6cj-5382)
+  erl_tar:extract/2 loops forever on a GNU sparse member with a trailing hole
+  published 2026-10-14, modified 2026-10-24
+  OTP 29 fixed in: 29.1.2
+  tags: OTP-29.1.1 listed, OTP-29.1.2 not listed (28 enumerated)
+-- CVE-2026-94200 (EEF-CVE-2026-94200, GHSA-m5mh-q53w-67jq)
+  TLS 1.3 client ticket store crashed by NewSessionTicket with empty early_data extension in ssl
+  published 2026-10-14, modified 2026-10-24
+  OTP 29 fixed in: 29.1.2
+  tags: OTP-29.1.1 not listed, OTP-29.1.2 not listed (0 enumerated)
+== 2. hex_audit.py
+-- the committed tree
+  hex-audit: OSV.dev lists no advisory for 38 hex packages or Erlang/OTP 29.1.2
+  exit 0
+-- control: the committed manifest with erlang ==29.1.1
+  CVE-2026-105236  Erlang/OTP 29.1.1  https://osv.dev/vulnerability/CVE-2026-105236
+  CVE-2026-42789  Erlang/OTP 29.1.1  https://osv.dev/vulnerability/CVE-2026-42789
+  CVE-2026-96596  Erlang/OTP 29.1.1  https://osv.dev/vulnerability/CVE-2026-96596
+  EEF-CVE-2026-42789  Erlang/OTP 29.1.1  https://osv.dev/vulnerability/EEF-CVE-2026-42789
+  hex-audit: OSV.dev lists 4 advisories against these releases; move each pin past its fix, or record why it stays
+  exit 1
+== 3. conda-forge erlang builds
+linux-64       erlang 29.1.2 pl5321h8f2c242_0, 2026-10-14 16:37:10 UTC, locked; newest 29.1.2
+osx-arm64      erlang 29.1.2 pl5321h4aabdd8_0, 2026-10-14 16:37:09 UTC, locked; newest 29.1.2
+linux-aarch64  erlang 29.1.2 pl5321h7778743_0, 2026-10-14 16:30:58 UTC, locked; newest 29.1.2
+== 4. the runtime base
+pinned:    sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c
+tag today: sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c
+libssl3t64 linux/amd64: 3.0.13-0ubuntu3.16
+libssl3t64 linux/arm64: 3.0.13-0ubuntu3.16
+-- grype the pinned base
+  No vulnerabilities found
+  exit 0
+-- grype control: the previous pin
+  NAME        INSTALLED                FIXED IN                 TYPE  VULNERABILITY   SEVERITY  EPSS         RISK
+  libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16       deb   CVE-2026-84782  High      0.8% (57th)  0.6
+  libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16       deb   CVE-2026-75806  Low       1.1% (65th)  0.3
+  zlib1g      1:1.3.dfsg-3.1ubuntu2.2  1:1.3.dfsg-3.1ubuntu2.3  deb   CVE-2026-85091  Medium    0.5% (40th)  0.2
+  libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16       deb   CVE-2026-54872  Low       0.4% (36th)  0.1
+  libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16       deb   CVE-2026-77696  Low       0.4% (33rd)  0.1
+  libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16       deb   CVE-2026-75805  Low       0.3% (25th)  < 0.1
+  libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16       deb   CVE-2026-35189  Low       0.3% (24th)  < 0.1
+  [0001] ERROR discovered vulnerabilities at or above the severity threshold
+  exit 2
+grype database built: 2026-10-27T06:30:41Z
