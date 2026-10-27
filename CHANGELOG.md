@@ -4,7 +4,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ## [Unreleased]
 
-## [0.3.1-rc.1] - 2026-10-26
+## [0.3.1-rc.1] - 2026-10-27
 
 ### Added
 
