@@ -33,7 +33,7 @@ kustomize = "==5.8.2"
 # The single owner of the OTP version: pixi, CI and both Dockerfile stages read
 # this pin through pixi.lock.
 [feature.otp.dependencies]
-erlang = "==29.1.1"
+erlang = "==29.1.2"
 
 # Local-cluster tooling, kept out of the default environment so the gate jobs
 # do not install it.

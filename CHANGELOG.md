@@ -4,6 +4,10 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ## [Unreleased]
 
+### Security
+
+- The image ships Erlang/OTP 29.1.2 (erts 17.1.1), up from 29.1.1, which fixes CVE-2026-94200 (High), CVE-2026-105236, CVE-2026-42789 and CVE-2026-96596 (bootstrap ticket 52). Its `ubuntu:24.04` base moves to the index that carries `libssl3t64` 3.0.13-0ubuntu3.16, which fixes CVE-2026-84782 (High), and `zlib1g` 1:1.3.dfsg-3.1ubuntu2.3. The conda-forge openssl the BEAM links stays at 3.6.5.
+
 ### Fixed
 
 - The install guide's `gh attestation verify` commands spell the owner `BiscuitBin` (helm-chart ticket 07). `--signer-workflow` matches the signing certificate's workflow URI letter for letter, and the certificate names `https://github.com/BiscuitBin/knarr/.github/workflows/release.yml`, so the lowercase `biscuitbin/knarr/.github/workflows/release.yml` that 0.3.1-rc.1's entry quotes fails on every release with `Error: verifying with issuer "sigstore.dev"`. `--repo` and the image and chart names are unaffected.

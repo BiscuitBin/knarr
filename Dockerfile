@@ -17,7 +17,7 @@ RUN gleam export erlang-shipment \
 COPY scripts/prune_runtime.py scripts/
 RUN .pixi/envs/default/bin/python -I scripts/prune_runtime.py .pixi/envs/runtime perl
 
-FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55 AS runtime
+FROM ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c AS runtime
 WORKDIR /opt/knarr
 COPY --from=build /opt/knarr/.pixi/envs/runtime /opt/knarr/.pixi/envs/runtime
 COPY --from=build /opt/knarr/build/erlang-shipment /opt/knarr/shipment
