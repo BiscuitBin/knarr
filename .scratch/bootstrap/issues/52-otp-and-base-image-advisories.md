@@ -28,15 +28,15 @@ These OTP findings are new. On 2026-10-09 (UTC), ticket 27's probe found no OSV 
 
 **MVP critical path:** no. It is maintenance hygiene, and the MVP does not need it.
 
-**Status:** in progress. The pin and base-image work is done on the branch; the pull request's kind smoke job and the audit run on `main` are pending.
+**Status:** in progress. The pin and base-image work is done in [pull request #68](https://github.com/BiscuitBin/knarr/pull/68), and its CI run is green; the audit run on `main` after the merge is pending.
 
 - [x] **Authorization required:** the network, for `pixi lock`. `erlang` in `pixi.toml` moves past 29.1.2 to a release with no OSV advisory, and the lock follows; or 0014 records why the pin stays and when it is looked at again.
-- [ ] The tripwires ticket 42 names pass on the new pin: the SNI test and the `unknown_ca`, `bad_certificate` and `econnrefused` loopback tests in `just test`, and `tls_check.escript` through `just image-check` in CI's kind smoke job.
+- [x] The tripwires ticket 42 names pass on the new pin: the SNI test and the `unknown_ca`, `bad_certificate` and `econnrefused` loopback tests in `just test`, and `tls_check.escript` through `just image-check` in CI's kind smoke job.
 - [x] Decision 0003's L55, L88 and L214, and `test_env_check.py`'s committed-lock test, state the new pin. 0014 carries an "Amended by ticket 52" note.
 - [x] **Authorization required:** the network, for `docker buildx imagetools inspect` on `ubuntu:24.04`. The Dockerfile's runtime `FROM` digest moves to an index with `libssl3t64` 3.0.13-0ubuntu3.16 or later, or 0014 records the date it was checked and that the image scan is still red on it.
-- [ ] **Authorization required:** a push and `gh`, for the branch and its pull request.
+- [x] **Authorization required:** a push and `gh`, for the branch and its pull request.
 - [ ] **Authorization required:** one `gh workflow run audit.yml --ref main` after the merge. The hand-back records the run URL and its verdict.
-- [ ] `just check` ends with "All checks passed and the worktree is unchanged."
+- [x] `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes
 
@@ -53,7 +53,7 @@ Started on 2026-10-27 (UTC). The maintainer authorized every network action the 
 
 - The committed-lock test failed on the old lock, then passed after the relock. `just lock-check` and `just env-check` pass. `just test` reports 676 passed, among them the SNI test and the `unknown_ca`, `bad_certificate` and `econnrefused` loopback tests.
 - `just hex-audit` exits 0 on OTP 29.1.2. As a control, the pin moved back exits 1 naming the three OSV advisories ([probe.txt](../evidence/52/probe.txt)).
-- The image built here for linux/arm64 passes `just image-check`, with `tls_check.escript` matching all 6 cases, and both `just image-scan` and `just runtime-scan` exit 0 ([local-image.txt](../evidence/52/local-image.txt)). CI's amd64 build and its kind smoke job are the ticket's proof and are still pending.
+- The image built here for linux/arm64 passes `just image-check`, with `tls_check.escript` matching all 6 cases, and both `just image-scan` and `just runtime-scan` exit 0 ([local-image.txt](../evidence/52/local-image.txt)). CI's amd64 build is the ticket's proof: in pull request #68's `ci.yml` run [40470638639](https://github.com/BiscuitBin/knarr/actions/runs/40470638639), at `e7eb105`, every job passed, and the kind smoke job's `just image-check` shows erts 17.1.1 and `tls_check.escript` matching all 6 cases ([ci-runs.txt](../evidence/52/ci-runs.txt)).
 - **L116's reconciliation:** syft's `binary-classifier-cataloger` reads `beam.smp` and reports erlang with the CPE `erlang/otp`. That is how an image scan matched erlang as a `binary` package. This was observed on the 29.1.2 image here; run 39896502411's 29.1.1 row is the ticket's account.
 - **When the advisories appeared:** three were published on 2026-10-14, the day after ticket 45's run. CVE-2026-42789 was published in May, and its EEF record was last modified on 2026-10-14. When it began to list `OTP-29.1.1` is not shown.
 
