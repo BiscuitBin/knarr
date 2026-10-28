@@ -14,8 +14,8 @@
 # ripsecrets 0.1.11 predates GitHub's asset digests and publishes no checksum
 # file: its sha256 is a first-use pin computed on 2026-10-07 (Decision 0003).
 
-rebar3 3.27.1 linux-64 https://github.com/erlang/rebar3/releases/download/3.27.1/rebar3 708407032479514dd68b581a0b09a68b5a781fb6f53dcf4ad81ce4ef6b92940f rebar3
-rebar3 3.27.1 osx-arm64 https://github.com/erlang/rebar3/releases/download/3.27.1/rebar3 708407032479514dd68b581a0b09a68b5a781fb6f53dcf4ad81ce4ef6b92940f rebar3
+rebar3 3.28.0 linux-64 https://github.com/erlang/rebar3/releases/download/3.28.0/rebar3 5a28b1cca082d3b023ec0f5df9d9f9d52557036c6f2a21c1ffa11b93a984dd42 rebar3
+rebar3 3.28.0 osx-arm64 https://github.com/erlang/rebar3/releases/download/3.28.0/rebar3 5a28b1cca082d3b023ec0f5df9d9f9d52557036c6f2a21c1ffa11b93a984dd42 rebar3
 ripsecrets 0.1.11 linux-64 https://github.com/sirwart/ripsecrets/releases/download/v0.1.11/ripsecrets-0.1.11-x86_64-unknown-linux-gnu.tar.gz 9daf017dfdea242a58f672450a2526f0406211afe9e872c740adc49b42feccf5 ripsecrets
 ripsecrets 0.1.11 osx-arm64 https://github.com/sirwart/ripsecrets/releases/download/v0.1.11/ripsecrets-0.1.11-aarch64-apple-darwin.tar.gz b2c822742e8cbf355ba0cb4cc690c3cd8fdc9ec1916c8148f27bd9098cb7aee4 ripsecrets
 editorconfig-checker 4.0.2 linux-64 https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v4.0.2/editorconfig-checker-linux-amd64.tar.gz 44efaef3ed14c6ab52eb87481d78e5e5c204796dccf26e2f4598a61ba17f8003 editorconfig-checker
