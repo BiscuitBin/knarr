@@ -22,3 +22,27 @@ ok   right CA, wrong name (SNI wrong.example)     want hostname   got {error,{tl
 ok   right CA, IP tuple, cert has no IP SAN       want hostname   got {error,{tls_alert,{bad_certificate,"TLS client: In state wait_cert_cr at ssl_handshake.erl:2316 generated CLIENT ALERT: Fatal - Bad Certificate\n {bad_cert,{hostname_check_failed,{requested,{127,0,0,1}},\n {received,[{dNSName,\"localhost\"}]}}}"}}}
 tls_check: all 6 cases matched
 image: OTP 29, numeric user and read-only runtime verified
+== audit.yml
+run: https://github.com/BiscuitBin/knarr/actions/runs/40605236290
+event: workflow_dispatch on main at e886837, 2026-10-27T23:54:03Z
+status: completed, success
+-- jobs
+Hex advisories: success, 2026-10-27T23:54:07Z to 2026-10-27T23:54:25Z
+Image scan: success, 2026-10-27T23:54:06Z to 2026-10-27T23:56:11Z
+External links: success, 2026-10-27T23:54:07Z to 2026-10-27T23:54:27Z
+-- Hex advisories
+hex-audit: OSV.dev lists no advisory for 38 hex packages or Erlang/OTP 29.1.2
+-- Image scan: steps
+Set up job: success
+Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1: success
+Run ./.github/actions/setup: success
+Run just image-build: success
+Run just image-scan: success
+Run just runtime-scan: success
+Post Run ./.github/actions/setup: success
+Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1: success
+Complete job: success
+-- Image scan: just image-scan, just runtime-scan
+No vulnerabilities found
+No vulnerabilities found
+runtime-scan: grype catalogued 12 conda packages in /opt/knarr/.pixi/envs/runtime of knarr:knarr-12fc945d and found no fixable high or critical vulnerability in the copy
