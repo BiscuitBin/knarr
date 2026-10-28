@@ -11,6 +11,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 ### Security
 
 - The image ships Erlang/OTP 29.1.2 (erts 17.1.1), up from 29.1.1, which fixes CVE-2026-94200 (High), CVE-2026-105236, CVE-2026-42789 and CVE-2026-96596 (bootstrap ticket 52). Its `ubuntu:24.04` base moves to the index that carries `libssl3t64` 3.0.13-0ubuntu3.16, which fixes CVE-2026-84782 (High), and `zlib1g` 1:1.3.dfsg-3.1ubuntu2.3. The conda-forge openssl the BEAM links stays at 3.6.5.
+- The image builds with rebar3 3.28.0, up from 3.27.1. 3.28.0 fixes CVE-2026-96596, CVE-2026-103060 and CVE-2026-105274 in rebar3 and the hex_core copy it ships (bootstrap ticket 53). rebar3 runs only in the build stage, where it compiles `prometheus`, `ddskerl` and `hpack_erl`. The runtime image does not carry it, so nothing it ships changes.
 
 ## [0.3.1-rc.1] - 2026-10-27
 
