@@ -20,14 +20,14 @@
 
 **MVP critical path:** no. It is maintenance hygiene, and rebar3 runs only in the build.
 
-**Status:** in progress. See [the hand-back notes](#hand-back-notes).
+**Status:** done. [Pull request #70](https://github.com/BiscuitBin/knarr/pull/70) is open, and its `ci.yml` run [40780385069](https://github.com/BiscuitBin/knarr/actions/runs/40780385069) passed every job. See [the hand-back notes](#hand-back-notes).
 
 - [x] **Authorization required:** the network, for `gh api` on erlang/rebar3's releases, downloading the escript and its Sigstore bundle, and OSV.dev's records. rebar3 moves to a release at or past 3.28.0, or 0014 records why it stays.
 - [x] `test_image.py`'s rebar3 test fails after the `tools.txt` move and passes after both Dockerfiles move.
 - [x] **Authorization required:** `just initialize`, which reinstalls rebar3 and, with `gh` authenticated, verifies its Sigstore bundle. `just env-check` passes, and `rebar3 version` reports the new release.
 - [x] With the compiled packages removed, `just build` rebuilds `prometheus`, `ddskerl` and `hpack_erl` with the new rebar3, and `just test` passes.
 - [x] Decision 0003's L114 and L125-126 state the new pin. 0014 and 0003 carry "Amended by ticket 53" notes, and `CHANGELOG.md` has the Security entry.
-- [ ] **Authorization required:** a push and `gh`, for the branch and its pull request. CI builds both images, so `ADD --checksum` accepts the new sha256, and every job passes.
+- [x] **Authorization required:** a push and `gh`, for the branch and its pull request. CI builds both images, so `ADD --checksum` accepts the new sha256, and every job passes.
 - [x] `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes
@@ -56,7 +56,7 @@ Started on 2026-10-28 (UTC). The maintainer authorized the reads above, `just in
   - OSV's querybatch lists no advisory for 3.28.0. None of the three records lists 3.28.0, and each states its rebar3 fixes at or before it. Because the querybatch misses CVE-2026-96596, this covers the records the probe read, not every record OSV holds.
 - [build.txt](../evidence/53/build.txt): with `build/dev` and `build/prod` removed, `just build` compiled `ddskerl` 0.4.3, `hpack_erl` 0.3.0 and `prometheus` 6.1.3 with `rebar 3.28.0 on Erlang/OTP 29 Erts 17.1.1`. `just test` reports 676 passed.
 - **Not established:** why OSV's querybatch does not return CVE-2026-96596 for rebar3 3.27.1, although the record enumerates that tag. Its record joins four repositories in one `affected` entry, while the two it does return name rebar3 alone, which may or may not be the cause.
-- CI's image builds are pending; the hand-back records them once the pull request's run ends.
+- **CI:** pull request #70's `ci.yml` run [40780385069](https://github.com/BiscuitBin/knarr/actions/runs/40780385069), at `93c66e9`, passed every job: the repository gate, `check`, the selected checker regressions, kwok readiness, and both kind smoke jobs. In the kind smoke job's `just image-build` and the fake worker job's `just fake-worker-image-build`, the build stage's `ADD --checksum=sha256:5a28b1cc… …/3.28.0/rebar3` step finished. Inside the image builds, rebar3 compiled `ddskerl`, `hpack_erl` and `prometheus` for knarr, and `hpack_erl`, the fake worker's one rebar3-built package. The kind smoke job's `just image-check` reports OTP 29, erts 17.1.1 and `tls_check: all 6 cases matched` on amd64. The run was read back with `gh run view --log`; no transcript of it is committed.
 
 ### What later tickets need
 
