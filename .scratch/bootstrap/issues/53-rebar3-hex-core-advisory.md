@@ -20,7 +20,7 @@
 
 **MVP critical path:** no. It is maintenance hygiene, and rebar3 runs only in the build.
 
-**Status:** done. [Pull request #70](https://github.com/BiscuitBin/knarr/pull/70) is open, and its `ci.yml` run [40983365570](https://github.com/BiscuitBin/knarr/actions/runs/40983365570), at `5448fae`, passed every job. See [the hand-back notes](#hand-back-notes).
+**Status:** done. [Pull request #70](https://github.com/BiscuitBin/knarr/pull/70) merged as `9c2f431`. Its `ci.yml` run [40983365570](https://github.com/BiscuitBin/knarr/actions/runs/40983365570), at `5448fae`, passed every job, and so did `ci.yml` run [40991392327](https://github.com/BiscuitBin/knarr/actions/runs/40991392327) on `main` at the merge commit. See [the hand-back notes](#hand-back-notes).
 
 - [x] **Authorization required:** the network, for `gh api` on erlang/rebar3's releases, downloading the escript and its Sigstore bundle, and OSV.dev's records. rebar3 moves to a release at or past 3.28.0, or 0014 records why it stays.
 - [x] `test_image.py`'s rebar3 test fails after the `tools.txt` move and passes after both Dockerfiles move.
