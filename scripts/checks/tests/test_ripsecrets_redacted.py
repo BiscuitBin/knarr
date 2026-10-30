@@ -3,7 +3,8 @@
 Ported from the cases in .scratch/bootstrap/evidence/02/ripsecrets.sh. Each case
 runs the wrapper in a throwaway worktree holding the pinned binary that
 `just initialize` installs. The planted token is made at run time, so no
-committed file carries one.
+committed file carries one. ripsecrets 0.1.11's randomness test passes over about
+1 random token in 200, so the fixture redraws until the pinned binary flags one.
 """
 
 from __future__ import annotations
@@ -42,9 +43,18 @@ def worktree(repository: Path, pinned: Path) -> Path:
 
 
 @pytest.fixture
-def token() -> str:
+def token(pinned: Path, tmp_path: Path) -> str:
     alphabet = string.ascii_letters + string.digits
-    return "ghp_" + "".join(secrets.choice(alphabet) for _ in range(36))
+    draw = tmp_path / "draw.py"
+    for _ in range(100):
+        candidate = "ghp_" + "".join(secrets.choice(alphabet) for _ in range(36))
+        draw.write_text(f'token = "{candidate}"\n')
+        result = subprocess.run(
+            [str(pinned), "--", str(draw)], check=False, capture_output=True, text=True
+        )
+        if result.returncode == 1:
+            return candidate
+    pytest.fail("the pinned ripsecrets flagged none of 100 fresh tokens")
 
 
 @pytest.fixture
