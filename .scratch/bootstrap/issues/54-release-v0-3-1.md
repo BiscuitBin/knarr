@@ -20,22 +20,22 @@
 
 **MVP critical path:** no. It is a documentation fix and a patch release.
 
-**Status:** in-progress. The release commit is prepared; every step that leaves the worktree waits for the maintainer. See [the hand-back notes](#hand-back-notes).
+**Status:** done once its evidence pull request merges. `v0.3.1` is published as `ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385`, with the chart `oci://ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013`, both attested. The last box stays open until that pull request merges. See [the hand-back notes](#hand-back-notes) and [the evidence](../evidence/54/README.md).
 
 - [x] The status text is fixed in `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/README.md` and `docs/tutorials/README.md`.
 - [x] `gleam.toml` and `charts/knarr/Chart.yaml` name 0.3.1, and `CHANGELOG.md` moves `[Unreleased]` under `## [0.3.1]`.
 - [x] The install guide names `v0.3.1` as the first stable release with attestations, and its upgrade from `v0.2.0` names `--version 0.3.1`.
 - [x] `just check` ends with "All checks passed and the worktree is unchanged.", and `git status --short` is empty.
-- [ ] **Authorization required:** push the branch.
-- [ ] **Authorization required:** open the release pull request with `gh`.
-- [ ] **Authorization required:** merge it.
-- [ ] **Authorization required:** `git fetch`, then `just release-preflight v0.3.1 <merge commit>` exits 0, with its transcript in `evidence/54/preflight.txt`.
-- [ ] **Authorization required:** push the annotated tag `v0.3.1` on the merge commit.
-- [ ] **Authorization required:** the maintainer approves the `release` environment in GitHub.
-- [ ] **Authorization required:** `gh run view` reads the run: both jobs green, the tags `0.3.1`, `0.3` and `sha-` with the merge commit's first seven characters, and the image and chart digests from its summary.
-- [ ] **Authorization required:** the install guide's `gh attestation verify` commands pass for both digests, and the chart's stamped digest is the image's.
-- [ ] **Authorization required:** `just audit-install`, then `just image-scan` and `just runtime-scan` on the published digest, with `v0.3.1-rc.1`'s digest as a control.
-- [ ] Ticket 38's last box is split, and its attestation half names 0.3.1-rc.1 as the first prerelease and 0.3.1 as the first stable release to carry attestations.
+- [x] **Authorization required:** push the branch.
+- [x] **Authorization required:** open the release pull request with `gh`.
+- [x] **Authorization required:** merge it.
+- [x] **Authorization required:** `git fetch`, then `just release-preflight v0.3.1 <merge commit>` exits 0, with its transcript in `evidence/54/preflight.txt`.
+- [x] **Authorization required:** push the annotated tag `v0.3.1` on the merge commit.
+- [x] **Authorization required:** the maintainer approves the `release` environment in GitHub.
+- [x] **Authorization required:** `gh run view` reads the run: both jobs green, the tags `0.3.1`, `0.3` and `sha-` with the merge commit's first seven characters, and the image and chart digests from its summary.
+- [x] **Authorization required:** the install guide's `gh attestation verify` commands pass for both digests, and the chart's stamped digest is the image's.
+- [x] **Authorization required:** `just audit-install`, then `just image-scan` and `just runtime-scan` on the published digest, with `v0.3.1-rc.1`'s digest as a control.
+- [x] Ticket 38's last box is split, and its attestation half names 0.3.1-rc.1 as the first prerelease and 0.3.1 as the first stable release to carry attestations.
 - [ ] **Authorization required:** push, open and merge the evidence pull request.
 
 ## Hand-back notes
@@ -62,3 +62,42 @@
 - **The bootstrap index** gains ticket 54, blocked by 52 and 53, in wave 10.
 - **Verified.** The maintainer authorized `just initialize` in this worktree. It verified rebar3 3.28.0's Sigstore bundle and installed every pin. `just docs-check` validated 37 pages. `just format-check` and `just build` passed, and `just test` reports 676 passed with no failures, so the tests that read the version from `gleam.toml` accept 0.3.1. Before the merge, `just release-preflight` stops at its ancestry check against `origin/main`, so its version guards were run by hand from `scripts/release/lib.sh` on this branch: `changelog_has_version 0.3.1` returned 0, `changelog_date 0.3.1` printed `2026-10-30`, `tag_matches_version v0.3.1 0.3.1` returned 0, and `tags_for` gives `0.3.1`, `0.3` and `sha-` with the commit's first seven characters. TDD had no seam here: the change is prose, a version bump and the changelog. `just check` ended with "All checks passed and the worktree is unchanged." on the staged tree.
 - **Next,** each step only when the maintainer authorizes it: push the branch; open the pull request; merge it; `git fetch`; `just release-preflight v0.3.1 <merge commit>`; push the tag; the `release` approval; then the run, the verification and the scans under `evidence/54/`, and the evidence pull request.
+
+### Released (2026-10-30 UTC)
+
+Every step that left the worktree was authorized by the maintainer, one at a time. [The evidence README](../evidence/54/README.md) lists each action and the one failed attempt.
+
+#### What changed
+
+- Pull request [#72](https://github.com/BiscuitBin/knarr/pull/72) passed every job of `ci.yml` run [41008705513](https://github.com/BiscuitBin/knarr/actions/runs/41008705513), and the maintainer merged it as `6e2428ced066ebb05b9b73a0be12825550f3488e` at 05:52 UTC.
+- Tag `v0.3.1`, annotated with message `v0.3.1` (object `95b0b89`), on that merge commit at 06:46 UTC, after `just release-preflight` passed.
+- Run [41016018897](https://github.com/BiscuitBin/knarr/actions/runs/41016018897) waited for the `release` approval until 23:40 UTC, then published the image `ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385` (tags `0.3.1`, `0.3`, `sha-6e2428c`) and the chart `ghcr.io/biscuitbin/charts/knarr:0.3.1` at `sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013`. It attested both: [61979711](https://github.com/BiscuitBin/knarr/attestations/61979711) and [61979733](https://github.com/BiscuitBin/knarr/attestations/61979733).
+- The `0.3` tag moved from `v0.3.0`'s image to this one. No package was new, so no visibility step was needed.
+- Ticket 38's last box is split. The attestation half is ticked with 0.3.1's timings, and the SBOM, provenance and arm64 half stays open.
+- `evidence/54/` holds `run.sh`, `verify.sh` and `scan.sh`, each with its transcript, and `preflight.txt`.
+
+#### What was verified
+
+- [preflight.txt](../evidence/54/preflight.txt): the tag matches `gleam.toml`, the commit is `origin/main`, the changelog heading is `## [0.3.1] - 2026-10-30`, and the chart stamps as `knarr-0.3.1.tgz`.
+- [run.txt](../evidence/54/run.txt):
+  - both jobs green;
+  - the approval by user 8365892 on environment `23921538204`;
+  - every existence guard `absent (http 404)`;
+  - exactly the three image tags, and one image digest;
+  - the chart stamped with that digest and pushed;
+  - both attest steps green, 20 s for the image and 7 s for the chart, in a 72 s publish job;
+  - their `Attestation created for` lines name exactly the two published digests;
+  - the annotated tag on the remote.
+- [verify.txt](../evidence/54/verify.txt): `gh attestation verify` passes for the image and the chart, from GitHub and from ghcr.io, with the guide's `--signer-workflow BiscuitBin/knarr/.github/workflows/release.yml`. The guide's `helm show values … | grep 'digest:'` prints the image digest.
+- [scan.txt](../evidence/54/scan.txt), on grype 0.120.1 with a database built 2026-10-30T06:23Z:
+  - **v0.3.1:** `just image-scan` finds no vulnerabilities and exits 0. `just runtime-scan` catalogues 12 conda packages, finds no fixable high or critical vulnerability, and exits 0.
+  - **The control, `v0.3.1-rc.1`:** both scans exit 2. `image-scan` lists CVE-2026-94200 (High) in erlang 29.1.1, CVE-2026-84782 (High) in `libssl3t64` 3.0.13-0ubuntu3.15, and lower findings in libssl and zlib. `runtime-scan` lists CVE-2026-94200, CVE-2026-105236 and CVE-2026-96596 in erlang 29.1.1.
+  - **rebar3:** it is not in the runtime image, so neither scan reads it. Ticket 53's fix is in the build stage, not in anything scanned here.
+- **Not done:** an install or upgrade of `v0.3.1` on a cluster. `git diff v0.3.0 v0.3.1` changes only `version` and `appVersion` under `charts/` and nothing under `src/`, so the release differs from `v0.3.0` in the image's build only, and 05's upgrade from `v0.2.0` covered the route.
+
+#### What later tickets need
+
+- **SECURITY.md names the supported release by hand.** Its table says "0.3.1, the latest stable release", and nothing holds that row equal to `gleam.toml` the way `just chart-check` holds `Chart.yaml`. Every release pull request has to update it. A check could hold it, or the row could say "the latest stable release" with no version.
+- **The local cluster guide's title**, "Run the walking skeleton locally", is still stale. Renaming it touches `docs/manifest.yml`, the page's frontmatter, `docs/README.md` and Decision 0013's link text.
+- **Ticket 38** keeps the SBOM, provenance and arm64 boxes, and the storage-record question.
+- **Ticket 39**, the GKE Standard rollout, can now install a stable release with OTP 29.1.2 and verifiable attestations.

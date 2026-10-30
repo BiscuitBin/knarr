@@ -1,0 +1,88 @@
+date: 2026-10-30T23:41Z
+gh version 2.100.0 (2026-09-03)
+repository: biscuitbin/knarr
+tag: v0.3.1
+commit: 6e2428ced066ebb05b9b73a0be12825550f3488e
+
+== run 41016018897
+url: https://github.com/BiscuitBin/knarr/actions/runs/41016018897
+created: 2026-10-30T06:46:08Z
+ok   workflow: Release
+ok   event: push
+ok   ref: v0.3.1
+ok   head sha: 6e2428ced066ebb05b9b73a0be12825550f3488e
+ok   status, conclusion: completed success
+-- jobs
+Verify the tag (job 123932400919): success, 2026-10-30T06:46:11Z to 2026-10-30T06:46:16Z
+Publish to ghcr.io (job 123932438396): success, 2026-10-30T23:40:20Z to 2026-10-30T23:41:32Z
+ok   job conclusions: Publish to ghcr.io=success,Verify the tag=success
+
+== the release environment's approval: gh api repos/biscuitbin/knarr/actions/runs/41016018897/approvals
+approved by steven-cutting (user 8365892) for release (23921538204), comment: ""
+ok   approvals (state:user:environment): approved:8365892:23921538204
+
+== Verify the tag (job 123932400919): the guards' line
+tag v0.3.1 at 6e2428ced066ebb05b9b73a0be12825550f3488e: version 0.3.1, an ancestor of origin/main, in the changelog
+ok   verify's line: tag v0.3.1 at 6e2428ced066ebb05b9b73a0be12825550f3488e: version 0.3.1, an ancestor of origin/main, in the changelog
+ok   error lines (::error:: or ##[error]): 0
+
+== Publish to ghcr.io (job 123932438396): the chart check, logins, the existence guards, the image push and digest, the chart stamp and push
+/home/runner/work/_temp/chart-check/knarr-0.3.1.tgz
+Login Succeeded
+ghcr.io/biscuitbin/knarr:0.3.1 is absent (http 404): pushing
+ghcr.io/biscuitbin/charts/knarr:0.3.1 is absent (http 404): pushing the image
+#27 naming to ghcr.io/biscuitbin/knarr:0.3.1 done
+#27 naming to ghcr.io/biscuitbin/knarr:0.3 done
+#27 naming to ghcr.io/biscuitbin/knarr:sha-6e2428c done
+#29 pushing ghcr.io/biscuitbin/knarr:0.3.1 with docker
+#30 pushing ghcr.io/biscuitbin/knarr:0.3 with docker
+#31 pushing ghcr.io/biscuitbin/knarr:sha-6e2428c with docker
+digest=sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+packaged /home/runner/work/_temp/chart/knarr-0.3.1.tgz with ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+ghcr.io/biscuitbin/charts/knarr:0.3.1 is absent (http 404): pushing
+Login Succeeded
+Pushed: ghcr.io/biscuitbin/charts/knarr:0.3.1
+Digest: sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+chart_digest=sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+-- checks: the image
+ok   Login Succeeded lines (docker login, helm registry login): 2
+ok   the image's existence guard: ghcr.io/biscuitbin/knarr:0.3.1 is absent (http 404): pushing
+ok   tags buildx named: 0.3,0.3.1,sha-6e2428c
+ok   tags buildx pushed: 0.3,0.3.1,sha-6e2428c
+ok   error lines (::error:: or ##[error]): 0
+ok   digest= lines: 1
+ok   the digest is sha256: and 64 hex digits: 1
+-- checks: the chart
+ok   the chart packaged with the placeholder digest, before any push: 1
+     ghcr.io/biscuitbin/charts/knarr:0.3.1 is absent (http 404): pushing the image
+     ghcr.io/biscuitbin/charts/knarr:0.3.1 is absent (http 404): pushing
+ok   the chart's existence guards, before the image push and before the chart push: ghcr.io/biscuitbin/charts/knarr:0.3.1 is absent (http 404): pushing the image|ghcr.io/biscuitbin/charts/knarr:0.3.1 is absent (http 404): pushing
+ok   the stamped package names the image digest: 1
+ok   helm's Pushed: line: Pushed: ghcr.io/biscuitbin/charts/knarr:0.3.1
+ok   Digest: lines: 1
+ok   the chart digest is sha256: and 64 hex digits: 1
+ok   chart_digest= agrees with the Digest: line: sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+
+== Publish to ghcr.io (job 123932438396): the attest steps
+Run actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8: success, 2026-10-30T23:41:03Z to 2026-10-30T23:41:23Z
+Run actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8: success, 2026-10-30T23:41:23Z to 2026-10-30T23:41:30Z
+ok   attest steps: 2
+ok   attest step conclusions: success,success
+info took 20 s
+info took 7 s
+Attestation created for ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+Attestation created for ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+ok   Attestation created lines: Attestation created for ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385|Attestation created for ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+https://github.com/BiscuitBin/knarr/attestations/61979711
+https://github.com/BiscuitBin/knarr/attestations/61979733
+
+== the git tag
+ok   git cat-file -t v0.3.1: tag
+ok   v0.3.1^{commit}: 6e2428ced066ebb05b9b73a0be12825550f3488e
+95b0b8986403ccccf6d37a193f0b20db67064729	refs/tags/v0.3.1
+6e2428ced066ebb05b9b73a0be12825550f3488e	refs/tags/v0.3.1^{}
+ok   remote v0.3.1 object: 95b0b8986403ccccf6d37a193f0b20db67064729
+ok   remote v0.3.1^{}: 6e2428ced066ebb05b9b73a0be12825550f3488e
+
+digest: sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+chart digest: sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
