@@ -20,14 +20,14 @@
 
 **MVP critical path:** no. It is maintenance hygiene, and rebar3 runs only in the build.
 
-**Status:** done. [Pull request #70](https://github.com/BiscuitBin/knarr/pull/70) is open, and its `ci.yml` run [40780385069](https://github.com/BiscuitBin/knarr/actions/runs/40780385069) passed every job. See [the hand-back notes](#hand-back-notes).
+**Status:** done. [Pull request #70](https://github.com/BiscuitBin/knarr/pull/70) is open, and its `ci.yml` run [40983365570](https://github.com/BiscuitBin/knarr/actions/runs/40983365570), at `5448fae`, passed every job. See [the hand-back notes](#hand-back-notes).
 
 - [x] **Authorization required:** the network, for `gh api` on erlang/rebar3's releases, downloading the escript and its Sigstore bundle, and OSV.dev's records. rebar3 moves to a release at or past 3.28.0, or 0014 records why it stays.
 - [x] `test_image.py`'s rebar3 test fails after the `tools.txt` move and passes after both Dockerfiles move.
 - [x] **Authorization required:** `just initialize`, which reinstalls rebar3 and, with `gh` authenticated, verifies its Sigstore bundle. `just env-check` passes, and `rebar3 version` reports the new release.
 - [x] With the compiled packages removed, `just build` rebuilds `prometheus`, `ddskerl` and `hpack_erl` with the new rebar3, and `just test` passes.
 - [x] Decision 0003's L114 and L125-126 state the new pin. 0014 and 0003 carry "Amended by ticket 53" notes, and `CHANGELOG.md` has the Security entry.
-- [x] **Authorization required:** a push and `gh`, for the branch and its pull request. CI builds both images, so `ADD --checksum` accepts the new sha256, and every job passes.
+- [x] **Authorization required:** a push and `gh`, for the branch and its pull request. CI builds both images, so `ADD --checksum` accepts the new sha256, and every job passes: run [40983365570](https://github.com/BiscuitBin/knarr/actions/runs/40983365570).
 - [x] `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes
@@ -57,6 +57,7 @@ Started on 2026-10-28 (UTC). The maintainer authorized the reads above, `just in
 - [build.txt](../evidence/53/build.txt): with `build/dev` and `build/prod` removed, `just build` compiled `ddskerl` 0.4.3, `hpack_erl` 0.3.0 and `prometheus` 6.1.3 with `rebar 3.28.0 on Erlang/OTP 29 Erts 17.1.1`. `just test` reports 676 passed.
 - **Not established:** why OSV's querybatch does not return CVE-2026-96596 for rebar3 3.27.1, although the record enumerates that tag. Its record joins four repositories in one `affected` entry, while the two it does return name rebar3 alone, which may or may not be the cause.
 - **CI:** pull request #70's `ci.yml` run [40780385069](https://github.com/BiscuitBin/knarr/actions/runs/40780385069), at `93c66e9`, passed every job: the repository gate, `check`, the selected checker regressions, kwok readiness, and both kind smoke jobs. In the kind smoke job's `just image-build` and the fake worker job's `just fake-worker-image-build`, the build stage's `ADD --checksum=sha256:5a28b1cc… …/3.28.0/rebar3` step finished. Inside the image builds, rebar3 compiled `ddskerl`, `hpack_erl` and `prometheus` for knarr, and `hpack_erl`, the fake worker's one rebar3-built package. The kind smoke job's `just image-check` reports OTP 29, erts 17.1.1 and `tls_check: all 6 cases matched` on amd64. The run was read back with `gh run view --log`; no transcript of it is committed.
+- **A pre-existing flake.** Run [40781561224](https://github.com/BiscuitBin/knarr/actions/runs/40781561224), at `6aa625a`, failed `Selected checker regressions`: `test_ripsecrets_redacted.py::test_a_planted_token_fails_with_the_fixed_message_and_never_prints_it` got `(0, '', '')` where it expected status 1. The `token` fixture drew a random `ghp_` token, and the pinned ripsecrets 0.1.11's randomness test passed over 10 of 2000 such tokens in a local run, so with five tests planting one, about 1 run in 40 failed. Commit `5448fae` makes the fixture redraw, up to 100 times, until the pinned binary exits 1 on the token. That fix is outside this ticket's scope and lands in #70 at the maintainer's direction. The test file then passed 50 local runs in a row, and run [40983365570](https://github.com/BiscuitBin/knarr/actions/runs/40983365570), at `5448fae`, passed every job.
 
 ### What later tickets need
 
