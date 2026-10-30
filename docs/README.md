@@ -26,7 +26,7 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 - [The KEDA end-to-end harness](reference/keda-e2e.md): busy kills under KEDA scale-in with and without knarr, the restart threshold and the patch rate, in one run on kind.
 - [Project](project/README.md): current direction and deferred work.
 - [Decisions](decisions/README.md): accepted architectural and tooling choices.
-- [Run the walking skeleton locally](how-to/local-cluster.md): build, deploy and check the local skeleton.
+- [Run the walking skeleton locally](how-to/local-cluster.md): build the controller's image, deploy its chart on kind and check it.
 - [See the local cluster's metrics in Grafana](how-to/local-observability.md): an opt-in Prometheus and Grafana on the kind cluster, with an example dashboard.
 - [Decision 0010: Prometheus metrics](decisions/0010-metrics.md): the skeleton's metrics choice.
 - [Decision 0012: Release and packaging](decisions/0012-release-and-packaging.md): how a release is versioned, published and installed.
@@ -36,7 +36,7 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 
 ## Maintainer documents
 
-- [Repository README](../README.md): current pre-MVP status and local setup.
+- [Repository README](../README.md): current status and local setup.
 - [Contributing](../CONTRIBUTING.md): the ticket frontier, worktrees, authorization, verification and merging.
 - [Security policy](../SECURITY.md): supported versions and private vulnerability reporting.
 - [Changelog](../CHANGELOG.md): notable changes, by release.

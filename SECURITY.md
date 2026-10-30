@@ -2,12 +2,14 @@
 
 ## Supported versions
 
-Knarr is pre-MVP and has no supported published releases yet. Security fixes target current `main`; older revisions are not maintained. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides how releases are versioned and published; it does not yet say which releases receive security fixes.
+Knarr is early and pre-1.0. The latest stable release and current `main` receive security fixes. A fix lands on `main` and ships as a new patch release cut from it; no fix is backported to an older release. Prereleases, such as `0.3.1-rc.1`, are not supported. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides how releases are versioned and published.
 
 | Version | Security support |
 | --- | --- |
-| Current `main` | Supported during development |
-| Older revisions | Not supported |
+| 0.3.1, the latest stable release | Supported |
+| Current `main` | Supported |
+| Older releases | Not supported |
+| Prereleases | Not supported |
 
 ## Report a vulnerability privately
 
