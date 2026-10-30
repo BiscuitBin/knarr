@@ -1,6 +1,6 @@
 # Contributing to Knarr
 
-Knarr is pre-MVP. Humans and agents work from local tickets, with one ticket per branch and worktree. Read [AGENTS.md](AGENTS.md) before starting: it is the canonical repository instruction file. The [handbook](docs/README.md) links the documentation, testing and agent contracts.
+Knarr is early and pre-1.0; the [README](README.md) states what the released controller does. Humans and agents work from local tickets, with one ticket per branch and worktree. Read [AGENTS.md](AGENTS.md) before starting: it is the canonical repository instruction file. The [handbook](docs/README.md) links the documentation, testing and agent contracts.
 
 ## Pick a ticket from the frontier
 

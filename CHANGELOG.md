@@ -1,11 +1,19 @@
 # Changelog
 
-Notable changes to Knarr are recorded here, by release. This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). 0.1.0 is the walking skeleton, published to rehearse the release route. 0.2.0 is the first release of the controller, the MVP, and the first to publish the Helm chart. 0.3.0 is the first release from `github.com/biscuitbin/knarr`, published under `ghcr.io/biscuitbin/…`. 0.3.1-rc.1 is a prerelease that proves the image and chart attestations on ghcr.io before a stable release carries them; a prerelease moves no `X.Y` tag. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides versioning and the release workflow: a release pull request moves the `[Unreleased]` section under `## [X.Y.Z] - YYYY-MM-DD`, and the release workflow refuses a tag whose version has no such heading.
+Notable changes to Knarr are recorded here, by release. This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). 0.1.0 is the walking skeleton, published to rehearse the release route. 0.2.0 is the first release of the controller, the MVP, and the first to publish the Helm chart. 0.3.0 is the first release from `github.com/biscuitbin/knarr`, published under `ghcr.io/biscuitbin/…`. 0.3.1-rc.1 is a prerelease that proves the image and chart attestations on ghcr.io before a stable release carries them; a prerelease moves no `X.Y` tag. 0.3.1 is the first stable release with image and chart attestations, and the first published image built on Erlang/OTP 29.1.2 with rebar3 3.28.0; 0.3.1-rc.1 carries neither fix. [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides versioning and the release workflow: a release pull request moves the `[Unreleased]` section under `## [X.Y.Z] - YYYY-MM-DD`, and the release workflow refuses a tag whose version has no such heading.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-30
+
+### Changed
+
+- The security policy supports the latest stable release, 0.3.1, and current `main`. A fix lands on `main` and ships as a new patch release cut from it; older releases and prereleases are not supported (bootstrap ticket 54).
+- The install guide's example upgrade from a `v0.2.0` Helm install to the org's chart names `--version 0.3.1`, so it skips `v0.3.0` and the advisories below.
+
 ### Fixed
 
+- The README, the contributing guide, the handbook index and the first tutorial no longer call knarr a pre-MVP walking skeleton that reads and changes no Kubernetes object (bootstrap ticket 54). The README states what the released controller does and never does, that the safe-to-evict policy is deferred, and that the MVP's acceptance on GKE Standard has not happened yet.
 - The install guide's `gh attestation verify` commands spell the owner `BiscuitBin` (helm-chart ticket 07). `--signer-workflow` matches the signing certificate's workflow URI letter for letter, and the certificate names `https://github.com/BiscuitBin/knarr/.github/workflows/release.yml`, so the lowercase `biscuitbin/knarr/.github/workflows/release.yml` that 0.3.1-rc.1's entry quotes fails on every release with `Error: verifying with issuer "sigstore.dev"`. `--repo` and the image and chart names are unaffected.
 
 ### Security

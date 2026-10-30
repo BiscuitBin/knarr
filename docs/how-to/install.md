@@ -18,7 +18,7 @@ Use an amd64 Linux cluster, kubectl access to the intended namespace, and Helm 4
 
 ## Verify a release
 
-Releases after `v0.3.0` attest the image and the chart they push with GitHub artifact attestations, and push each attestation to ghcr.io beside its digest; `v0.3.0` and earlier carry none. Before installing, check that each digest was attested by knarr's release workflow. The successful release workflow run's summary for the chosen tag prints the image digest and the chart by digest, `oci://ghcr.io/biscuitbin/charts/knarr@sha256:…`; copy the part after each `@`. `gh` must be authenticated (`gh auth status`). Each command fails unless it finds an attestation for that digest signed by `release.yml` in `BiscuitBin/knarr` ([Decision 0012](../decisions/0012-release-and-packaging.md), cosign, SBOM and build provenance; [Decision 0015](../decisions/0015-helm-chart.md), publishing). Keep the owner's capitals in `--signer-workflow`: it matches the signing certificate's workflow URI letter for letter, the certificate spells the owner `BiscuitBin`, and the lowercase owner fails with only `Error: verifying with issuer "sigstore.dev"`. Image and chart names stay lowercase:
+Releases after `v0.3.0` attest the image and the chart they push with GitHub artifact attestations, and push each attestation to ghcr.io beside its digest. The prerelease `v0.3.1-rc.1` was the first to carry them, and `v0.3.1` is the first stable release that does; `v0.3.0` and earlier carry none. Before installing, check that each digest was attested by knarr's release workflow. The successful release workflow run's summary for the chosen tag prints the image digest and the chart by digest, `oci://ghcr.io/biscuitbin/charts/knarr@sha256:…`; copy the part after each `@`. `gh` must be authenticated (`gh auth status`). Each command fails unless it finds an attestation for that digest signed by `release.yml` in `BiscuitBin/knarr` ([Decision 0012](../decisions/0012-release-and-packaging.md), cosign, SBOM and build provenance; [Decision 0015](../decisions/0015-helm-chart.md), publishing). Keep the owner's capitals in `--signer-workflow`: it matches the signing certificate's workflow URI letter for letter, the certificate spells the owner `BiscuitBin`, and the lowercase owner fails with only `Error: verifying with issuer "sigstore.dev"`. Image and chart names stay lowercase:
 
 ```sh
 image_digest=sha256:...   # the image digest from the run summary
@@ -73,11 +73,11 @@ helm upgrade knarr oci://ghcr.io/biscuitbin/charts/knarr \
   --values knarr-values.yaml --wait
 ```
 
-To move an existing `v0.2.0` Helm install to the org’s first release, keep the same release name (`knarr` below) and namespace. After `v0.3.0` is published, run:
+To move an existing `v0.2.0` Helm install to the org’s chart, keep the same release name (`knarr` below) and namespace. `v0.3.0` was the org’s first release; upgrade straight to the current one, `v0.3.1`, which carries the security fixes `v0.3.0` lacks:
 
 ```sh
 helm upgrade knarr oci://ghcr.io/biscuitbin/charts/knarr \
-  --version 0.3.0 --namespace "$worker_namespace" \
+  --version 0.3.1 --namespace "$worker_namespace" \
   --values knarr-values.yaml --wait
 ```
 

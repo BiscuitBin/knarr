@@ -1,8 +1,8 @@
 # Knarr
 
-A Kubernetes controller project, written in Gleam on the BEAM, designed to bias Deployment scale-down away from busy worker pods. The planned controller polls workers over HTTP and sets `controller.kubernetes.io/pod-deletion-cost` (and optionally `cluster-autoscaler.kubernetes.io/safe-to-evict`) on live pods.
+A Kubernetes controller, written in Gleam on the BEAM, that biases Deployment scale-down away from busy worker pods. It polls workers over HTTP and sets `controller.kubernetes.io/pod-deletion-cost` on live pods.
 
-**Status: pre-MVP.** The implemented walking skeleton has supervised health, readiness and Prometheus metrics endpoints. It does not yet read or change Kubernetes objects; worker polling and annotation behaviour remain future work.
+**Status: early, pre-1.0.** The released controller discovers the Deployments in its namespace labelled `knarr.io/enabled=true` and polls each of their pods' `GET /knarr/v1/status`. It maps each reading to a `pod-deletion-cost` value and writes it with a JSON Patch that records what it applied in its `knarr.io/applied` marker. When a Deployment opts out, it removes the annotations it owns. It serves health, readiness and Prometheus metrics endpoints. It never changes a replica count or a Deployment's pod template, and it stops patching a pod once the pod is terminating. The `cluster-autoscaler.kubernetes.io/safe-to-evict` policy is deferred: knarr reserves its opt-in but writes no protection. The MVP's acceptance on a production GKE Standard workload has not happened yet. To run it, follow the [install guide](docs/how-to/install.md).
 
 See the [project overview](docs/OVERVIEW.md) for goals, the worker contract draft and open questions, and the [documentation index](docs/README.md) for the handbook.
 
@@ -40,7 +40,7 @@ just check
 ```
 
 `just --list` shows every recipe in seven groups: setup, develop, format, check, audit, cluster and release.
-The [local cluster guide](docs/how-to/local-cluster.md) covers the walking skeleton.
+The [local cluster guide](docs/how-to/local-cluster.md) builds the controller's image and deploys its chart on kind.
 
 ## The gate
 
