@@ -107,11 +107,11 @@ Two corrections to the ticket's premise:
 
 ### Escape hatch: checksum-pinned downloads into `.tools/bin`
 
-A tool conda-forge does not carry is downloaded from its upstream release into the gitignored `.tools/bin`, and only if its sha256 matches a committed pin. Each pin line gives the name, version, platform, URL, sha256 and the archive member to extract. The lines below are the pin list [tools.sh](../../.scratch/bootstrap/evidence/01/tools.sh) printed and verified. 03 writes the list as `tools.txt` with the rebar3 lines, along with the recipe that installs it. Each other lane copies its own lines from here when it first uses the tool, so the foundation stays small.
+A tool conda-forge does not carry is downloaded from its upstream release into the gitignored `.tools/bin`, and only if its sha256 matches a committed pin. Each pin line gives the name, version, platform, URL, sha256 and the archive member to extract. The lines below are the pin list [tools.sh](../../.scratch/bootstrap/evidence/01/tools.sh) printed and verified. 03 writes the list as `tools.txt` with the rebar3 lines, along with the recipe that installs it. Each other lane copies its own lines from here when it first uses the tool, so the foundation stays small. Amended by [ticket 53](../../.scratch/bootstrap/issues/53-rebar3-hex-core-advisory.md): rebar3 is 3.28.0. Three advisories apply to 3.27.1: CVE-2026-96596, fixed in 3.28.0, CVE-2026-103060, fixed in 3.27.2, and CVE-2026-105274, fixed in 3.27.3. 3.28.0 is erlang/rebar3's newest release, published on 2026-10-21. Its asset digest is the pin, and its Sigstore bundle verifies against `erlang/rebar3/.github/workflows/publish.yml@refs/tags/3.28.0` ([probe.txt](../../.scratch/bootstrap/evidence/53/probe.txt)). The `rebar3` row and the snippet state the new pin; the original record was 3.27.1, with sha256 `708407032479514dd68b581a0b09a68b5a781fb6f53dcf4ad81ce4ef6b92940f`. The other rows keep the original record. [Decision 0014](0014-dependency-updates-and-audit.md) has the advisories.
 
 | Tool | Version | Source | sha256 verified against | Added by |
 | --- | --- | --- | --- | --- |
-| rebar3 | 3.27.1 | `erlang/rebar3` release, one escript for both platforms | GitHub asset digest; the Sigstore bundle verifies against `erlang/rebar3/.github/workflows/publish.yml@refs/tags/3.27.1` | 03 |
+| rebar3 | 3.28.0 | `erlang/rebar3` release, one escript for both platforms | GitHub asset digest; the Sigstore bundle verifies against `erlang/rebar3/.github/workflows/publish.yml@refs/tags/3.28.0` | 03 |
 | ripsecrets | 0.1.11 | `sirwart/ripsecrets` release, both platforms | nothing upstream (see below) | 03, if 02 keeps it |
 | editorconfig-checker | 4.0.2 | release, linux-amd64 and darwin-all | GitHub asset digest and `checksums.txt` | 03, if 02 keeps it |
 | hadolint | 2.15.1 | release, linux-x86_64 and macos-arm64 | GitHub asset digest and `checksums.sha256` | 13 |
@@ -122,8 +122,8 @@ A tool conda-forge does not carry is downloaded from its upstream release into t
 | Cluster Autoscaler | 1.35.2 or 1.36.1 | image only (see below) | registry digest | 15 |
 
 ```text
-rebar3 3.27.1 linux-64 https://github.com/erlang/rebar3/releases/download/3.27.1/rebar3 708407032479514dd68b581a0b09a68b5a781fb6f53dcf4ad81ce4ef6b92940f rebar3
-rebar3 3.27.1 osx-arm64 https://github.com/erlang/rebar3/releases/download/3.27.1/rebar3 708407032479514dd68b581a0b09a68b5a781fb6f53dcf4ad81ce4ef6b92940f rebar3
+rebar3 3.28.0 linux-64 https://github.com/erlang/rebar3/releases/download/3.28.0/rebar3 5a28b1cca082d3b023ec0f5df9d9f9d52557036c6f2a21c1ffa11b93a984dd42 rebar3
+rebar3 3.28.0 osx-arm64 https://github.com/erlang/rebar3/releases/download/3.28.0/rebar3 5a28b1cca082d3b023ec0f5df9d9f9d52557036c6f2a21c1ffa11b93a984dd42 rebar3
 ```
 
 The other tools' lines, for both platforms, are at the end of [tools.txt](../../.scratch/bootstrap/evidence/01/tools.txt).

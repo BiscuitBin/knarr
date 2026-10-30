@@ -1,0 +1,36 @@
+date: 2026-10-28T22:27Z
+revision: 12ddb13
+rebar3 pin: 3.28.0, 5a28b1cca082d3b023ec0f5df9d9f9d52557036c6f2a21c1ffa11b93a984dd42
+  tools.txt (linux-64, osx-arm64), Dockerfile and fixtures/fake_worker/Dockerfile agree
+== 1. OSV.dev querybatch, GIT ecosystem
+  rebar3 3.28.0: no advisory
+  rebar3 3.27.1: CVE-2026-103060, CVE-2026-105274, EEF-CVE-2026-103060, EEF-CVE-2026-105274
+  CVE-2026-96596 is not among them
+== 2. OSV.dev records
+-- CVE-2026-96596 (EEF-CVE-2026-96596, GHSA-phm5-m6cj-5382)
+  erl_tar:extract/2 loops forever on a GNU sparse member with a trailing hole
+  published 2026-10-14, modified 2026-10-28
+  CVSS_V4 CVSS:4.0/AV:L/AC:L/AT:P/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N
+  details: rebar3 from 3.27.1 before 3.28.0
+  rebar3 range: introduced 3.27.1, fixed 3.28.0
+  enumerated rebar3 tags: 3; 3.27.1 listed, 3.28.0 not listed
+-- CVE-2026-103060 (EEF-CVE-2026-103060, GHSA-6ggr-r7mh-2mv8)
+  Path traversal in rebar3 via unvalidated dependency app names
+  published 2026-10-12, modified 2026-10-28
+  CVSS_V4 CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:A/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N
+  details: rebar3: from 3.7.0-rc1 before 3.27.2
+  rebar3 range: introduced 3.7.0-rc1, fixed 3.27.2
+  enumerated rebar3 tags: 39; 3.27.1 listed, 3.28.0 not listed
+-- CVE-2026-105274 (EEF-CVE-2026-105274, GHSA-7c4r-cgf9-9jmq)
+  hex_core decompresses registry and Erlang term API responses without size limits
+  published 2026-10-12, modified 2026-10-28
+  CVSS_V4 CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:A/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N
+  details: rebar3: from 3.9.1 before 3.27.3
+  rebar3 range: introduced 3.9.1, fixed 3.27.3
+  enumerated rebar3 tags: 30; 3.27.1 listed, 3.28.0 not listed
+== 3. the release
+  newest release: 3.28.0, published 2026-10-21
+  3.28.0 asset digest: sha256:5a28b1cca082d3b023ec0f5df9d9f9d52557036c6f2a21c1ffa11b93a984dd42
+  3.27.1 asset digest: sha256:708407032479514dd68b581a0b09a68b5a781fb6f53dcf4ad81ce4ef6b92940f
+  downloaded escript sha256: 5a28b1cca082d3b023ec0f5df9d9f9d52557036c6f2a21c1ffa11b93a984dd42
+  Sigstore bundle verified: erlang/rebar3/.github/workflows/publish.yml@refs/tags/3.28.0

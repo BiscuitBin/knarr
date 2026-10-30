@@ -57,6 +57,7 @@ flowchart TD
     T50["50 Local arm64 image"]:::offpath
     T51["51 Local Prometheus and Grafana"]:::offpath
     T52["52 OTP and base-image advisories"]:::offpath
+    T53["53 rebar3 hex_core advisory"]:::offpath
 
     T01 --> T02
     T01 --> T03
@@ -159,6 +160,7 @@ flowchart TD
     T29 --> T51
     T50 --> T51
     T45 --> T52
+    T52 --> T53
     T47 --> T40
     T47 --> T33
     T31 --> T39
@@ -190,7 +192,7 @@ A wave is the earliest point a ticket can start if every lane runs in parallel: 
 | 6 | [12](issues/12-maintainer-docs.md), [14](issues/14-spike-s1-in-cluster-client.md), [18](issues/18-elicit-worker-contract.md), [19](issues/19-elicit-configuration-schema.md), [22](issues/22-elicit-ownership-and-conflicts.md), [24](issues/24-elicit-poll-budget-feature-gate.md), [25](issues/25-elicit-safe-to-evict-policy.md), [27](issues/27-spike-dependency-updates-and-audit.md), [28](issues/28-spike-release-and-packaging.md), [35](issues/35-bootstrap-verification-gaps.md) |
 | 7 | [20](issues/20-elicit-cost-mapping.md), [29](issues/29-fake-worker-fixture.md), [30](issues/30-elicit-observability.md), [36](issues/36-release-workflow-and-overlay.md), [41](issues/41-k8s-client-spec-then-build.md), [42](issues/42-otp-ssl-findings.md), [43](issues/43-status-poller.md), [44](issues/44-renovate-activation.md), [45](issues/45-scan-image-runtime-environment.md) |
 | 8 | [21](issues/21-elicit-unknown-unreachable-policy.md), [23](issues/23-elicit-cleanup-staleness-restart.md), [37](issues/37-first-release-v0-1-0.md), [50](issues/50-local-arm64-image.md), [52](issues/52-otp-and-base-image-advisories.md) |
-| 9 | [31](issues/31-spec-then-build-reconcile-core.md), [32](issues/32-spec-then-build-ownership-lifecycle.md), [34](issues/34-user-guides.md), [38](issues/38-attestations-sbom-arm64.md), [51](issues/51-local-observability.md) |
+| 9 | [31](issues/31-spec-then-build-reconcile-core.md), [32](issues/32-spec-then-build-ownership-lifecycle.md), [34](issues/34-user-guides.md), [38](issues/38-attestations-sbom-arm64.md), [51](issues/51-local-observability.md), [53](issues/53-rebar3-hex-core-advisory.md) |
 | 10 | [46](issues/46-spec-then-build-poll-schedule-and-patcher.md), [49](issues/49-safe-to-evict-user-guidance.md) |
 | 11 | [47](issues/47-discovery-cleanup-hand-off.md), [48](issues/48-detect-patch-on-replacement-pod.md) |
 | 12 | [33](issues/33-keda-harness-success-criterion.md), [40](issues/40-mvp-release.md) |

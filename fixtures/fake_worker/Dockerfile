@@ -8,7 +8,7 @@ FROM ghcr.io/prefix-dev/pixi:0.81.0@sha256:788ae451641666e2d1f79d3dbe35392dfc7e9
 WORKDIR /opt/knarr
 COPY pixi.toml pixi.lock ./
 RUN pixi install --locked -e default -e runtime
-ADD --checksum=sha256:708407032479514dd68b581a0b09a68b5a781fb6f53dcf4ad81ce4ef6b92940f https://github.com/erlang/rebar3/releases/download/3.27.1/rebar3 /opt/knarr/.tools/bin/rebar3
+ADD --checksum=sha256:5a28b1cca082d3b023ec0f5df9d9f9d52557036c6f2a21c1ffa11b93a984dd42 https://github.com/erlang/rebar3/releases/download/3.28.0/rebar3 /opt/knarr/.tools/bin/rebar3
 RUN chmod 0755 .tools/bin/rebar3
 ENV PATH="/opt/knarr/.pixi/envs/default/bin:/opt/knarr/.tools/bin:${PATH}"
 WORKDIR /opt/knarr/fixtures/fake_worker
