@@ -20,7 +20,7 @@
 
 **MVP critical path:** no. It is a documentation fix and a patch release.
 
-**Status:** done once its evidence pull request merges. `v0.3.1` is published as `ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385`, with the chart `oci://ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013`, both attested. The last box stays open until that pull request merges. See [the hand-back notes](#hand-back-notes) and [the evidence](../evidence/54/README.md).
+**Status:** done. Its evidence pull request, [#73](https://github.com/BiscuitBin/knarr/pull/73), merged as `efc1327`. Its `ci.yml` run [41159056805](https://github.com/BiscuitBin/knarr/actions/runs/41159056805), at `c54ce8d`, passed every required job, and so did `ci.yml` run [41161963095](https://github.com/BiscuitBin/knarr/actions/runs/41161963095) on `main` at the merge commit. `v0.3.1` is published as `ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385`, with the chart `oci://ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013`, both attested. See [the hand-back notes](#hand-back-notes) and [the evidence](../evidence/54/README.md).
 
 - [x] The status text is fixed in `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/README.md` and `docs/tutorials/README.md`.
 - [x] `gleam.toml` and `charts/knarr/Chart.yaml` name 0.3.1, and `CHANGELOG.md` moves `[Unreleased]` under `## [0.3.1]`.
@@ -36,7 +36,7 @@
 - [x] **Authorization required:** the install guide's `gh attestation verify` commands pass for both digests, and the chart's stamped digest is the image's.
 - [x] **Authorization required:** `just audit-install`, then `just image-scan` and `just runtime-scan` on the published digest, with `v0.3.1-rc.1`'s digest as a control.
 - [x] Ticket 38's last box is split, and its attestation half names 0.3.1-rc.1 as the first prerelease and 0.3.1 as the first stable release to carry attestations.
-- [ ] **Authorization required:** push, open and merge the evidence pull request.
+- [x] **Authorization required:** push, open and merge the evidence pull request.
 
 ## Hand-back notes
 
@@ -97,7 +97,7 @@ Every step that left the worktree was authorized by the maintainer, one at a tim
 
 #### What later tickets need
 
-- **SECURITY.md names the supported release by hand.** Its table says "0.3.1, the latest stable release", and nothing holds that row equal to `gleam.toml` the way `just chart-check` holds `Chart.yaml`. Every release pull request has to update it. A check could hold it, or the row could say "the latest stable release" with no version.
-- **The local cluster guide's title**, "Run the walking skeleton locally", is still stale. Renaming it touches `docs/manifest.yml`, the page's frontmatter, `docs/README.md` and Decision 0013's link text.
+- **SECURITY.md names the supported release by hand.** Its table says "0.3.1, the latest stable release", and nothing holds that row equal to `gleam.toml` the way `just chart-check` holds `Chart.yaml`. Every release pull request has to update it. A check could hold it, or the row could say "the latest stable release" with no version. Done after #73: the row says "The latest stable release", so no release pull request touches it.
+- **The local cluster guide's title**, "Run the walking skeleton locally", is still stale. Renaming it touches `docs/manifest.yml`, the page's frontmatter, `docs/README.md` and Decision 0013's link text. Done after #73: it is "Run Knarr on a local cluster" in all four.
 - **Ticket 38** keeps the SBOM, provenance and arm64 boxes, and the storage-record question.
 - **Ticket 39**, the GKE Standard rollout, can now install a stable release with OTP 29.1.2 and verifiable attestations.

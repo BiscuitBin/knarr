@@ -361,7 +361,7 @@
     },
     {
       "path": "how-to/local-cluster.md",
-      "title": "Run the walking skeleton locally",
+      "title": "Run Knarr on a local cluster",
       "kind": "how-to",
       "audience": [
         "contributor",
