@@ -1,0 +1,28 @@
+date: 2026-10-30T23:41Z
+gh version 2.100.0 (2026-09-03)
+helm v4.3.0+conda-forge
+
+== image, from GitHub: gh attestation verify oci://ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385 
+ok   image, from GitHub
+
+== image, from ghcr.io: gh attestation verify oci://ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385 --bundle-from-oci
+ok   image, from ghcr.io
+
+== chart, from GitHub: gh attestation verify oci://ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013 
+ok   chart, from GitHub
+
+== chart, from ghcr.io: gh attestation verify oci://ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013 --bundle-from-oci
+ok   chart, from ghcr.io
+
+== the chart pins the verified image
+Pulled: ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+Digest: sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+ok   image.digest: sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+
+== the guide: helm show values oci://ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013 | grep digest:
+Pulled: ghcr.io/biscuitbin/charts/knarr@sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+Digest: sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013
+  digest: sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+ok   the guide prints sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+
+verify passed

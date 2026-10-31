@@ -1,0 +1,27 @@
+sh scripts/release/preflight.sh "$1" "$2"
+date: 2026-10-30T05:52Z
+tag: v0.3.1
+commit: 6e2428ced066ebb05b9b73a0be12825550f3488e
+parents: 3c225c703c1ce22f1aa774df8f369312e58483b0 bafb460e13d424d3c3e24cdd2247c4549d94fb71
+subject: Merge pull request #72 from BiscuitBin/54-release-v0-3-1
+committed: 2026-10-29T22:52:11-07:00
+origin/main: 6e2428ced066ebb05b9b73a0be12825550f3488e
+origin/main is this commit
+no local v0.3.1
+
+== the guards, as verify runs them
+toml_version: 0.3.1
+tag_matches_version v0.3.1 0.3.1: 0
+ancestor_verdict 6e2428c origin/main: ancestor (0)
+changelog_has_version 0.3.1: 0
+changelog heading: ## [0.3.1] - 2026-10-30
+
+== the chart, as publish stamps it first
+stamp-chart: knarr-0.3.1.tgz
+
+tags_for v0.3.1:
+  0.3.1
+  0.3
+  sha-6e2428c
+
+preflight passed: tag 6e2428ced066ebb05b9b73a0be12825550f3488e as v0.3.1

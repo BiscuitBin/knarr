@@ -1,0 +1,68 @@
+date: 2026-10-31T02:11Z
+Application:         grype Version:             0.120.1
+docker 29.4.0
+
+== v0.3.1: docker pull --platform linux/amd64 ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+
+== v0.3.1: just image-scan ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+test -x .pixi/envs/audit/bin/grype || { echo 'run just audit-install' >&2; exit 2; }
+grype "$1" --only-fixed --fail-on high
+No vulnerabilities found
+info image-scan exit: 0
+
+== v0.3.1: just runtime-scan ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385
+test -x .pixi/envs/audit/bin/grype || { echo 'run just audit-install' >&2; exit 2; }
+python3 scripts/checks/runtime_scan.py "$1"
+No vulnerabilities found
+runtime-scan: grype catalogued 12 conda packages in /opt/knarr/.pixi/envs/runtime of ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385 and found no fixable high or critical vulnerability in the copy
+info runtime-scan exit: 0
+
+== v0.3.1-rc.1, the control: docker pull --platform linux/amd64 ghcr.io/biscuitbin/knarr@sha256:747f9fc7f61982a3caac6de01355e40e1e0cc15db12aefeca13f68045b8b004c
+ghcr.io/biscuitbin/knarr@sha256:747f9fc7f61982a3caac6de01355e40e1e0cc15db12aefeca13f68045b8b004c
+
+== v0.3.1-rc.1, the control: just image-scan ghcr.io/biscuitbin/knarr@sha256:747f9fc7f61982a3caac6de01355e40e1e0cc15db12aefeca13f68045b8b004c
+test -x .pixi/envs/audit/bin/grype || { echo 'run just audit-install' >&2; exit 2; }
+grype "$1" --only-fixed --fail-on high
+NAME        INSTALLED                FIXED IN                      TYPE    VULNERABILITY    SEVERITY  EPSS         RISK   
+libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16            deb     CVE-2026-84782   High      0.8% (57th)  0.6    
+erlang      29.1.1                   27.3.4.19, 28.5.0.8, *29.1.2  binary  CVE-2026-94200   High      0.5% (39th)  0.4    
+libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16            deb     CVE-2026-75806   Low       1.1% (65th)  0.3    
+zlib1g      1:1.3.dfsg-3.1ubuntu2.2  1:1.3.dfsg-3.1ubuntu2.3       deb     CVE-2026-85091   Medium    0.5% (40th)  0.2    
+erlang      29.1.1                   27.3.4.19, 28.5.0.8, *29.1.2  binary  CVE-2026-105236  Medium    0.4% (29th)  0.2    
+libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16            deb     CVE-2026-54872   Low       0.4% (36th)  0.1    
+libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16            deb     CVE-2026-77696   Low       0.4% (33rd)  0.1    
+erlang      29.1.1                   29.1.2                        binary  CVE-2026-96596   Medium    0.2% (11th)  0.1    
+libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16            deb     CVE-2026-75805   Low       0.3% (25th)  < 0.1  
+libssl3t64  3.0.13-0ubuntu3.15       3.0.13-0ubuntu3.16            deb     CVE-2026-35189   Low       0.3% (24th)  < 0.1
+[0002] ERROR [31mdiscovered vulnerabilities at or above the severity threshold[0m
+error: recipe `image-scan` failed on line 219 with exit code 2
+info image-scan exit: 2
+
+== v0.3.1-rc.1, the control: just runtime-scan ghcr.io/biscuitbin/knarr@sha256:747f9fc7f61982a3caac6de01355e40e1e0cc15db12aefeca13f68045b8b004c
+test -x .pixi/envs/audit/bin/grype || { echo 'run just audit-install' >&2; exit 2; }
+python3 scripts/checks/runtime_scan.py "$1"
+NAME    INSTALLED  FIXED IN                      TYPE    VULNERABILITY    SEVERITY  EPSS         RISK  
+erlang  29.1.1     27.3.4.19, 28.5.0.8, *29.1.2  binary  CVE-2026-94200   High      0.5% (39th)  0.4   
+erlang  29.1.1     27.3.4.19, 28.5.0.8, *29.1.2  binary  CVE-2026-105236  Medium    0.4% (29th)  0.2   
+erlang  29.1.1     29.1.2                        binary  CVE-2026-96596   Medium    0.2% (11th)  0.1
+runtime-scan: grype catalogued 12 conda packages in /opt/knarr/.pixi/envs/runtime of ghcr.io/biscuitbin/knarr@sha256:747f9fc7f61982a3caac6de01355e40e1e0cc15db12aefeca13f68045b8b004c and found a fixable high or critical vulnerability in the copy
+error: recipe `runtime-scan` failed on line 228 with exit code 2
+info runtime-scan exit: 2
+
+== grype db status, the database both scans read
+Path:      /Users/scutting/Library/Caches/grype/db/6/vulnerability.db
+Schema:    v6.1.10
+Built:     2026-10-30T06:23:28Z
+From:      https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-10-30T00:25:15Z_1793341408.tar.zst?checksum=sha256%3A1e1b9cf2cbfaf16b770e4d75d7beb4840dc4254ca2281682fe5ec3700a4251a8
+Status:    valid
+
+== checks
+ok   the control: image-scan lists CVE-2026-94200 (exit 2)
+ok   the control: runtime-scan lists CVE-2026-94200 (exit 2)
+ok   v0.3.1: image-scan does not list CVE-2026-94200
+ok   v0.3.1: runtime-scan does not list CVE-2026-94200
+ok   v0.3.1: image-scan exit 0
+ok   v0.3.1: runtime-scan exit 0
+
+scan passed
