@@ -82,6 +82,6 @@ Each row names the transcript that shows it. The first group is local evidence; 
 - [Decision 0002: Effects live behind sans-IO boundaries](0002-sans-io-boundaries.md)
 - [Decision 0007: Local cluster and test tiers](0007-local-cluster.md)
 - [Testing reference](../reference/testing.md), for the sans-IO pattern the client follows
-- [Run the walking skeleton locally](../how-to/local-cluster.md), for the Role, the token volume and the wrong-CA variant
+- [Run Knarr on a local cluster](../how-to/local-cluster.md), for the Role, the token volume and the wrong-CA variant
 - [Evidence for this record](../../.scratch/bootstrap/evidence/14/README.md)
 - [Ticket 14](../../.scratch/bootstrap/issues/14-spike-s1-in-cluster-client.md), with the hand-back notes and the follow-ups 36 and 37

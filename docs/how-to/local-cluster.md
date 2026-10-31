@@ -1,12 +1,12 @@
 ---
-title: "Run the walking skeleton locally"
+title: "Run Knarr on a local cluster"
 kind: "how-to"
 audience: ["contributor", "maintainer", "agent"]
 canonical_for: ["local_cluster_loop"]
 requires: []
 ---
 
-# Run the walking skeleton locally
+# Run Knarr on a local cluster
 
 ## Setup and deployment
 

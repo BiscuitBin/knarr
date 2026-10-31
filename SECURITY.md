@@ -6,7 +6,7 @@ Knarr is early and pre-1.0. The latest stable release and current `main` receive
 
 | Version | Security support |
 | --- | --- |
-| 0.3.1, the latest stable release | Supported |
+| The latest stable release | Supported |
 | Current `main` | Supported |
 | Older releases | Not supported |
 | Prereleases | Not supported |
