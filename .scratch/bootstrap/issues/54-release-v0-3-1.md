@@ -65,7 +65,7 @@
 
 ### Released (2026-10-30 UTC)
 
-Every step that left the worktree was authorized by the maintainer, one at a time. [The evidence README](../evidence/54/README.md) lists each action and the one failed attempt.
+Every step that left the worktree was authorized by the maintainer, one at a time, except one read-only `git fetch --tags` for the `git diff v0.3.0 v0.3.1` below, which fetched nothing new; [the evidence README](../evidence/54/README.md) lists each action and the one failed attempt.
 
 #### What changed
 

@@ -9,10 +9,12 @@
 # amd64 only, and runtime-scan creates its container with --pull=never), then
 # just image-scan (grype over the OS packages) and just runtime-scan (grype
 # over the conda runtime environment copied out of the image). Both use
-# --only-fixed --fail-on high. image-scan exits 0 or grype's own non-zero
-# status; runtime-scan exits 0 for nothing that qualifies, 2 for a finding and
-# 1 when it cannot decide. Each exit status is printed, and every scan runs
-# before any check, so the transcript is whole even when a check fails.
+# --only-fixed --fail-on high. image-scan exits grype's own status: 0, 2 when
+# --fail-on trips and 1 on an error. runtime-scan exits 0 for nothing that
+# qualifies, 2 for a finding and 1 when it cannot decide. A scan can print a
+# table and still exit 1, so the control counts only when it lists the CVE and
+# exits 2. Each exit status is printed, and every scan runs before any check,
+# so the transcript is whole even when a check fails.
 #
 # rebar3 runs only in the build stage and is not in the runtime image, so
 # neither scan ever matched rebar3: ticket 53's fix is in the build, not in
@@ -67,8 +69,10 @@ echo; echo '== checks'
 # shellcheck disable=SC2154 # set by scan's eval
 {
   [ "$(has "$control_image_out")" -gt 0 ] || fail "the control's image-scan does not list $cve"
+  [ "$control_image_rc" = 2 ] || fail "the control's image-scan exited $control_image_rc, not 2"
   printf 'ok   the control: image-scan lists %s (exit %s)\n' "$cve" "$control_image_rc"
   [ "$(has "$control_runtime_out")" -gt 0 ] || fail "the control's runtime-scan does not list $cve"
+  [ "$control_runtime_rc" = 2 ] || fail "the control's runtime-scan exited $control_runtime_rc, not 2"
   printf 'ok   the control: runtime-scan lists %s (exit %s)\n' "$cve" "$control_runtime_rc"
   [ "$(has "$release_image_out")" = 0 ] || fail "v0.3.1's image-scan lists $cve"
   printf 'ok   v0.3.1: image-scan does not list %s\n' "$cve"

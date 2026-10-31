@@ -1,4 +1,4 @@
-date: 2026-10-30T23:53Z
+date: 2026-10-31T02:11Z
 Application:         grype Version:             0.120.1
 docker 29.4.0
 

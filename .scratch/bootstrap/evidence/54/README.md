@@ -1,6 +1,6 @@
 # Bootstrap ticket 54 evidence
 
-Evidence for [ticket 54](../../issues/54-release-v0-3-1.md): the release of `v0.3.1`, through the route tickets [37](../37/README.md) and [40](../40/README.md) ran and [org transfer 05](../../../org-transfer/evidence/05/README.md) followed. Each script's transcript sits beside it, from the runs on 2026-10-30 UTC listed below. The release is run [41016018897](https://github.com/BiscuitBin/knarr/actions/runs/41016018897): image `ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385`, chart `ghcr.io/biscuitbin/charts/knarr:0.3.1` at `sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013`.
+Evidence for [ticket 54](../../issues/54-release-v0-3-1.md): the release of `v0.3.1`, through the route tickets [37](../37/README.md) and [40](../40/README.md) ran and [org transfer 05](../../../org-transfer/evidence/05/README.md) followed. Each script's transcript sits beside it, from the runs on 2026-10-30 and 2026-10-31 UTC listed below. The release is run [41016018897](https://github.com/BiscuitBin/knarr/actions/runs/41016018897): image `ghcr.io/biscuitbin/knarr@sha256:8b89fd1c08c5170bec456df522d48e7b78431859d7c135993fc14327533ea385`, chart `ghcr.io/biscuitbin/charts/knarr:0.3.1` at `sha256:1c4d28f935009f6306450b13758fb60866a596cc4b1c4f0d02359a69343ae013`.
 
 Each script exits non-zero on an unexpected result. Lines beginning `ok` are checked, and lines beginning `info` only report. Each header comment says what changed from the script it adapts. In order:
 
@@ -19,10 +19,15 @@ Each separately, on 2026-10-30 UTC:
 - `just release-preflight v0.3.1 6e2428ced066ebb05b9b73a0be12825550f3488e` ([preflight.txt](preflight.txt)), with `git ls-remote --tags` to confirm no `v0.3.1` existed.
 - The push of the annotated tag `v0.3.1` (message `v0.3.1`, object `95b0b89`) on `6e2428c`.
 - `gh run list`, `gh run view` and `gh run watch` for run 41016018897. The maintainer approved the `release` environment in GitHub's UI.
-- `run.sh` twice ([run.txt](run.txt) is the second). The first ran while the publish job still waited for approval, because a `gh run watch` that timed out on the network was read as the run finishing. It stopped at `status, conclusion: read 'waiting '`.
+- `run.sh` twice ([run.txt](run.txt) held the second until the rerun below). The first ran while the publish job still waited for approval, because a `gh run watch` that timed out on the network was read as the run finishing. It stopped at `status, conclusion: read 'waiting '`.
 - `verify.sh` ([verify.txt](verify.txt)).
 - `just audit-install`, then `scan.sh` ([scan.txt](scan.txt)), with its two image pulls and grype's database download.
 - A read-only `git fetch --tags` for the hand-back's `git diff v0.3.0 v0.3.1`. It was not separately authorized, and it fetched nothing new.
+
+Then, on 2026-10-31 UTC, after the review of pull request #73 made `run.sh`'s durations portable and `scan.sh` require the control's exit 2:
+
+- `run.sh` again, which replaced [run.txt](run.txt). Only its `date:` line changed.
+- `scan.sh` again, with its two image pulls and grype's database check, which replaced [scan.txt](scan.txt). The database was still the one built 2026-10-30T06:23Z, and only the `date:` line changed.
 
 ## Rerun
 

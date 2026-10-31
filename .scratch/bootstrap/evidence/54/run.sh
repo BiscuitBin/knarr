@@ -20,7 +20,8 @@
 # ticket 36's, which carried over the transfer. Every guard still expects
 # `absent (http 404)`: both packages are new under the org.
 # Each answer is read once, and what it prints and what it checks come from
-# that one read. It prints no whole log and no token. gh and git ls-remote
+# that one read. Each attest step's duration is computed by gh's jq in that
+# read, not by date, so the script runs on Linux as well as macOS. It prints no whole log and no token. gh and git ls-remote
 # read only. Needs an authenticated gh and the local tag the maintainer pushed.
 # Usage: sh run.sh <run-id> <tag> <commit> > run.txt 2>&1
 set -eu
@@ -142,16 +143,16 @@ expect 'the chart digest is sha256: and 64 hex digits' "$(count "$chart_digest" 
 expect 'chart_digest= agrees with the Digest: line' "$(printf '%s\n' "$publish_log" | sed -n 's/^chart_digest=//p')" "$chart_digest"
 
 echo; echo "== Publish to ghcr.io (job $publish): the attest steps"
-# One line per attest step: name, conclusion, start and end, from the one
-# read of the run's jobs below.
+# One line per attest step: name, conclusion, start, end and the seconds
+# between them, from the one read of the run's jobs below.
 v=$(gh run view "$run" -R "$repo" --json jobs \
-  --jq '.jobs[] | select(.name == "Publish to ghcr.io") | .steps[] | select(.name | startswith("Run actions/attest-build-provenance@")) | [.name, .conclusion, .startedAt, .completedAt] | join("\t")') ||
+  --jq '.jobs[] | select(.name == "Publish to ghcr.io") | .steps[] | select(.name | startswith("Run actions/attest-build-provenance@")) | [.name, .conclusion, .startedAt, .completedAt, ((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601) | tostring)] | join("\t")') ||
   fail 'reading the publish steps failed'
 printf '%s\n' "$v" | awk -F '\t' '{ printf "%s: %s, %s to %s\n", $1, $2, $3, $4 }'
 expect 'attest steps' "$(count "$v" .)" 2
 expect 'attest step conclusions' "$(printf '%s\n' "$v" | cut -f 2 | paste -s -d , -)" success,success
-printf '%s\n' "$v" | while IFS='	' read -r _ _ s e; do
-  printf 'info took %s s\n' "$(( $(date -ju -f %Y-%m-%dT%H:%M:%SZ "$e" +%s) - $(date -ju -f %Y-%m-%dT%H:%M:%SZ "$s" +%s) ))"
+printf '%s\n' "$v" | while IFS='	' read -r _ _ _ _ d; do
+  printf 'info took %s s\n' "$d"
 done
 v=$(matching "$publish_log" '^Attestation created for ')
 printf '%s\n' "$v"
