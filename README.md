@@ -18,15 +18,15 @@ flowchart LR
     end
     AS["Your autoscaler<br/>KEDA, HPA or kubectl scale"]
     RS["ReplicaSet controller"]
-    K -- "1. polls GET /knarr/v1/status<br/>every 30 s: cost, accepting" --> DEP
-    K -- "2. patches pod-deletion-cost<br/>when a threshold is crossed" --> DEP
+    K -- "1. polls GET /knarr/v1/status<br/>every 30 s by default: cost, accepting" --> DEP
+    K -- "2. patches pod-deletion-cost via the API server<br/>when a threshold is crossed" --> DEP
     AS -- "3. lowers replicas 3 to 2" --> RS
     RS -- "4. prefers to remove<br/>the lowest-cost pod" --> B
     classDef knarr stroke:#2f80ed,stroke-width:3px
     classDef victim stroke:#d64545,stroke-width:3px,stroke-dasharray:5 5
 ```
 
-The bias is best-effort: Kubernetes compares deletion cost only after node assignment, phase and readiness, so workers still drain gracefully when chosen. [Prepare a worker](docs/how-to/worker.md) covers the status endpoint and drain, and the [project overview](docs/OVERVIEW.md#4-how-it-works-conceptual) has the full loop and its limits.
+The bias is best-effort: Kubernetes compares deletion cost only after node assignment, phase and readiness, so a busy pod can still be chosen. Each worker must handle SIGTERM by draining on its own, with enough termination grace to finish its in-flight work. [Prepare a worker](docs/how-to/worker.md) covers the status endpoint and drain, and the [project overview](docs/OVERVIEW.md#4-how-it-works-conceptual) has the full loop and its limits.
 
 ## Install
 
