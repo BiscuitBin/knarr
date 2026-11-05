@@ -36,8 +36,8 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 
 ## Maintainer documents
 
-- [Repository README](../README.md): current status and local setup.
-- [Contributing](../CONTRIBUTING.md): the ticket frontier, worktrees, authorization, verification and merging.
+- [Repository README](../README.md): what knarr does and how to install it.
+- [Contributing](../CONTRIBUTING.md): local setup, the gate, audits and pins, the ticket frontier, worktrees, authorization, verification and merging.
 - [Security policy](../SECURITY.md): supported versions and private vulnerability reporting.
 - [Changelog](../CHANGELOG.md): notable changes, by release.
 

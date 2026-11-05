@@ -159,7 +159,7 @@ PIXI_SITES = {
     ".github/actions/setup/action.yml": r"^\s+pixi-version: v(\S+)$",
     ".github/actions/setup/action.yml cache": r"^\s+cache-key: knarr-pixi-v(\S+?)-$",
     "Dockerfile": r"^FROM ghcr\.io/prefix-dev/pixi:([^\s@]+)@",
-    "README.md": r"\[pixi\]\(https://pixi\.sh\) (\S+) or later",
+    "CONTRIBUTING.md": r"\[pixi\]\(https://pixi\.sh\) (\S+) or later",
 }
 
 
@@ -181,13 +181,13 @@ def test_the_pixi_version_agrees_everywhere_it_is_written() -> None:
 
 @pytest.mark.parametrize(
     ("path", "sites"),
-    [("pixi.toml", 1), (".github/actions/setup/action.yml", 2), ("README.md", 1)],
+    [("pixi.toml", 1), (".github/actions/setup/action.yml", 2), ("CONTRIBUTING.md", 1)],
 )
 def test_every_pixi_version_but_the_build_stage_is_read_against_the_image_tags(
     path: str, sites: int
 ) -> None:
     # The Dockerfile's FROM has the dockerfile manager. The floor, the cache key
-    # and the README have no manager of their own, and setup-pixi's input is
+    # and the contributing guide have no manager of their own, and setup-pixi's input is
     # read here too, because its native reading proposes nothing (renovate.txt).
     version = next(iter(set(pixi_versions().values())))
     assert (
@@ -281,7 +281,7 @@ PIXI = [
         "packageFile": path,
         "datasource": "docker",
     }
-    for path in ("pixi.toml", ".github/actions/setup/action.yml", "README.md")
+    for path in ("pixi.toml", ".github/actions/setup/action.yml", "CONTRIBUTING.md")
 ]
 CONDA = {
     "manager": "pixi",

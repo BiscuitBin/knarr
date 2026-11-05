@@ -68,7 +68,7 @@
       "enabled": false
     },
     {
-      "description": "The pixi version, written in five places (the floor, setup-pixi's input, the cache key, the build stage's FROM and the README), moves in one pull request; scripts/checks/tests/test_dependency_pins.py fails until all five agree.",
+      "description": "The pixi version, written in five places (the floor, setup-pixi's input, the cache key, the build stage's FROM and the contributing guide), moves in one pull request; scripts/checks/tests/test_dependency_pins.py fails until all five agree.",
       "matchPackageNames": [
         "ghcr.io/prefix-dev/pixi"
       ],
@@ -76,7 +76,7 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "The floor, setup-pixi's input, the cache key and the README name a pixi version, not an image, so docker:pinDigests has no digest to add there.",
+      "description": "The floor, setup-pixi's input, the cache key and the contributing guide name a pixi version, not an image, so docker:pinDigests has no digest to add there.",
       "matchManagers": [
         "custom.regex"
       ],
@@ -166,11 +166,11 @@
     },
     {
       "customType": "regex",
-      "description": "The pixi version outside the Dockerfile: the floor in pixi.toml, setup-pixi's input and the cache key in the setup action, and the README's prerequisite. Read against the pixi image's tags, so all four move with the build stage's FROM; the pixi group keeps the five in one pull request.",
+      "description": "The pixi version outside the Dockerfile: the floor in pixi.toml, setup-pixi's input and the cache key in the setup action, and the contributing guide's prerequisite. Read against the pixi image's tags, so all four move with the build stage's FROM; the pixi group keeps the five in one pull request.",
       "managerFilePatterns": [
         "/^pixi\\.toml$/",
         "/^\\.github/actions/setup/action\\.yml$/",
-        "/^README\\.md$/"
+        "/^CONTRIBUTING\\.md$/"
       ],
       "matchStrings": [
         "requires-pixi = \">=(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",

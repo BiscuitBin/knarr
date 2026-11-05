@@ -31,11 +31,105 @@ cd ../knarr-12-maintainer-docs
 
 Check `git worktree list` first. If the ticket already has a worktree, use that worktree and branch. Preserve changes you did not author.
 
-Follow the README's [getting started instructions](README.md#getting-started) for prerequisites and `just initialize`, then run `just check`. Obtain the first-run network grant before initialization. Rerunning initialization after a pin change also needs authorization for its network access.
+Follow [Getting started](#getting-started), below, for prerequisites and `just initialize`, then run `just check`. Obtain the first-run network grant before initialization. Rerunning initialization after a pin change also needs authorization for its network access.
 
 Never install hooks from a linked worktree: all worktrees share `.git/hooks`. `just initialize` detects linked worktrees and skips hook installation with a notice. A maintainer installs hooks by initializing the primary checkout; agents need explicit authorization before acting there on the shared hooks or using the network. A linked worktree can run the gate without installing hooks.
 
 Tracked bootstrap tickets and evidence belong in `.scratch/bootstrap/`. Temporary experiments and review output go in `ai_tmp/`, which is ignored and never committed.
+
+## Getting started
+
+You need [pixi](https://pixi.sh) 0.81.0 or later, git, curl and a POSIX shell. pixi installs everything else from `pixi.lock`: Gleam, Erlang/OTP, `just`, Python and every gate tool ([Decision 0003](docs/decisions/0003-tool-manager.md)).
+
+From a fresh clone, run one command:
+
+```sh
+just initialize
+```
+
+Any recent `just` works; 1.51 and the pinned 1.58 are known to. Without one, run `sh scripts/initialize.sh`, which is exactly what the recipe runs. Afterwards the pinned `just` is at `.pixi/envs/default/bin/just`. `just initialize` is the one first-run command:
+
+- It installs the pixi environment, exactly as `pixi.lock` pins it.
+- It downloads the tools conda-forge lacks into `.tools/bin`, refusing any whose sha256 differs from `tools.txt`.
+- It downloads Gleam's hex packages.
+- In the primary checkout, it installs the pre-commit hook.
+
+It never formats, stages, commits or pushes, and it is safe to rerun. Rerun it after a pull that moves a pin in `pixi.lock` or `tools.txt`. Until you do, `just check` fails at `env-check` rather than running the old tools.
+
+**Repository initialization needs network; `just check` runs offline.** An agent needs an explicit network grant before the first run of `just initialize`. Each later network action needs its own authorization; see [Authorization](#authorization).
+
+Then run the gate:
+
+```sh
+just check
+```
+
+`just --list` shows every recipe in seven groups: setup, develop, format, check, audit, cluster and release.
+The [local cluster guide](docs/how-to/local-cluster.md) builds the controller's image and deploys its chart on kind.
+
+## The gate
+
+`just check` is read-only. It runs each recipe in the check group through `scripts/checks/run_project_check.py`, which snapshots every tracked and untracked-unignored file first. The gate fails on the first recipe that changes any of them, even when that recipe passed ([Decision 0004](docs/decisions/0004-gate-checkers.md)).
+
+Recipes may write ignored paths, such as `build/` and the `<title>.new` a failing snapshot test leaves; `just initialize` writes nothing else. Four recipes change tracked files on purpose, all outside the gate:
+
+- `just fix` repairs formatting and lint findings.
+- `just snapshots-review` and `just snapshots-accept` accept snapshot changes into `test/birdie_snapshots/`.
+- `just birdie` runs any other birdie command. `just birdie reject` and `just birdie stale delete` can change tracked snapshot files.
+
+The pre-commit hook runs the read-only config, `.pre-commit-config.yaml`. `just fix` runs `.pre-commit-fix.yaml`. The [testing reference](docs/reference/testing.md) covers the snapshot recipes and how `just check` stays read-only around them.
+
+[CI](.github/workflows/ci.yml) runs `just check` on every pull request and
+every push to `main`, using the same locked environment and `just initialize`
+as contributors. Its aggregate `check` fails if any gate job fails, is cancelled,
+or is skipped. `check` is the only required status check on `main`.
+Administrators are exempt, so it binds pull requests but not an owner's
+direct push.
+Add only required gate jobs to the aggregate's `needs` list. The initial kind
+and kwok jobs stay outside it; the kind smoke job must demonstrate stability
+for a stated period before becoming required (tickets 10 and 13).
+
+## Audits and pins
+
+The separate [audit](.github/workflows/audit.yml) runs on Mondays at 06:00 UTC
+and on manual dispatch, outside the required gate:
+
+- `just links-audit` checks that remote links still resolve.
+- `just hex-audit` checks the hex packages and the OTP pin against OSV.dev
+  advisories.
+- `just image-scan` runs grype over the OS packages of the image
+  `just image-build` builds. It does not read the image's conda runtime
+  environment.
+- `just runtime-scan` copies that runtime environment out of the image and
+  runs grype over its conda packages as a directory. It fails when grype
+  catalogues no conda package.
+
+Remote availability and published advisories change without a commit
+([Decision 0014](docs/decisions/0014-dependency-updates-and-audit.md)).
+
+Moving a pin is a manual edit, never a recipe. Renovate is configured to
+propose most of these edits as pull requests, held until ticket 44 activates
+it ([Decision 0014](docs/decisions/0014-dependency-updates-and-audit.md)). A
+proposal lands like any other change, and a reviewer checks the same steps:
+
+- **A conda package:** edit its `==` line in `pixi.toml`, run `pixi update <package>`, read the `pixi.lock` diff, commit both files, and rerun `just initialize`.
+- **A tools.txt download:** replace both platforms' lines with the new URL and sha256, and rerun `just initialize`.
+- **A Gleam dependency:** edit `gleam.toml`, run `gleam deps download` (or `gleam deps update`), read the `manifest.toml` diff, and commit both. The gate fails while the two disagree. The fake worker fixture is a second Gleam project, so a package it shares with knarr moves in `fixtures/fake_worker/gleam.toml` and its `manifest.toml` too, through `gleam deps download` there; `test_fake_worker_manifest.py` fails while the two projects lock different versions.
+
+## Specifications
+
+Allium modules live in [docs/specs/](docs/specs/knarr.allium), configured by
+`[allium] specs` in `checks.toml`. The root module is a skeleton; later tickets
+add behaviour clauses. `just initialize` installs Allium 3.6.1 from the
+checksum pins in `tools.txt`.
+
+- `just check-specs` fails on every diagnostic, including informational ones.
+- `just analyse-specs` fails on every finding or diagnostic.
+- `just plan-spec docs/specs/knarr.allium` prints the module's test plan and obligation count.
+
+Both checks run inside `just check`. They read the JSON reports because
+Allium's exit status alone does not establish that a spec is clean. Planning
+is a development command and is not part of the gate.
 
 ## Authorization
 
@@ -62,6 +156,6 @@ Finish the ticket with hand-back notes recording what changed, the checks and ev
 
 After separate authorization to push and open a pull request, submit the ticket branch against `main`. Push the ticket branch named in the authorization; permission to push that branch does not authorize pushing directly to `main`. Describe the resulting behaviour, validation and material limitations, and link the local ticket and relevant decisions. Keep security reports in the private channel described in [SECURITY.md](SECURITY.md).
 
-Pull requests to `main` require the aggregate CI status `check` to pass. External link audits and the initial cluster jobs are outside that required gate; the README's [gate section](README.md#the-gate) explains the CI setup. Maintainers review the change and merge it with authorization. Administrators can bypass protection under the existing repository policy, so the contributor workflow uses a pull request and the passing required check.
+Pull requests to `main` require the aggregate CI status `check` to pass. External link audits and the initial cluster jobs are outside that required gate; [The gate](#the-gate) explains the CI setup. Maintainers review the change and merge it with authorization. Administrators can bypass protection under the existing repository policy, so the contributor workflow uses a pull request and the passing required check.
 
 [Decision 0012](docs/decisions/0012-release-and-packaging.md) decides release versioning, publishing and the changelog's release headings; tickets 36 to 40 carry it out. User-facing worker, KEDA and operations guides belong to [ticket 34](.scratch/bootstrap/issues/34-user-guides.md).

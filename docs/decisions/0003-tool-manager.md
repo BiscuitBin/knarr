@@ -189,7 +189,7 @@ Plain `pixi lock --check` is not the lock check. On drift it exits 1, but it has
 - **Locally:** pixi 0.81.0, with `requires-pixi = ">=0.81.0"` in the manifest as the floor.
 - **In CI:** `prefix-dev/setup-pixi` with `pixi-version: v0.81.0` and `locked: true`. setup-pixi v0.11.0 (commit `9dabb60412d3d2d967a8d682f7ce01317af40514`) is the current release. It was published on 2026-10-06, one day before this record. libpawdoku runs v0.10.2. 05 pins one of the two by SHA and records which.
 
-The version appears twice, once exact (CI) and once as a floor (the manifest), because nothing else can install pixi. Amended by ticket 27: it now appears in five places. They are the floor, setup-pixi's `pixi-version`, the setup action's cache key, the Dockerfile build stage's `FROM ghcr.io/prefix-dev/pixi:<version>@sha256:…`, and the README's prerequisite. `scripts/checks/tests/test_dependency_pins.py` fails unless all five agree, and Renovate moves them in one pull request ([Decision 0014](0014-dependency-updates-and-audit.md)).
+The version appears twice, once exact (CI) and once as a floor (the manifest), because nothing else can install pixi. Amended by ticket 27: it now appears in five places. They are the floor, setup-pixi's `pixi-version`, the setup action's cache key, the Dockerfile build stage's `FROM ghcr.io/prefix-dev/pixi:<version>@sha256:…`, and the README's prerequisite. `scripts/checks/tests/test_dependency_pins.py` fails unless all five agree, and Renovate moves them in one pull request ([Decision 0014](0014-dependency-updates-and-audit.md)). Amended on 2026-11-04: the prerequisite moved from the README to `CONTRIBUTING.md`'s Getting started, and the test and Renovate's regex manager read it there.
 
 ### `manifest.toml` (Verify 5)
 
