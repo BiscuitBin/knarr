@@ -178,7 +178,7 @@ flowchart TD
 
 ## Branches
 
-Each ticket is worked on its own branch, in its own git worktree. The branch name is the ticket's file name without `.md`, so [03](issues/03-foundation.md) is worked on `03-foundation`. Ticket 03 fixed this convention, and the root [README](../../README.md#branches-and-worktrees) states it with the worktree rules.
+Each ticket is worked on its own branch, in its own git worktree. The branch name is the ticket's file name without `.md`, so [03](issues/03-foundation.md) is worked on `03-foundation`. Ticket 03 fixed this convention, and the [contributing guide](../../CONTRIBUTING.md#create-the-ticket-worktree) states it with the worktree rules.
 
 ## Execution waves
 

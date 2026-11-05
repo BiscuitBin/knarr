@@ -4,6 +4,10 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ## [Unreleased]
 
+### Changed
+
+- The README now covers what knarr does, how to install its Helm chart and where the user guides are. Local setup, the gate, audits, moving pins and specifications moved to the contributing guide, `CONTRIBUTING.md`.
+
 ## [0.3.1] - 2026-10-30
 
 ### Changed

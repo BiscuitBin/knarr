@@ -13,7 +13,7 @@ export PATH PYTHONDONTWRITEBYTECODE
 git rev-parse --is-inside-work-tree > /dev/null
 
 command -v pixi > /dev/null ||
-  { printf '%s\n' 'pixi is not installed; see README.md, Getting started' >&2; exit 2; }
+  { printf '%s\n' 'pixi is not installed; see CONTRIBUTING.md, Getting started' >&2; exit 2; }
 
 # The compiler, OTP, Python and every gate tool, exactly as pixi.lock pins
 # them. --locked refuses a lock that disagrees with pixi.toml rather than

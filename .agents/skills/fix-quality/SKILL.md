@@ -10,7 +10,7 @@ description: Diagnose and repair a failing quality gate at its root instead of s
    - `format-check` or `toml-check`: run `just fix`; never hand-format to match.
    - `build` or `test`: warnings are errors, so fix the code. A test that is already green proves nothing about new behaviour; a failing test is the clause it derives from, not an obstacle.
    - `manifest-check` or a report that gleam rewrote `manifest.toml`: `gleam.toml` and `manifest.toml` disagree. Run `gleam deps download`, read the `manifest.toml` diff, and commit both.
-   - `lock-check` or `env-check`: `pixi.lock` disagrees with `pixi.toml`, or the installed tools differ from the pins. A pin move is a manual edit described in `README.md`; after a pull, rerun `just initialize`.
+   - `lock-check` or `env-check`: `pixi.lock` disagrees with `pixi.toml`, or the installed tools differ from the pins. A pin move is a manual edit described in `CONTRIBUTING.md`; after a pull, rerun `just initialize`.
    - `docs-check`: a page is unregistered, unreachable, or its frontmatter disagrees with `docs/manifest.yml`. The list comparison is order-sensitive. Hand to the `review-docs` skill.
    - `agents-check`: a bridge under `.claude/skills/` has grown content, a managed file is missing or unexpected, a phrase left `AGENTS.md`, or a vendored file differs from `skills-lock.json`. Vendored bytes are never edited; see `docs/reference/agent-contract.md`.
    - `check-specs` or `analyse-specs`: hand to the `spec-change` skill. A diagnostic is a regression and a finding cannot be waived.

@@ -36,7 +36,7 @@ flowchart TD
 
 ## Branches
 
-Each ticket is worked on its own branch, in its own git worktree, as the root [README](../../README.md#branches-and-worktrees) states. The branch name is the ticket's file name without `.md`, so [02](issues/02-chart-renders-base.md) is worked on `02-chart-renders-base`. Numbers are per directory: this round's 02 is not bootstrap ticket 02. When a ticket here names a bootstrap ticket, it says "bootstrap".
+Each ticket is worked on its own branch, in its own git worktree, as the [contributing guide](../../CONTRIBUTING.md#create-the-ticket-worktree) states. The branch name is the ticket's file name without `.md`, so [02](issues/02-chart-renders-base.md) is worked on `02-chart-renders-base`. Numbers are per directory: this round's 02 is not bootstrap ticket 02. When a ticket here names a bootstrap ticket, it says "bootstrap".
 
 ## Execution waves
 
