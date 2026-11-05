@@ -4,6 +4,30 @@ A Kubernetes controller, written in Gleam on the BEAM, that biases Deployment sc
 
 **Status: early, pre-1.0.** knarr manages the Deployments in its namespace that carry the label `knarr.io/enabled=true`. It polls each of their pods' `GET /knarr/v1/status` and sets `pod-deletion-cost` from the reading. When a Deployment opts out, knarr removes the annotations it owns. It serves health, readiness and Prometheus metrics endpoints. It never changes a replica count or a Deployment's pod template, and it stops patching a pod once the pod is terminating. The `cluster-autoscaler.kubernetes.io/safe-to-evict` policy is not implemented yet. knarr has not yet been accepted on a production GKE Standard workload.
 
+## How it works
+
+Each worker pod reports how long its current work has been running. knarr turns that into the pod's `pod-deletion-cost` annotation, so when your autoscaler removes a replica, Kubernetes prefers to remove an idle pod over a busy one.
+
+```mermaid
+flowchart LR
+    K["knarr"]:::knarr
+    subgraph DEP ["Deployment labelled knarr.io/enabled=true"]
+        A["pod A<br/>busy for 40 min<br/>deletion cost: high"]
+        C["pod C<br/>busy for 10 min<br/>deletion cost: low"]
+        B["pod B<br/>idle<br/>deletion cost: none"]:::victim
+    end
+    AS["Your autoscaler<br/>KEDA, HPA or kubectl scale"]
+    RS["ReplicaSet controller"]
+    K -- "1. polls GET /knarr/v1/status<br/>every 30 s: cost, accepting" --> DEP
+    K -- "2. patches pod-deletion-cost<br/>when a threshold is crossed" --> DEP
+    AS -- "3. lowers replicas 3 to 2" --> RS
+    RS -- "4. prefers to remove<br/>the lowest-cost pod" --> B
+    classDef knarr stroke:#2f80ed,stroke-width:3px
+    classDef victim stroke:#d64545,stroke-width:3px,stroke-dasharray:5 5
+```
+
+The bias is best-effort: Kubernetes compares deletion cost only after node assignment, phase and readiness, so workers still drain gracefully when chosen. [Prepare a worker](docs/how-to/worker.md) covers the status endpoint and drain, and the [project overview](docs/OVERVIEW.md#4-how-it-works-conceptual) has the full loop and its limits.
+
 ## Install
 
 knarr ships as a Helm chart. Set `chart_version` to a release version and `worker_namespace` to the existing namespace whose Deployments knarr should manage. Installing changes your selected cluster, so check the context first:
