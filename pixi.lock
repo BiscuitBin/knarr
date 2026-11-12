@@ -2,19 +2,19 @@ version: 7
 platforms:
 - name: linux-64
   virtual-packages:
-  - __unix=0=0
+  - __unix=0
   - __linux=4.18
   - __glibc=2.28
   - __archspec=0=x86_64
 - name: linux-aarch64
   virtual-packages:
-  - __unix=0=0
+  - __unix=0
   - __linux=4.18
   - __glibc=2.28
   - __archspec=0=aarch64
 - name: osx-arm64
   virtual-packages:
-  - __unix=0=0
+  - __unix=0
   - __osx=13.0
   - __archspec=0=m1
 environments:
@@ -23,11 +23,11 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     packages:
       linux-64:
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/grype-0.120.1-hfc2019e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/grype-0.121.3-hfc2019e_0.conda
       linux-aarch64:
-      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/grype-0.120.1-h22914b5_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/grype-0.121.3-h22914b5_0.conda
       osx-arm64:
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/grype-0.120.1-hf76c51c_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/grype-0.121.3-h2ef8fd1_0.conda
   cluster:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -517,14 +517,14 @@ packages:
   run_exports: {}
   size: 7270490
   timestamp: 1791220918151
-- conda: https://conda.anaconda.org/conda-forge/linux-64/grype-0.120.1-hfc2019e_0.conda
-  sha256: 784b4e5bc5b2ace0eb58c1eadb003d529998e079556f57870f41af823976f914
-  md5: 4aa440d3c32931d2c6a4cf67c20af11b
+- conda: https://conda.anaconda.org/conda-forge/linux-64/grype-0.121.3-hfc2019e_0.conda
+  sha256: 4c061c9eb6e122d25aa102f904b0cc1722e1eda9be8216c7c1d4dc5f5ef55d6b
+  md5: 766026b19f5a4a083db5aa9cf2d66840
   license: Apache-2.0
   license_family: APACHE
   run_exports: {}
-  size: 55093126
-  timestamp: 1791336200332
+  size: 56215757
+  timestamp: 1794271774890
 - conda: https://conda.anaconda.org/conda-forge/linux-64/icu-78.3-py310h44b86e0_2.conda
   sha256: 9f07834f0c546ab14d885ce0366285f61f44e326c0edd1fc63b8294e113ae432
   md5: 72a381cbad04f24b1c2a43ef707f45b4
@@ -1186,14 +1186,14 @@ packages:
   run_exports: {}
   size: 7118823
   timestamp: 1791220907491
-- conda: https://conda.anaconda.org/conda-forge/linux-aarch64/grype-0.120.1-h22914b5_0.conda
-  sha256: 1ecf91b0cd0b14ad3034baa8a0f98b08831e0458ed52913b0cfb6018e27e41d2
-  md5: 8509ed3fc5cc8d75e80a2f33be34eac0
+- conda: https://conda.anaconda.org/conda-forge/linux-aarch64/grype-0.121.3-h22914b5_0.conda
+  sha256: 5e0e24847e7b6ef202a97f7f69783386eb84bb1e3c975aee51df5356cc7c507d
+  md5: a7e5970bd15e99d71a2c1471046aaf56
   license: Apache-2.0
   license_family: APACHE
   run_exports: {}
-  size: 51129280
-  timestamp: 1791336188887
+  size: 52186081
+  timestamp: 1794271783288
 - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/icu-78.3-py311h3512406_2.conda
   sha256: 54d921defd947adb58a90e10203d3bfe6c1f209f5f1a1ad2c6a9f7617f2fb59e
   md5: b35bbb1b957440ed742f35fb96eb7f1c
@@ -1986,14 +1986,14 @@ packages:
     - gmp >=6.3.0,<7.0a0
   size: 399307
   timestamp: 1786629210135
-- conda: https://conda.anaconda.org/conda-forge/osx-arm64/grype-0.120.1-hf76c51c_0.conda
-  sha256: 8ddf02df254aecf3379161772831ad4910892cf0a341ff7016547f1d53da78bc
-  md5: 326ee319ca6bc5843dff465f3d87dab3
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/grype-0.121.3-h2ef8fd1_0.conda
+  sha256: 27815310404ff6587b90a981e7236a689675e28f5c29a17b918bd3e136ce32e9
+  md5: 1f0ec80a3c930816550819ce9615bab0
   license: Apache-2.0
   license_family: APACHE
   run_exports: {}
-  size: 53009041
-  timestamp: 1791336192305
+  size: 54024497
+  timestamp: 1794271791174
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/icu-78.3-py310h579977c_2.conda
   sha256: 6cdb5dee54c72e56ab189fb3ad33cb28533553d42590e7e831160248f4416a43
   md5: a5efc0b42bb8b42e97d0a29ae3e3c187

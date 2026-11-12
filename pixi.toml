@@ -46,7 +46,7 @@ tilt = "==0.37.8"
 # The image scan the audit workflow runs (Decision 0014). Kept out of the
 # default environment like the cluster tools; grype brings no dependencies.
 [feature.audit.dependencies]
-grype = "==0.120.1"
+grype = "==0.121.3"
 
 # One solve group: every environment gets the same erlang build and the same
 # openssl, so what the default environment proves about TLS holds for the
