@@ -11,6 +11,8 @@
 #          the Erlang HTTP tests load the system store even when offline.
 # Ubuntu's base image has no git, python, node or curl of its own.
 # Usage: sh host.sh [--offline] <command> [argument...]
+#   KNARR_HOST_NO_CA=1 leaves the CA link out; host-needs.sh uses it to show
+#   what then fails.
 set -eu
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 root=$(CDPATH='' cd -- "$here/../../../.." && pwd -P)
@@ -37,7 +39,10 @@ exec docker run --rm $network \
   --env=NIX_CONFIG="$config" \
   --env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/nix/var/nix/profiles/default/bin \
   --workdir=/work \
+  --env=KNARR_HOST_NO_CA="${KNARR_HOST_NO_CA:-}" \
   "$image" sh -c '
-    mkdir -p /etc/ssl/certs &&
-    ln -s /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt &&
+    if [ -z "$KNARR_HOST_NO_CA" ]; then
+      mkdir -p /etc/ssl/certs
+      ln -s /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt
+    fi
     exec "$@"' host "$@"

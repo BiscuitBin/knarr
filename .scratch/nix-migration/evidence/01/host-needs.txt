@@ -1,0 +1,20 @@
+
+== On the Nix image
+on PATH without the prefix: sh=yes git=yes sed=NO awk=NO find=yes diff=NO perl=NO curl=yes dirname=yes
+/usr/bin holds 1 entries; a CA store at /etc/ssl/certs/ca-certificates.crt: yes
+in the prototype environment: perl=NO sed=NO
+just manifest-check    exit 127  2 sed: command not found;
+just lint              exit 127  2 sed: command not found;
+just fake-worker-test  exit 127  2 sed: command not found;
+scripts that call perl: scripts/release/lib.sh scripts/release/stamp-chart.sh 
+tests that run with PATH=/usr/bin:/bin: scripts/checks/tests/test_run_glinter.py scripts/checks/tests/test_with_env.py 
+
+== On the stand-in host, without the CA link
+on PATH without the prefix: sh=yes git=yes sed=yes awk=yes find=yes diff=yes perl=yes curl=yes dirname=yes
+/usr/bin holds 295 entries; a CA store at /etc/ssl/certs/ca-certificates.crt: NO
+in the prototype environment: perl=NO sed=NO
+just manifest-check    exit 0   
+just lint              exit 1    12 No CA certificates were loaded from the system;
+just fake-worker-test  exit 1    9 FailedLoadCacerts(NoCacertsFound);
+scripts that call perl: scripts/release/lib.sh scripts/release/stamp-chart.sh 
+tests that run with PATH=/usr/bin:/bin: scripts/checks/tests/test_run_glinter.py scripts/checks/tests/test_with_env.py 

@@ -91,7 +91,7 @@ Nothing compiles. The derivations built locally are the environments themselves 
 
 | Option | OTP | OpenSSL | Cached (three systems) | Cost |
 | --- | --- | --- | --- | --- |
-| The candidate's Erlang (**the prototype**) | 29.1.2 | 3.5.9 | yes, yes, yes | OpenSSL differs from pixi.lock's. The six TLS cases were rerun on it and pass; see [the image](#8-the-image-and-tls). |
+| The candidate's Erlang (**the prototype**) | 29.1.2 | 3.5.9 | yes, yes, yes | OpenSSL differs from pixi.lock's. The six TLS cases were rerun on it and pass; see [the image](#9-the-image-and-tls). |
 | Erlang from a second input at nixos-26.05 `f1e5c35` | 29.1.2 | 3.6.5 | yes, yes, yes | The exact pair pixi.lock has, and cached. It ships an OpenSSL line nixpkgs unstable has already dropped as end of life, and brings a second glibc into every closure. |
 | The candidate's Erlang with `.override { openssl = … }` | 29.1.2 | any | no, no, no | Forfeits the cache on all three systems: Erlang compiles from source wherever it is installed. |
 
@@ -132,7 +132,7 @@ A plain fixed-hash fetch does not run on Linux. Both Linux binaries are dynamica
 
 **hadolint** is 2.14.0 in nixpkgs against `tools.txt`'s 2.15.1. The upstream 2.15.1 asset is statically linked and runs as fetched (`hadolint-linux-arm64`, sha256 `f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d`). The prototype uses nixpkgs' 2.14.0, and `just packaging-check` passes with it.
 
-**grype** is 0.120.0 in nixpkgs against the pin's 0.120.1; see [Scanning](#9-scanning).
+**grype** is 0.120.0 in nixpkgs against the pin's 0.120.1; see [Scanning](#10-scanning).
 
 One trap for a fetched executable: a store file carries its executable bit only when it is hashed as a NAR, so `fetchurl { executable = true; }` takes a Nix-only hash that is not the upstream sha256. To keep the upstream digest as the pin, fetch the plain file and install it with mode 0755 in a derivation, as the allium derivation does.
 
@@ -181,13 +181,106 @@ Outside the flake directory the check writes one file, Nix's own `fetcher-cache-
 
 ### 7. The gate from a PATH prefix
 
-Not yet recorded.
+[gate-setup.txt](gate-setup.txt) prepares the clone with the network on; [gate.txt](gate.txt) is the run with the network off; [host-needs.txt](host-needs.txt) and [fresh.txt](fresh.txt) are the two side cases. All of it ran on aarch64-linux.
 
-### 8. The image and TLS
+**Where it ran.** Not in the Nix image: that image is not a POSIX machine. It has no `/usr/bin`, and no `sed`, `awk`, `diff` or `perl`, and every recipe stops there with `sed: command not found`, because the `Justfile` runs `scripts/cluster-name.sh` when it loads ([host-needs.txt](host-needs.txt)). So the gate ran on a stand-in for "a Linux machine with only Nix installed", [host.sh](host.sh): the Ubuntu 24.04 base the Dockerfile ships, by the same digest, with the store volume at `/nix`, the Nix image's profile last on `PATH` (it supplies `nix` and `git`), and a link from `/etc/ssl/certs/ca-certificates.crt` to that profile's CA bundle. Nothing was installed into it, and without the prefix it has no `python3` and no `node`.
 
-Not yet recorded.
+**How the prefix was put in place.** Six readers name pixi's directories: the `Justfile`'s `PATH` and its `check` guard, `scripts/with-env.sh`, `scripts/initialize.sh`, the docs checker, the Allium runner and the ripsecrets wrapper. So the prototype environment was built straight into the path they name: `nix build <flake>#default --out-link .pixi/envs/default`, and `.tools/bin` is a link to its `bin`. Both paths are gitignored, so `git status --short` stays empty and no tracked file changes. Ticket 02's seam removes the need for this: with one script owning the directories, the out-link gets a name of its own.
 
-### 9. Scanning
+**What the machine still has to supply.** These are facts about the repository, not about Nix, and each was hidden by pixi or by the host:
+
+- `sed`, `awk`, `find` and `diff`, and `/usr/bin:/bin` holding the usual utilities: two checker tests run with exactly that `PATH`.
+- `perl`, for `scripts/release/stamp-chart.sh` and `scripts/release/lib.sh`. Today the recipes find conda's perl in `.pixi/envs/default/bin`, where Erlang's conda package puts it. The Nix environment has none, so those scripts use the machine's perl unless the flake adds one.
+- A system CA store, with the network off too. Without it `just lint` fails 12 times with `No CA certificates were loaded from the system` (lychee builds its client before it knows it is offline), and the Erlang HTTP tests fail with `FailedLoadCacerts(NoCacertsFound)`.
+
+**The four cases.**
+
+1. **The checker tests run through the interpreter's own pytest: yes.** `sys.executable` is `.pixi/envs/default/bin/python3`, the out-link path, and `pytest 9.1.1` loads from the Python environment in the store. `just test-checkers` passes (168 tests). `just test-checkers-all` has 714 passing, 65 failing and 13 skipped; the 65 are cases 2 and the Allium gap below, and with the scratch patch all 779 pass. The 13 skipped are the installer tests, which skip because `tools.txt` has no line for this host.
+2. **The docs checker's Node does not find markdown-it where the checker looks.** nixpkgs' `bin/markdownlint-cli2` is a wrapper script that runs `node …/lib/node_modules/markdownlint-cli2/markdownlint-cli2-bin.mjs`; conda's is a link to that file. The checker resolves `markdown-it` from the real path of `bin/markdownlint-cli2`, so under Nix it searches beside the wrapper and fails with `Cannot find module 'markdown-it'`, and `just docs-check` reports `Markdown parser unavailable`. Given the module's own entry script, `<prefix>/lib/node_modules/markdownlint-cli2/markdownlint-cli2-bin.mjs`, the same command renders. The prototype's environments link `lib/node_modules` beside `bin` for this. The fix is one path in the checker, which ticket 02 moves behind its Python helper. The bundled markdown-it is 15.0.3 (pixi: 15.0.1) under Node 24.22.2 (pixi: 26.10.0).
+3. **The path prek writes into the git hook does not follow a lock move.** prek 0.5.10 writes its resolved store path, `PREK="/nix/store/…-prek-0.5.10/bin/prek"`, not the out-link it was started through. After the out-link moved to an environment with prek 0.5.7, the hook still ran 0.5.10. Once the old path is garbage-collected the hook falls back to `prek` on `PATH`, which git's hook environment does not have: the commit fails with `exec: prek: not found`. That last step was simulated by renaming the path in a copy of the hook, because other roots held the real one. With the out-link path written into the hook instead (`PREK="<checkout>/.pixi/envs/default/bin/prek"`), commits pass before and after the move. Under pixi the binary is a real file in the worktree, so the question never arose. Ticket 07's hook step has to write the out-link path, or the hook has to be reinstalled after every lock move.
+4. **A fresh clone with only Nix reaches `just`.** On a new store volume and a new `HOME`, `nix build <flake>#default --no-update-lock-file --out-link .pixi/envs/default` took 11 seconds, copied 147 paths from the cache and built five trivial derivations, and `.pixi/envs/default/bin/just --list` then ran. `nix shell <flake>#default --no-update-lock-file --command just --version` works without an out-link. The store grew from 813 MB to 3.2 GB, which counts the three nixpkgs sources as well as the 871 MiB environment closure.
+
+**The whole gate.** With no tracked file changed, each recipe of `just check` was run on its own:
+
+| Recipe | Result | Cause of a failure |
+| --- | --- | --- |
+| `lock-check` | fails, exit 127 | Reads pixi: `pixi: not found`. |
+| `env-check` | fails, exit 2 | Reads pixi: `.pixi/envs/default/conda-meta/pixi is missing`. |
+| `docs-check` | fails, exit 1 | Case 2: the markdown-it path. |
+| `check-specs`, `analyse-specs` | fail, exit 1 | An aarch64-linux gap, not a Nix one: `tools.txt pins no Allium for this platform`. `tools.txt` has no linux-aarch64 line and the runner's host map no entry for it. The binary itself runs. |
+| `manifest-check`, `agents-check`, `format-check`, `lint-gleam`, `test`, `snapshots-check`, `fake-worker-lint`, `fake-worker-test`, `test-checkers`, `packaging-check`, `chart-check`, `toml-check`, `lint` | pass | |
+
+`just check` itself stops at `lock-check`. Then [gate-scratch.patch](gate-scratch.patch) was applied in the clone only. It changes three tracked files, 11 lines in and 7 out, and is what tickets 02 and 07 do properly:
+
+- `Justfile`: `lock-check` runs `nix flake lock --no-update-lock-file --offline <flake>`, and `env-check` runs [env-check.sh](env-check.sh);
+- `scripts/checks/validate_docs.py`: the module directory instead of `bin/markdownlint-cli2`;
+- `scripts/checks/run_allium.py`: Linux on aarch64 reads the `linux-64` pin's version.
+
+With the patch and the network off, `just check` ran all 18 recipes and `check-clean` and ended with `All checks passed and the worktree is unchanged.` in 107 seconds, of which `just test` is 95. `just test-checkers-all` then passed too.
+
+**The lock and environment checks.** The lock check takes 0.03 seconds. [env-check.sh](env-check.sh) is a prototype of the environment check ticket 07 writes: the out-link resolves into the store, it equals the output path this commit's flake evaluates to, and gleam, erlang, openssl, rebar3 and allium report the held versions. It takes 1.6 seconds, 1.2 of them evaluating the output path, and refuses a moved out-link with `… but this commit describes …`. Neither check writes in the clone or adds a store path. Outside the clone they write only Nix's own caches under `~/.cache/nix` (`fetcher-cache-v4.sqlite` and one `eval-cache-v6` file).
+
+### 8. Version differences
+
+[differences.txt](differences.txt), on today's tree, with the prototype's versions. "Hold the pixi version" means the flake pins it; "accept" means the candidate's version is taken and ticket 10 fixes whatever it finds.
+
+| Tool | pixi | Prototype | What differs on today's tree | Mark |
+| --- | --- | --- | --- | --- |
+| gleam | 1.19.0 | 1.19.0 (candidate: 1.19.2) | Nothing with the hold. With the candidate's 1.19.2 the format check, the build with warnings as errors, glinter and all 676 tests also pass, and `manifest.toml` is not rewritten. | Hold the pixi version. |
+| erlang | 29.1.2 | 29.1.2 | Nothing. | Hold the pixi version. |
+| OpenSSL | 3.6.5 | 3.5.9 | No finding: the six TLS cases and every test pass. | Accept and fix in 10: nothing in the tree to fix. Ticket 06 records the choice, or picks the nixos-26.05 pair. |
+| kubectl | 1.36.0 | 1.36.3 (candidate: 1.37.2) | Not run: no cluster in the container. | Hold the pixi minor. |
+| kind, kwokctl | 0.33.0, 0.8.0 | the same | Not run: no cluster in the container. | Hold the pixi version. |
+| just | 1.58.0 | 1.59.0 | No finding. | Accept and fix in 10: nothing to fix. |
+| prek | 0.5.5 | 0.5.10 | No finding in any of the 17 hooks. The hook path is case 3 above. | Accept and fix in 10: nothing to fix. |
+| typos | 1.51.1 | 1.52.0 | No finding. | Accept and fix in 10: nothing to fix. |
+| markdownlint-cli2 | 0.23.3 | 0.24.0 | No finding (markdownlint 0.42.0 against 0.41.1). The package layout is case 2 above. | Accept and fix in 10: nothing to fix. |
+| python | 3.14.8 | 3.14.10 | No finding; all 779 checker tests pass. | Accept and fix in 10: nothing to fix. |
+| ruff | 0.16.10 | 0.17.4 | No finding from `ruff check` or `ruff format --check`. | Accept and fix in 10: nothing to fix. |
+| helm | 4.3.0 | 4.3.1 | No finding: `just chart-check` and the chart tests pass. | Accept and fix in 10: nothing to fix. |
+| kustomize | 5.8.2 | 5.8.3 | No finding: the chart tests pass. | Accept and fix in 10: nothing to fix. |
+| hadolint | 2.15.1 | 2.14.0 | No finding: `just packaging-check` passes. nixpkgs is behind the pin here. | Accept and fix in 10: nothing to fix. |
+| grype | 0.120.1 | 0.120.0 | See [Scanning](#10-scanning). | Accept and fix in 11. |
+| Node | 26.10.0 | 24.22.2 | No finding. | Accept and fix in 10: nothing to fix. |
+
+lychee, taplo, actionlint, shellcheck, pytest, rebar3, ripsecrets, editorconfig-checker, allium and kubeconform are the same version in both.
+
+The repairing formatters (`just fix`) rewrite nothing through gleam format, taplo or ruff. The one hook that rewrites files is `trailing-whitespace`, on 12 transcripts under the evidence directories of this round, helm-chart and org-transfer. That is not a version difference: prek 0.5.5 from pixi rewrites the same 12, because `.pre-commit-fix.yaml` excludes only the bootstrap round's evidence.
+
+### 9. The image and TLS
+
+[image/Dockerfile](image/Dockerfile) is the prototype, [image.sh](image.sh) builds and checks it with the host's `docker build`, and [image.txt](image.txt) is the transcript. [tls-pairs.txt](tls-pairs.txt) repeats the TLS cases outside the image on both Erlang and OpenSSL pairs of [Held versions](#3-held-versions).
+
+**The shape.** The build stage is the pinned Nix image. It copies `flake.nix` and `flake.lock` alone into a directory of their own, builds the `default` group for gleam, erlang and rebar3 and the `runtime` group for what ships, then runs `gleam deps download` and `gleam export erlang-shipment` as today. Its last step lays the runtime closure out for the final stage: `nix path-info --recursive` lists the store paths, they are copied under `/out/nix/store`, and `/out/opt/knarr/runtime` is a link to the environment. The final stage is the Ubuntu base by today's digest and takes that tree with one `COPY --from=build /out/ /`.
+
+**The fixed prefix is `/opt/knarr/runtime`**, a link to `/nix/store/…-knarr-runtime`. Store paths are not relocatable, so the closure keeps its paths under `/nix/store` and the prefix is the one stable name: it is what `PATH` and the checkers' runtime-prefix constant use.
+
+**The build context is staged**, because the root `.dockerignore` is an allowlist that leaves the evidence directory out. It holds the two flake files, `gleam.toml`, `manifest.toml`, `src/` and the entrypoint script: 32 files. A context has no `.git`, so the flake is read as a `path:` flake; see [Flakes and git](#6-flakes-and-git).
+
+| Measure | Prototype (linux/arm64) |
+| --- | --- |
+| Build, `--no-cache`, base images already pulled | 30 seconds |
+| Build, nothing changed | 1 second |
+| Build after an edit under `src/` | 9 seconds |
+| Image size, `docker image inspect` `.Size` | 114.3 MB |
+| Image size, `docker images` | 461 MB |
+| Runtime closure | 19 store paths, 223 MB under `/nix/store` |
+| Largest paths | erlang 131 MB, glibc 47 MB, gcc-lib 10 MB, ncurses 9 MB, openssl 9 MB |
+| Shipment | 2.7 MB |
+
+**perl is not in Erlang's closure.** No store path in the closure is perl and no file under `/nix/store` is named `perl*`. `scripts/prune_runtime.py`, its test and `image-check`'s perl assertions have nothing left to do. The closure does carry bash, coreutils, gawk and gnused, which Erlang's own scripts refer to.
+
+**The six TLS cases pass in the prototype image under `image-check`'s restrictions.** [image.sh](image.sh) repeats the `docker run` arguments `scripts/checks/image.py` builds in `common`: `--pull=never`, `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--tmpfs=/tmp:rw,noexec,nosuid,size=16m`, and `--memory` and `--memory-swap` at the chart's limit, 256Mi, as user `10001:10001`. With them:
+
+- `tls/run.sh /opt/knarr/runtime /tmp/tls` from bootstrap ticket 01, unchanged, ends `tls_check: all 6 cases matched`, on `otp_release 29, erts 17.1.1` and `OpenSSL 3.5.9 29 Sep 2026`, with certificates made by the `openssl` command in the same prefix;
+- the entrypoint bounds the descriptor limit to 65536, and `/opt/build-otp` and the runtime both say OTP 29;
+- the container starts, `/readyz` answers `ok`, `/metrics` has `knarr_startups_total 1`, and memory is 86 to 89 MiB of 256 MiB.
+
+Outside the image, the same six cases pass on both pairs: the candidate's OTP 29.1.2 with OpenSSL 3.5.9, and nixos-26.05's OTP 29.1.2 with OpenSSL 3.6.5.
+
+`scripts/checks/image.py` itself, unchanged, stops on this image at its conda check, `no conda-meta in /opt/knarr/.pixi/envs/runtime`. Ticket 03's prefix constant and ticket 09's removal of the conda checks are what it needs.
+
+### 10. Scanning
 
 Not yet recorded.
 

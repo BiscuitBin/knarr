@@ -26,6 +26,17 @@ for system in $systems; do
   plan ".#packages.$system.default"
 done
 
+printf '\n== Closure sizes, asked of the cache without fetching\n'
+for attribute in beam_minimal.interpreters.erlang_29 beam.interpreters.erlang_29 python314 nodejs-slim markdownlint-cli2 kubernetes-helm; do
+  printf '%-38s' "$attribute"
+  for system in $systems; do
+    out=$(quiet nix eval --raw "github:NixOS/nixpkgs/$rev#legacyPackages.$system.$attribute.outPath")
+    size=$(nix path-info --store "$cache" --closure-size --json "$out" 2> /dev/null | jq '[.. | .closureSize? | numbers][0] / 1048576 | floor')
+    printf ' %s %s MiB;' "$system" "$size"
+  done
+  printf '\n'
+done
+
 printf '\n== A foreign-system derivation cannot be built here\n'
 if nix build --no-link --impure --expr \
   'derivation { name = "darwin-probe"; system = "aarch64-darwin"; builder = "/bin/sh"; }' > /work/systems/.out 2>&1; then

@@ -1,17 +1,22 @@
-date: 2026-11-14T14:12Z
+date: 2026-11-14T14:25Z
 docker: 29.6.1, linux/arm64
 context: 32 files, 376K
 
 == Build times (both base images already pulled)
-cold (--no-cache: every Nix path fetched again)        30 seconds
+cold (--no-cache: every Nix path fetched again)        33 seconds
 warm (nothing changed)                                  1 seconds
-after an edit under src/ (flake layers cached)          1 seconds
+after an edit under src/ (flake layers cached)         11 seconds
 source restored                                         1 seconds
 
 == The image
 architecture arm64, user 10001:10001, entrypoint ["/opt/knarr/container-entrypoint.sh","/opt/knarr/shipment/entrypoint.sh"]
 size (docker image inspect .Size): 114.3 MB
 size (docker images):              461MB
+baseline ghcr.io/biscuitbin/knarr:0.3.1 (amd64):
+  size (docker image inspect .Size): 105.2 MB
+  size (docker images):              382MB
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+  its runtime environment: 178M
 layers of the final stage:
   0B	CMD ["run"]
   0B	ENTRYPOINT ["/opt/knarr/container-entrypoint.sh" "/opt/knarr/shipment/entrypoint.sh"]
@@ -52,7 +57,7 @@ OTP: build stage 29, runtime 29
 id: uid=10001 gid=10001 groups=10001
 
 == The six TLS cases (bootstrap ticket 01's tls/run.sh) on the image's Erlang and OpenSSL
-date: 2026-11-14T14:13Z
+date: 2026-11-14T14:25Z
 host: Linux aarch64
 env: /opt/knarr/runtime
 openssl: OpenSSL 3.5.9 29 Sep 2026 (Library: OpenSSL 3.5.9 29 Sep 2026) (/opt/knarr/runtime/bin/openssl)
@@ -75,7 +80,7 @@ tls_check: all 6 cases matched
 == The restricted container starts and serves
 /readyz: ok (after 2 probes)
 /metrics: knarr_startups_total 1
-memory usage / limit: 88.78MiB / 256MiB
+memory usage / limit: 70.07MiB / 256MiB
 
 == scripts/checks/image.py on this image, unchanged
 exit 1

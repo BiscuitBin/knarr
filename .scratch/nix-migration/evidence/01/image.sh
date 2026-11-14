@@ -5,8 +5,9 @@
 # scripts/checks/image.py puts in `common`, the same OTP comparison, the same
 # TLS script on the image's own Erlang and OpenSSL, and the same readiness and
 # metrics probe. image.py itself is run last, to record where it stops.
-# Usage: sh image.sh > image.txt   (needs Docker and the network)
-#        sh image.sh <baseline-image> also prints that image's size beside it.
+# Usage: sh image.sh [baseline-image] > image.txt   (needs Docker and the network)
+#   The baseline is today's image, already pulled or built, whose size is
+#   printed beside the prototype's: ghcr.io/biscuitbin/knarr:0.3.1 here.
 set -eu
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 root=$(CDPATH='' cd -- "$here/../../../.." && pwd -P)
@@ -44,7 +45,7 @@ printf 'date: %s\ndocker: %s, %s\ncontext: %s files, %s\n' "$(date -u +%Y-%m-%dT
 printf '\n== Build times (both base images already pulled)\n'
 build 'cold (--no-cache: every Nix path fetched again)' --no-cache
 build 'warm (nothing changed)'
-echo '// ticket 01 probe' >> "$context/src/knarr.gleam"
+echo "// ticket 01 probe $(date +%s)" >> "$context/src/knarr.gleam"
 build 'after an edit under src/ (flake layers cached)'
 cp "$root/src/knarr.gleam" "$context/src/knarr.gleam"
 build 'source restored'
@@ -57,6 +58,7 @@ if [ -n "$baseline" ]; then
   printf 'baseline %s (%s):\n' "$baseline" "$(docker image inspect "$baseline" --format '{{.Architecture}}')"
   printf '  size (docker image inspect .Size): %s\n' "$(megabytes "$(docker image inspect "$baseline" --format '{{.Size}}')")"
   printf '  size (docker images):              %s\n' "$(docker images --format '{{.Size}}' "$baseline")"
+  printf '  its runtime environment: %s\n' "$(docker run --rm --pull=never --platform="linux/$(docker image inspect "$baseline" --format '{{.Architecture}}')" --entrypoint=du "$baseline" -sh /opt/knarr/.pixi/envs/runtime | cut -f1)"
 fi
 printf 'layers of the final stage:\n'
 docker history --no-trunc --format '{{.Size}}\t{{.CreatedBy}}' "$image" | cut -c1-110 | sed 's/^/  /'
