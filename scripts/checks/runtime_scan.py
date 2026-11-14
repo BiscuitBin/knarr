@@ -27,11 +27,12 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import _runtime
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME = "/opt/knarr/.pixi/envs/runtime"
 # The line grype 0.120.1 logs at -vv, as grype-probe.sh part 3 reads it.
 CATALOGUED = re.compile(r"discovered (\d+) packages cataloger=conda-meta-cataloger")
 
@@ -70,11 +71,13 @@ def main(
         return cannot_decide(f"docker create {image}: {created.stderr.strip()}")
     container = created.stdout.strip()
     try:
-        copied = run(["docker", "cp", f"{container}:{RUNTIME}", str(copy)], check=False)
+        copied = run(["docker", "cp", f"{container}:{_runtime.PREFIX}", str(copy)], check=False)
     finally:
         run(["docker", "rm", "--force", container], capture_output=True, check=False)
     if copied.returncode != 0:
-        return cannot_decide(f"docker cp of {RUNTIME} from {image} exited {copied.returncode}")
+        return cannot_decide(
+            f"docker cp of {_runtime.PREFIX} from {image} exited {copied.returncode}"
+        )
     with log.open("w", encoding="utf-8") as stderr:
         scanned = run(
             ["grype", "-vv", f"dir:{copy}", "--only-fixed", "--fail-on", "high"],
@@ -93,7 +96,7 @@ def main(
     # OTP application rather than a conda record; the table's TYPE column says.
     verdict = "a fixable high or critical" if scanned.returncode else "no fixable high or critical"
     print(
-        f"runtime-scan: grype catalogued {packages} conda packages in {RUNTIME} of {image} "
+        f"runtime-scan: grype catalogued {packages} conda packages in {_runtime.PREFIX} of {image} "
         f"and found {verdict} vulnerability in the copy"
     )
     return scanned.returncode

@@ -51,7 +51,7 @@ GROUPS = {
         ),
     ),
     "packaging": (
-        "image prune_runtime container_entrypoint",
+        "image runtime prune_runtime container_entrypoint",
         (
             "Dockerfile",
             "fixtures/fake_worker/Dockerfile",
@@ -61,6 +61,8 @@ GROUPS = {
             ".scratch/bootstrap/evidence/01/tls/**",
             ".dockerignore",
             "scripts/checks/image.py",
+            # image.py reads the OTP pin and the runtime prefix from it.
+            "scripts/checks/_runtime.py",
             "scripts/prune_runtime.py",
             "scripts/container-entrypoint.sh",
         ),
@@ -115,6 +117,8 @@ GROUPS = {
         (
             "scripts/checks/hex_audit.py",
             "scripts/checks/runtime_scan.py",
+            # hex_audit.py reads the OTP pin from it, runtime_scan.py the prefix.
+            "scripts/checks/_runtime.py",
             "scripts/checks/ripsecrets-redacted.sh",
             ".github/workflows/audit.yml",
         ),
@@ -180,6 +184,7 @@ CLUSTERS = {
         "charts/**",
         "scripts/checks/chart.py",
         "scripts/checks/image.py",
+        "scripts/checks/_runtime.py",
         "scripts/prune_runtime.py",
         "scripts/container-entrypoint.sh",
         "scripts/checks/deployment.py",
@@ -188,6 +193,7 @@ CLUSTERS = {
     "worker": (
         "fixtures/fake_worker/**",
         "scripts/checks/image.py",
+        "scripts/checks/_runtime.py",
         "scripts/prune_runtime.py",
         "scripts/container-entrypoint.sh",
         "scripts/checks/deployment.py",

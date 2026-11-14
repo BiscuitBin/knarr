@@ -37,6 +37,8 @@ def test_every_module_has_exactly_one_owner():
         ),
         # Only the KEDA harness installs it, and its workflow has no path filter.
         (["fixtures/chart-values/e2e-fast.yaml"], ["chart", "cluster"], [], []),
+        # image.py, hex_audit.py and runtime_scan.py import it.
+        (["scripts/checks/_runtime.py"], ["audit", "packaging"], [], ["kind", "worker"]),
     ],
 )
 def test_selection(paths, regressions, runtime, clusters):

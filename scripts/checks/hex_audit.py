@@ -23,12 +23,13 @@ from __future__ import annotations
 
 import http.client
 import json
-import re
 import sys
 import tomllib
 import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
+
+import _runtime
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -70,30 +71,16 @@ def hex_packages(manifest_text: str) -> list[tuple[str, str]]:
         raise CannotDecideError(f"manifest.toml has a hex package without {error}") from error
 
 
-def otp_release(pixi_text: str) -> str:
-    """The OTP release the exact `erlang` pin in pixi.toml names."""
-    try:
-        pin = tomllib.loads(pixi_text)["feature"]["otp"]["dependencies"]["erlang"]
-    except (tomllib.TOMLDecodeError, KeyError, TypeError) as error:
-        raise CannotDecideError(
-            f"pixi.toml has no erlang pin in [feature.otp]: {error}"
-        ) from error
-    match = re.fullmatch(r"==(\d+(?:\.\d+)*)", pin) if isinstance(pin, str) else None
-    if match is None:
-        raise CannotDecideError(f"the erlang pin {pin!r} is not one exact version")
-    return match[1]
-
-
 def subjects(project: Path) -> list[Subject]:
     """Everything one audit of `project` asks about, the OTP release last."""
     try:
         manifest = (project / "manifest.toml").read_text(encoding="utf-8")
-        pixi = (project / "pixi.toml").read_text(encoding="utf-8")
-    except OSError as error:
+        otp = _runtime.otp_pin(project)
+    except (OSError, _runtime.OtpPinError) as error:
         raise CannotDecideError(str(error)) from error
     return [
         *(Subject("Hex", name, version) for name, version in hex_packages(manifest)),
-        Subject("GIT", OTP_REPOSITORY, f"OTP-{otp_release(pixi)}"),
+        Subject("GIT", OTP_REPOSITORY, f"OTP-{otp}"),
     ]
 
 

@@ -2,10 +2,12 @@
 
 import dataclasses
 import json
+import re
 import subprocess
 
 import pytest
 
+import _runtime
 import image
 
 ENTRYPOINT = ["/opt/knarr/container-entrypoint.sh", "/opt/knarr/shipment/entrypoint.sh"]
@@ -197,8 +199,37 @@ def test_the_knarr_entrypoint_does_not_pass_as_the_fake_workers(monkeypatch):
         image.main()
 
 
+@pytest.mark.parametrize(
+    ("pixi_toml", "message"),
+    [
+        pytest.param(
+            '[feature.otp.dependencies]\nerlang = ">=29.1.1"\n',
+            "the erlang pin '>=29.1.1' is not one exact version",
+            id="not exact",
+        ),
+        pytest.param(
+            '[dependencies]\ngleam = "==1.19.0"\n',
+            "pixi.toml has no erlang pin in [feature.otp]",
+            id="missing",
+        ),
+    ],
+)
+def test_main_refuses_an_otp_pin_that_is_not_one_exact_version(
+    monkeypatch, tmp_path, pixi_toml, message
+):
+    def output(*arguments):
+        raise AssertionError(f"image-check ran {arguments} without an OTP pin")
+
+    (tmp_path / "pixi.toml").write_text(pixi_toml)
+    monkeypatch.setattr(image, "ROOT", tmp_path)
+    monkeypatch.setattr(image, "output", output)
+    monkeypatch.setattr(image.sys, "argv", ["image.py", "knarr:test"])
+    with pytest.raises(_runtime.OtpPinError, match=re.escape(message)):
+        image.main()
+
+
 COMMON = ["docker", "run", "--read-only", "--tmpfs=/tmp:rw,noexec,nosuid,size=16m"]
-RUNTIME_ENV = "/opt/knarr/.pixi/envs/runtime"
+RUNTIME_ENV = _runtime.PREFIX
 
 
 def test_knarr_profile_proves_perl_pruned_and_reruns_the_tls_check(monkeypatch):
