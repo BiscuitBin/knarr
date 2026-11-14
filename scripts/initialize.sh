@@ -1,30 +1,51 @@
 #!/bin/sh
 # `just initialize`: the one first-run command, and the only step that needs
 # network. On a fresh clone with no `just` installed, run it as
-# `sh scripts/initialize.sh`; it sets its own PATH, so it needs only pixi. It writes only ignored paths (.pixi/, .tools/, build/) and, in the
-# primary checkout, .git/hooks. It never formats, stages, commits or pushes.
-# Rerunning it is safe; with everything already present it needs no network.
+# `sh scripts/initialize.sh`; it sets its own PATH, so it needs only the
+# selected backend's installer: pixi, or Nix with KNARR_TOOLS=nix (Decision
+# 0017). It writes only ignored paths (.pixi/, .tools/, .nix/, build/) and, in
+# the primary checkout, .git/hooks. It never formats, stages, commits or
+# pushes. Rerunning it is safe; with everything already present it needs no
+# network.
 set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 cd "$root"
+# An unknown KNARR_TOOLS is refused here, with the seam's message and exit 2.
+backend=$(sh scripts/tool-dirs.sh backend)
 tool_dirs=$(sh scripts/tool-dirs.sh dirs "$root")
 PATH="$tool_dirs:$PATH"
 PYTHONDONTWRITEBYTECODE=1
 export PATH PYTHONDONTWRITEBYTECODE
 git rev-parse --is-inside-work-tree > /dev/null
 
-command -v pixi > /dev/null ||
-  { printf '%s\n' 'pixi is not installed; see CONTRIBUTING.md, Getting started' >&2; exit 2; }
+case $backend in
+  pixi)
+    command -v pixi > /dev/null ||
+      { printf '%s\n' 'pixi is not installed; see CONTRIBUTING.md, Getting started' >&2; exit 2; }
 
-# The compiler, OTP, Python and every gate tool, exactly as pixi.lock pins
-# them. --locked refuses a lock that disagrees with pixi.toml rather than
-# rewriting it.
-pixi install --locked
+    # The compiler, OTP, Python and every gate tool, exactly as pixi.lock pins
+    # them. --locked refuses a lock that disagrees with pixi.toml rather than
+    # rewriting it.
+    pixi install --locked
 
-# What conda-forge lacks (rebar3, ripsecrets, editorconfig-checker), each
-# refused unless its sha256 matches tools.txt. They go in the last tool
-# directory, after everything pixi installs.
-sh scripts/install-tools.sh tools.txt "${tool_dirs##*:}"
+    # What conda-forge lacks (rebar3, ripsecrets, editorconfig-checker), each
+    # refused unless its sha256 matches tools.txt. They go in the last tool
+    # directory, after everything pixi installs.
+    sh scripts/install-tools.sh tools.txt "${tool_dirs##*:}"
+    ;;
+  nix)
+    command -v nix > /dev/null ||
+      { printf '%s\n' 'Nix is not installed; see Decision 0017, Host prerequisites' >&2; exit 2; }
+
+    # The compiler, OTP, Python and every gate tool, as flake.lock pins them,
+    # built into the default group's gitignored out-link, which also keeps
+    # them from garbage collection. --no-update-lock-file refuses a lock that
+    # disagrees with flake.nix rather than rewriting it.
+    outlink=$(sh scripts/tool-dirs.sh prefix default "$root")
+    mkdir -p "${outlink%/*}"
+    nix build --no-update-lock-file --out-link "$outlink" .#default
+    ;;
+esac
 
 # Gleam's hex packages into build/, so later builds run offline. The pre-check
 # first: `gleam deps download` would silently rewrite a drifted manifest.toml.
@@ -42,7 +63,12 @@ before=$(cksum < fixtures/fake_worker/manifest.toml)
 [ "$(cksum < fixtures/fake_worker/manifest.toml)" = "$before" ] ||
   { printf '%s\n' 'gleam deps download rewrote fixtures/fake_worker/manifest.toml; read the diff' >&2; exit 1; }
 
-sh scripts/install-hooks.sh
+# Under Nix the hook names the out-link's prek, never the store path prek
+# would write, so it follows every rebuild of the out-link (Decision 0017).
+case $backend in
+  pixi) sh scripts/install-hooks.sh ;;
+  nix) sh scripts/install-hooks.sh "$(sh scripts/tool-dirs.sh prefix default "$root")/bin/prek" ;;
+esac
 
 printf '\n%s\n' 'Ready. Next: just check (no network needed).'
 printf '%s\n' 'Nothing has been staged, committed or pushed.'

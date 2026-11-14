@@ -1,14 +1,18 @@
 """The installed-environment check: the gate refuses tools the pins no longer name.
 
-lock-check compares pixi.lock with pixi.toml only. After a pull that moves a
+lock-check compares the lock with its manifest only. After a pull that moves a
 pin, the old binaries stay on PATH until `just initialize` reruns, and this
 check is what fails the gate in the meantime. It never runs pixi and never
-writes.
+writes. Under KNARR_TOOLS=nix it asks Nix, offline and without touching
+flake.lock, what this commit's flake describes, and compares the out-link and
+the tools' own versions with that and with pins.toml (Decision 0017); a
+stand-in `nix` answers here, so these cases need no Nix.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -68,6 +72,12 @@ fake 2.0 linux-64 https://example.invalid/fake-2.0 {digest} fake
 """
 DIGEST = "a" * 64
 STAMP = f"fake 1.0 osx-arm64 https://example.invalid/fake-1.0 {DIGEST} fake\n"
+
+
+@pytest.fixture(autouse=True)
+def pixi_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The pixi cases run under pixi whichever backend the gate was started with."""
+    monkeypatch.setenv("KNARR_TOOLS", "pixi")
 
 
 @pytest.fixture
@@ -264,3 +274,157 @@ def test_cli_contract(project: Path, broken: bool) -> None:
     result = check(project, cli=True)
     assert result.returncode == int(broken), result.stdout + result.stderr
     assert "fake" in result.stdout if broken else "match the pins" in result.stdout
+
+
+# ---------------------------------------------------------------- nix ---
+
+PINS = """\
+[exact]
+erlang = "29.1.2"
+gleam = "1.19.0"
+allium = "3.6.1"
+
+[minor]
+
+[floor]
+rebar3 = "3.28.0"
+"""
+# What each tool in the default group prints, as the versions in PINS have it.
+REPORTS = {
+    "gleam": "gleam 1.19.0",
+    "erl": "29.1.2",
+    "rebar3": "rebar 3.28.0 on Erlang/OTP 29 Erts 17.1.1",
+    "allium": "allium 3.6.1",
+    "openssl": "OpenSSL 3.5.9 30 Sep 2025 (Library: OpenSSL 3.5.9 30 Sep 2025)",
+}
+
+
+def report(directory: Path, name: str, text: str) -> None:
+    (directory / name).write_text(f"#!/bin/sh\nprintf '%s\\n' '{text}'\n")
+    (directory / name).chmod(0o755)
+
+
+@pytest.fixture
+def flake(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A project under the Nix backend whose out-link is the environment its flake describes."""
+    monkeypatch.setenv("KNARR_TOOLS", "nix")
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pins.toml").write_text(PINS)
+    environment = tmp_path / "store" / "0000-knarr-tools"
+    (environment / "bin").mkdir(parents=True)
+    for name, text in REPORTS.items():
+        report(environment / "bin", name, text)
+    (project / ".nix").mkdir()
+    (project / ".nix" / "default").symlink_to(environment)
+    describes(tmp_path, environment)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'host'}:{os.environ['PATH']}")
+    return project
+
+
+def describes(tmp_path: Path, out: Path | str, openssl: str = "3.5.9", status: int = 0) -> None:
+    """The stand-in nix: records its arguments and answers with what the flake describes."""
+    host = tmp_path / "host"
+    host.mkdir(exist_ok=True)
+    answer = json.dumps({"out": str(out), "openssl": openssl})
+    (host / "nix").write_text(
+        "#!/bin/sh\n"
+        f'printf "%s\\n" "$*" >> "{tmp_path / "nix-calls"}"\n'
+        f"[ {status} = 0 ] || {{ echo 'error: cannot fetch input' >&2; exit {status}; }}\n"
+        f"printf '%s' '{answer}'\n"
+    )
+    (host / "nix").chmod(0o755)
+
+
+def environment_of(project: Path) -> Path:
+    return (project / ".nix" / "default").readlink()
+
+
+def test_nix_a_matching_out_link_passes(flake: Path, tmp_path: Path) -> None:
+    result = check(flake)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "the held versions match" in result.stdout
+    assert str(environment_of(flake)) in result.stdout
+    (call,) = (tmp_path / "nix-calls").read_text().splitlines()
+    assert call.startswith("eval --json --offline --no-update-lock-file ")
+    assert f"{flake.resolve()}#default" in call
+
+
+def test_nix_a_moved_lock_fails_and_says_to_initialize(flake: Path, tmp_path: Path) -> None:
+    describes(tmp_path, tmp_path / "store" / "1111-knarr-tools")
+    result = check(flake)
+    assert result.returncode == 1
+    assert f"but this commit describes {tmp_path / 'store' / '1111-knarr-tools'}" in result.stdout
+    assert "run just initialize" in result.stdout
+
+
+def test_nix_a_flake_it_cannot_evaluate_offline_fails_and_says_to_initialize(
+    flake: Path, tmp_path: Path
+) -> None:
+    describes(tmp_path, "", status=1)
+    result = check(flake)
+    assert result.returncode == 1
+    assert "error: cannot fetch input" in result.stdout
+    assert "run just initialize" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("tool", "text", "drift"),
+    [
+        ("gleam", "gleam 1.19.2", "gleam reports 1.19.2, pins.toml holds 1.19.0"),
+        ("erl", "29.1.1", "erlang reports 29.1.1, pins.toml holds 29.1.2"),
+        ("allium", "allium 3.6.0", "allium reports 3.6.0, pins.toml holds 3.6.1"),
+        ("rebar3", "rebar 3.27.9 on Erlang/OTP 29", "rebar3 reports 3.27.9, below 3.28.0"),
+        (
+            "openssl",
+            "OpenSSL 3.5.8 1 Jul 2025",
+            "openssl reports 3.5.8, Erlang is built with 3.5.9",
+        ),
+    ],
+)
+def test_nix_a_tool_that_differs_from_its_hold_fails(
+    flake: Path, tool: str, text: str, drift: str
+) -> None:
+    report(environment_of(flake) / "bin", tool, text)
+    result = check(flake)
+    assert result.returncode == 1
+    assert drift in result.stdout
+    assert "run just initialize" in result.stdout
+
+
+def test_nix_rebar3_is_a_floor_not_an_exact_version(flake: Path) -> None:
+    report(environment_of(flake) / "bin", "rebar3", "rebar 3.29.0 on Erlang/OTP 29")
+    result = check(flake)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_nix_a_missing_tool_fails(flake: Path) -> None:
+    (environment_of(flake) / "bin" / "allium").unlink()
+    result = check(flake)
+    assert result.returncode == 1
+    assert "allium cannot run" in result.stdout
+
+
+@pytest.mark.parametrize("state", ["absent", "a directory", "dangling"])
+def test_nix_without_an_out_link_into_the_store_it_refuses(
+    flake: Path, tmp_path: Path, state: str
+) -> None:
+    link = flake / ".nix" / "default"
+    link.unlink()
+    if state == "a directory":
+        link.mkdir()
+    elif state == "dangling":
+        link.symlink_to(tmp_path / "store" / "collected")
+    result = check(flake)
+    assert result.returncode == 2
+    assert "run just initialize" in result.stderr
+    assert not (tmp_path / "nix-calls").exists()
+
+
+def test_an_unknown_backend_is_refused_by_name(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KNARR_TOOLS", "conda")
+    result = check(project)
+    assert result.returncode == 2
+    assert "KNARR_TOOLS is 'conda'" in result.stderr

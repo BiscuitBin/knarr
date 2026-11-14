@@ -2,10 +2,11 @@
 # the primary checkout, and what `just lint` runs over every file inside
 # `just check`. It may report, never repair; .pre-commit-fix.yaml repairs.
 #
-# Every tool comes from pixi or .tools/bin, so every hook is `repo: local` with
-# `language: system` and no hook installs its own copy (Decision 0003, "One
-# owner per pin"). A remote hook is allowed only for a tool with no pixi or
-# .tools source, and must then pin `rev` to a full commit SHA with a version
+# Every tool comes from pixi and .tools/bin, or with KNARR_TOOLS=nix from the
+# flake, so every hook is `repo: local` with `language: system` and no hook
+# installs its own copy (Decisions 0003 and 0017, "One owner per pin"). A
+# remote hook is allowed only for a tool with no such source, and must then
+# pin `rev` to a full commit SHA with a version
 # comment (`rev: <40 hex> # vX.Y.Z`); scripts/checks/tests/test_hook_configs.py
 # enforces that. Git runs hooks without the Justfile's PATH, so each entry goes
 # through scripts/with-env.sh.
@@ -13,6 +14,7 @@ exclude: >-
   (?x)^(
     \.pixi/|
     \.tools/|
+    \.nix/|
     build/|
     ai_tmp/|
     pixi\.lock$

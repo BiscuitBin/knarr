@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import io
+import os
 import subprocess
 import sys
 from contextlib import redirect_stderr, redirect_stdout
@@ -21,9 +22,45 @@ REPOSITORY = CHECKS.parent.parent
 sys.path.insert(0, str(CHECKS))
 
 
-def tool_directory(checkout: Path) -> Path:
-    """Where a test plants a stand-in tool: the first of the checkout's tool directories."""
-    return importlib.import_module("_tools").directories(checkout)[0]
+# The two values of KNARR_TOOLS while both backends exist (Decision 0017).
+BACKENDS = ("pixi", "nix")
+
+
+def selected(backend: str | None) -> dict[str, str]:
+    """The environment a scratch-checkout test runs a script with: a bare PATH and a backend.
+
+    Without a backend the test inherits the caller's, as the gate's checkers do.
+    """
+    environment = {"PATH": "/usr/bin:/bin"}
+    if backend is not None:
+        environment["KNARR_TOOLS"] = backend
+    elif "KNARR_TOOLS" in os.environ:
+        environment["KNARR_TOOLS"] = os.environ["KNARR_TOOLS"]
+    return environment
+
+
+def tool_directory(checkout: Path, backend: str | None = None) -> Path:
+    """Where a test plants a stand-in tool: the first of the checkout's tool directories.
+
+    Without a backend it is the caller's, so a stand-in lands where the checker
+    under test, which inherits the caller's environment, will look.
+    """
+    if backend is None:
+        return importlib.import_module("_tools").directories(checkout)[0]
+    result = subprocess.run(
+        ["sh", str(CHECKS.parent / "tool-dirs.sh"), "dirs", str(checkout)],
+        env=selected(backend),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return Path(result.stdout.split(":", 1)[0])
+
+
+@pytest.fixture(params=BACKENDS)
+def backend(request: pytest.FixtureRequest) -> str:
+    """Each backend in turn, for a test that pins the one its scripts run under."""
+    return request.param
 
 
 def git(repository: Path, *arguments: str) -> str:

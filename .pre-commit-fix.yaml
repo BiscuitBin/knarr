@@ -4,9 +4,11 @@ exclude: >-
   (?x)^(
     \.pixi/|
     \.tools/|
+    \.nix/|
     build/|
     ai_tmp/|
     pixi\.lock$|
+    flake\.lock$|
     manifest\.toml$|
     fixtures/fake_worker/manifest\.toml$|
     \.scratch/bootstrap/evidence/|

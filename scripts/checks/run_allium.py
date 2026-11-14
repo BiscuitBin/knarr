@@ -3,7 +3,10 @@
 Copied from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
 (6c5c07f6bec86e86b3930dfa41392e4b440e8c85),
 src/biscuit_games_tooling/run_allium.py. Adapted per Decision 0004:
-checks.toml owns the specs path, tools.txt owns the version pin.
+checks.toml owns the specs path, tools.txt owns the version pin. Under
+KNARR_TOOLS=nix pins.toml owns it instead (Decision 0017): the flake installs
+the same version on every system, aarch64-linux included, which tools.txt has
+no line for.
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -18,6 +21,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import _pins
 import _project
 import _tools
 
@@ -148,8 +152,13 @@ def _read(
     return blocks
 
 
-def _binary(project_root: Path) -> Path:
-    """Only run the project-managed binary, at the host platform's pinned version."""
+def _pinned(project_root: Path) -> tuple[str, str]:
+    """The Allium version the selected backend installs, and the file that pins it."""
+    if _tools.backend() == "nix":
+        try:
+            return _pins.version(project_root, "exact", "allium"), "pins.toml"
+        except _pins.PinsError as error:
+            raise RuntimeError(str(error)) from error
     host = {("Darwin", "arm64"): "osx-arm64", ("Linux", "x86_64"): "linux-64"}.get(
         (platform.system(), platform.machine())
     )
@@ -166,6 +175,12 @@ def _binary(project_root: Path) -> Path:
             pins.append(fields[1])
     if len(pins) != 1:
         raise RuntimeError(f"tools.txt must contain exactly one allium pin for {host}")
+    return pins[0], "tools.txt"
+
+
+def _binary(project_root: Path) -> Path:
+    """Only run the project-managed binary, at the version its backend pins."""
+    version, source = _pinned(project_root)
     try:
         binary = _tools.tool(project_root, "allium")
         result = subprocess.run(
@@ -174,8 +189,8 @@ def _binary(project_root: Path) -> Path:
     except OSError as error:
         raise RuntimeError("Allium is missing or cannot run; run just initialize") from error
     fields = result.stdout.split()
-    if result.returncode or len(fields) < 2 or fields[:2] != ["allium", pins[0]]:
-        raise RuntimeError(f"Allium does not match tools.txt ({pins[0]}); run just initialize")
+    if result.returncode or len(fields) < 2 or fields[:2] != ["allium", version]:
+        raise RuntimeError(f"Allium does not match {source} ({version}); run just initialize")
     return binary
 
 

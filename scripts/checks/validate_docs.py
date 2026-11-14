@@ -103,11 +103,15 @@ def _documents(texts: dict[Path, str], errors: list[str]) -> dict[Path, _Documen
     if markdown:
         checker = Path(__file__).resolve()
         try:
+            # markdown-it is found from markdownlint-cli2's module directory:
+            # under Nix bin/markdownlint-cli2 is a wrapper script, not a link
+            # into the module (Decision 0017).
+            module = _tools.module(checker.parents[2], "markdownlint-cli2")
             result = subprocess.run(
                 [
                     str(_tools.tool(checker.parents[2], "node")),
                     str(checker.with_name("render_markdown.mjs")),
-                    str(_tools.tool(checker.parents[2], "markdownlint-cli2")),
+                    str(module / "markdownlint-cli2-bin.mjs"),
                 ],
                 input=json.dumps(markdown),
                 capture_output=True,
@@ -115,7 +119,7 @@ def _documents(texts: dict[Path, str], errors: list[str]) -> dict[Path, _Documen
                 check=True,
             )
             rendered = json.loads(result.stdout)
-        except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        except (OSError, RuntimeError, subprocess.CalledProcessError, ValueError) as error:
             errors.append(f"Markdown parser unavailable; run just initialize: {error}")
             return {}
     documents = {}

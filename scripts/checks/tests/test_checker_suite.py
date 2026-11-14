@@ -50,7 +50,19 @@ def test_selection(paths, regressions, runtime, clusters):
 
 @pytest.mark.parametrize(
     "paths",
-    [None, ["pixi.lock"], ["justfile"], ["new-script.sh"], ["scripts/checks/tests/conftest.py"]],
+    [
+        None,
+        ["pixi.lock"],
+        ["justfile"],
+        ["new-script.sh"],
+        ["scripts/checks/tests/conftest.py"],
+        # The held versions and the flake (Decision 0017), and the one reader of
+        # pins.toml, which _runtime.py imports.
+        ["pins.toml"],
+        ["flake.nix"],
+        ["flake.lock"],
+        ["scripts/checks/_pins.py"],
+    ],
 )
 def test_unknown_and_shared_inputs_run_everything(paths):
     result = suite.select(paths)

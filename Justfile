@@ -1,13 +1,16 @@
 set positional-arguments := true
 set shell := ["sh", "-eu", "-c"]
 
-# Recipes reach every tool through PATH, never `pixi run` (Decision 0003): on a
-# stale lock `pixi run` re-solves and rewrites pixi.lock. scripts/tool-dirs.sh
-# owns the directories and their order: the default environment first, so gleam
-# and the shared tools always resolve from it; the cluster and audit
-# environments' tools, which resolve only once each is installed; then the
-# checksum-pinned downloads from tools.txt. The script only builds a string, so
-# this line evaluates before `just initialize` has run.
+# Recipes reach every tool through PATH, never `pixi run` or `nix develop`,
+# `nix shell` or `nix run` (Decisions 0003 and 0017): on a stale lock each
+# re-resolves and rewrites the lock. scripts/tool-dirs.sh owns the directories
+# and their order, and is the only reader of KNARR_TOOLS=pixi|nix, which selects
+# a backend for a whole command: the default group first, so gleam and the
+# shared tools always resolve from it; the cluster and audit groups' tools,
+# which resolve only once each is installed; then, for pixi, the
+# checksum-pinned downloads from tools.txt. The script only builds a string and
+# never refuses, so this line evaluates before `just initialize` has run, and
+# with any KNARR_TOOLS.
 export PATH := `sh scripts/tool-dirs.sh dirs` + ":" + env("PATH")
 
 # Python would otherwise write __pycache__/ beside the checkers it runs.
@@ -31,10 +34,11 @@ default:
 # ------------------------------------------------------------------ setup ---
 
 # The one first-run command; it needs network, as does links-audit: the pixi
-# environment, the tools.txt downloads, and Gleam's hex packages. Hooks install
-# from the primary checkout only. Never stages, commits or pushes.
+# environment and the tools.txt downloads, or with KNARR_TOOLS=nix the flake's
+# default group in its out-link; then Gleam's hex packages. Hooks install from
+# the primary checkout only. Never stages, commits or pushes.
 [group('setup')]
-[doc('First run (needs network): pixi environment, tools.txt downloads, hex packages, hooks')]
+[doc('First run (needs network): the tools (pixi, or KNARR_TOOLS=nix), hex packages, hooks')]
 initialize:
     sh scripts/initialize.sh
 
@@ -163,18 +167,21 @@ fix:
 # ------------------------------------------------------------------ check ---
 
 # --dry-run, because plain `pixi lock --check` rewrites a stale lock even as it
-# fails; --offline, because the gate never fetches (Decision 0003).
+# fails; --offline, because the gate never fetches (Decision 0003). Under Nix,
+# --no-update-lock-file refuses a lock that disagrees with flake.nix and leaves
+# flake.lock byte-identical (Decision 0017, "The lock and environment checks").
 [group('check')]
-[doc('Fail if pixi.lock disagrees with pixi.toml, without rewriting it')]
+[doc("Fail if the backend's lock disagrees with its manifest, without rewriting it")]
 lock-check:
-    pixi lock --check --offline --dry-run
+    backend=$(sh scripts/tool-dirs.sh backend); case $backend in pixi) pixi lock --check --offline --dry-run ;; nix) nix flake lock --no-update-lock-file --offline ;; *) exit 2 ;; esac
 
-# lock-check reads pixi.lock and pixi.toml only. After a pull that moves a pin
-# the old binaries stay on PATH until `just initialize` reruns, so this fails
-# while the installed default environment or a tools.txt download differs from
-# the pins.
+# lock-check reads the lock and its manifest only. After a pull that moves a
+# pin the old binaries stay on PATH until `just initialize` reruns, so this
+# fails while the installed default environment or a tools.txt download differs
+# from the pins, or, under Nix, while the out-link is not what this commit's
+# flake describes or a tool differs from pins.toml.
 [group('check')]
-[doc('Fail if the installed tools differ from pixi.lock or tools.txt')]
+[doc("Fail if the installed tools differ from the backend's lock and pins")]
 env-check:
     python3 scripts/checks/env_check.py
 
@@ -203,7 +210,7 @@ agents-check:
 [group('audit')]
 [doc('Check Markdown and HTML links online (separate from the offline gate)')]
 links-audit:
-    lychee --no-progress --include-fragments --hidden --extensions md,html,htm --exclude-path '(^|/)(\.git|\.pixi|\.tools|build|ai_tmp)/' .
+    lychee --no-progress --include-fragments --hidden --extensions md,html,htm --exclude-path '(^|/)(\.git|\.pixi|\.tools|\.nix|result[^/]*|build|ai_tmp)/' .
 
 # OSV.dev's answer changes without a commit, so this runs in the audit
 # workflow, never in the gate (Decision 0014).
@@ -304,7 +311,7 @@ check-clean baseline="":
 [group('check')]
 [doc('The complete read-only gate')]
 check:
-    sh scripts/tool-dirs.sh tool python3 > /dev/null || { printf '%s\n' 'the pixi environment is missing; run just initialize' >&2; exit 2; }
+    backend=$(sh scripts/tool-dirs.sh backend); sh scripts/tool-dirs.sh tool python3 > /dev/null || { printf '%s\n' "the $backend environment is missing; run just initialize" >&2; exit 2; }
     python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam test snapshots-check fake-worker-lint fake-worker-test test-checkers packaging-check chart-check toml-check lint
 
 # --------------------------------------------------------------- cluster ---

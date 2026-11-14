@@ -26,13 +26,14 @@ def prepare(project: Path) -> None:
         shutil.copyfile(ROOT / name, project / name)
     for name in ("cluster-name.sh", "tool-dirs.sh"):
         shutil.copyfile(ROOT / "scripts" / name, project / "scripts" / name)
-    for name in (".pixi", ".tools"):
+    # Both backends' tool directories (Decision 0017); the seam picks one.
+    for name in (".pixi", ".tools", ".nix"):
         (project / name).symlink_to(ROOT / name, target_is_directory=True)
 
 
 def track(project: Path) -> None:
     git(project, "init", "-q")
-    (project / ".git/info/exclude").write_text(".pixi\n.tools\n")
+    (project / ".git/info/exclude").write_text(".pixi\n.tools\n.nix\n")
     git(project, "add", ".")
 
 

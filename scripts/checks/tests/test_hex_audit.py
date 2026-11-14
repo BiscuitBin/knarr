@@ -31,12 +31,13 @@ mist = { version = ">= 6.0.3 and < 7.0.0" }
 """
 # editorconfig-checker-enable
 
-PIXI_TOML = """\
-[dependencies]
-gleam = "==1.19.0"
+PINS_TOML = """\
+[exact]
+erlang = "29.1.1"
 
-[feature.otp.dependencies]
-erlang = "==29.1.1"
+[minor]
+
+[floor]
 """
 
 SUBJECTS = [
@@ -66,7 +67,7 @@ CONTROL_ANSWER = {
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
     (tmp_path / "manifest.toml").write_text(MANIFEST)
-    (tmp_path / "pixi.toml").write_text(PIXI_TOML)
+    (tmp_path / "pins.toml").write_text(PINS_TOML)
     return tmp_path
 
 
@@ -93,11 +94,12 @@ def test_the_subjects_end_with_the_otp_pin_the_shared_reader_returns(project: Pa
     assert hex_audit.subjects(project) == SUBJECTS
 
 
-@pytest.mark.parametrize("pin", ['">=29.1.1"', '"29.1.*"', '"==29.1.1,<30"'])
+@pytest.mark.parametrize("pin", ['">=29.1.1"', '"29.1.*"', '"==29.1.1"'])
 def test_an_erlang_pin_that_is_not_exact_cannot_be_audited(project: Path, pin: str) -> None:
-    (project / "pixi.toml").write_text(PIXI_TOML.replace('"==29.1.1"', pin))
+    (project / "pins.toml").write_text(PINS_TOML.replace('"29.1.1"', pin))
     with pytest.raises(
-        hex_audit.CannotDecideError, match=r"^the erlang pin .+ is not one exact version$"
+        hex_audit.CannotDecideError,
+        match=r"^pins\.toml: \[exact\] erlang .+ is not a dotted version$",
     ) as refused:
         hex_audit.subjects(project)
     assert isinstance(refused.value.__cause__, _runtime.OtpPinError)
@@ -108,28 +110,28 @@ def _never_asked(_body: object) -> object:
 
 
 @pytest.mark.parametrize(
-    ("pixi_toml", "reason"),
+    ("pins_toml", "reason"),
     [
         pytest.param(
-            PIXI_TOML.replace("==29.1.1", ">=29.1.1"),
-            "the erlang pin '>=29.1.1' is not one exact version",
+            PINS_TOML.replace('"29.1.1"', '">=29.1.1"'),
+            "pins.toml: [exact] erlang '>=29.1.1' is not a dotted version",
             id="not exact",
         ),
         pytest.param(
-            '[dependencies]\ngleam = "==1.19.0"\n',
-            "pixi.toml has no erlang pin in [feature.otp]: 'feature'",
+            '[exact]\ngleam = "1.19.0"\n[minor]\n[floor]\n',
+            "pins.toml holds no [exact] erlang",
             id="missing",
         ),
-        pytest.param(None, "pixi.toml'", id="no pixi.toml"),
+        pytest.param(None, "pins.toml'", id="no pins.toml"),
     ],
 )
 def test_main_cannot_decide_without_an_exact_otp_pin(
-    project: Path, capsys: pytest.CaptureFixture[str], pixi_toml: str | None, reason: str
+    project: Path, capsys: pytest.CaptureFixture[str], pins_toml: str | None, reason: str
 ) -> None:
-    if pixi_toml is None:
-        (project / "pixi.toml").unlink()
+    if pins_toml is None:
+        (project / "pins.toml").unlink()
     else:
-        (project / "pixi.toml").write_text(pixi_toml)
+        (project / "pins.toml").write_text(pins_toml)
     code = hex_audit.main([str(project)], post=_never_asked)
     out, err = capsys.readouterr()
     assert code == 2

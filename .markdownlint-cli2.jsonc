@@ -25,6 +25,7 @@
     "CLAUDE.md",
     ".pixi",
     ".tools",
+    ".nix",
     "build",
     "ai_tmp",
     ".agents/skills/allium",

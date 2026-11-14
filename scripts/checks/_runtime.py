@@ -3,9 +3,11 @@
 Each has one owner here, so a checker never parses the pin or spells the prefix
 itself:
 
-- `otp_pin` is the only reader of the OTP version, the exact `erlang` pin in
-    pixi.toml (Decision 0003). `image-check` compares the image's OTP release with
-    it and `hex-audit` asks OSV.dev about it.
+- `otp_pin` is the only reader of the OTP version, the `[exact]` `erlang` entry
+    in pins.toml (Decision 0017), which flake.nix asserts its Erlang against.
+    `image-check` compares the image's OTP release with it and `hex-audit` asks
+    OSV.dev about it. Until ticket 13 a policy test holds pixi.toml's `erlang`
+    pin equal to it.
 - `PREFIX` is where both Dockerfiles copy pixi's `runtime` environment.
     `image-check` inspects it there and `runtime-scan` copies it out from there.
 
@@ -14,9 +16,9 @@ SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
-import re
-import tomllib
 from typing import TYPE_CHECKING
+
+import _pins
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,16 +31,8 @@ class OtpPinError(Exception):
 
 
 def otp_pin(project: Path) -> str:
-    """The OTP version the exact `erlang` pin in `project`'s pixi.toml names."""
+    """The OTP version `project`'s pins.toml holds exactly, as a bare dotted version."""
     try:
-        pixi_text = (project / "pixi.toml").read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
+        return _pins.version(project, "exact", "erlang")
+    except _pins.PinsError as error:
         raise OtpPinError(str(error)) from error
-    try:
-        pin = tomllib.loads(pixi_text)["feature"]["otp"]["dependencies"]["erlang"]
-    except (tomllib.TOMLDecodeError, KeyError, TypeError) as error:
-        raise OtpPinError(f"pixi.toml has no erlang pin in [feature.otp]: {error}") from error
-    match = re.fullmatch(r"==(\d+(?:\.\d+)*)", pin) if isinstance(pin, str) else None
-    if match is None:
-        raise OtpPinError(f"the erlang pin {pin!r} is not one exact version")
-    return match[1]

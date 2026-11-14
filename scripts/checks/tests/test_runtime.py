@@ -1,7 +1,8 @@
 """The one reader of the OTP pin, and the one prefix the images ship their runtime at.
 
 `image-check` and `hex-audit` both ask `_runtime.otp_pin` for the OTP version, so
-a pin it cannot read as one exact version stops both with a named error.
+a pin it cannot read as one exact version stops both with a named error. The
+version is the `[exact]` `erlang` entry in pins.toml (Decision 0017).
 """
 
 from __future__ import annotations
@@ -14,70 +15,68 @@ import pytest
 import _runtime
 from conftest import REPOSITORY
 
-PIXI_TOML = """\
-[dependencies]
-gleam = "==1.19.0"
+PINS_TOML = """\
+[exact]
+erlang = "29.1.1"
+gleam = "1.19.0"
 
-[feature.otp.dependencies]
-erlang = "==29.1.1"
+[minor]
+
+[floor]
 """
 
 
-def project(tmp_path: Path, pixi_toml: str) -> Path:
-    (tmp_path / "pixi.toml").write_text(pixi_toml)
+def project(tmp_path: Path, pins_toml: str) -> Path:
+    (tmp_path / "pins.toml").write_text(pins_toml)
     return tmp_path
 
 
-def test_the_otp_pin_is_the_exact_erlang_pin(tmp_path: Path) -> None:
-    assert _runtime.otp_pin(project(tmp_path, PIXI_TOML)) == "29.1.1"
+def test_the_otp_pin_is_the_exact_erlang_version_pins_toml_holds(tmp_path: Path) -> None:
+    assert _runtime.otp_pin(project(tmp_path, PINS_TOML)) == "29.1.1"
 
 
 @pytest.mark.parametrize(
     "pin",
-    [
-        '">=29.1.1"',
-        '"29.1.*"',
-        '"==29.1.1,<30"',
-        '"29.1.1"',
-        '"==29.1.1 "',
-        '"==29.x"',
-        '""',
-        "29",
-        '{ version = "==29.1.1" }',
-    ],
+    ['">=29.1.1"', '"29.1.*"', '"==29.1.1"', '"29.1.1 "', '"29.x"', '""', "29", '{ v = "29" }'],
 )
-def test_an_erlang_pin_that_is_not_exact_is_refused(tmp_path: Path, pin: str) -> None:
-    written = project(tmp_path, PIXI_TOML.replace('"==29.1.1"', pin))
-    with pytest.raises(
-        _runtime.OtpPinError, match=r"^the erlang pin .+ is not one exact version$"
-    ):
+def test_an_erlang_version_that_is_not_exact_is_refused(tmp_path: Path, pin: str) -> None:
+    written = project(tmp_path, PINS_TOML.replace('"29.1.1"', pin))
+    with pytest.raises(_runtime.OtpPinError, match=r"^pins\.toml: \[exact\] erlang "):
         _runtime.otp_pin(written)
 
 
 @pytest.mark.parametrize(
-    "pixi_toml",
+    "pins_toml",
     [
-        pytest.param('[dependencies]\ngleam = "==1.19.0"\n', id="no otp feature"),
-        pytest.param('[feature.otp.dependencies]\ngleam = "==1.19.0"\n', id="no erlang key"),
-        pytest.param('[dependencies]\nerlang = "==29.1.1"\n', id="pinned outside the otp feature"),
-        pytest.param('feature = "otp"\n', id="a feature that is not a table"),
-        pytest.param("[feature.otp.dependencies", id="not TOML"),
+        pytest.param('[exact]\ngleam = "1.19.0"\n[minor]\n[floor]\n', id="no erlang key"),
+        pytest.param('[exact]\n[minor]\nerlang = "29.1"\n[floor]\n', id="held as a minor"),
     ],
 )
-def test_a_missing_erlang_pin_is_refused(tmp_path: Path, pixi_toml: str) -> None:
-    with pytest.raises(
-        _runtime.OtpPinError, match=r"^pixi\.toml has no erlang pin in \[feature\.otp\]: "
-    ):
-        _runtime.otp_pin(project(tmp_path, pixi_toml))
+def test_a_missing_erlang_version_is_refused(tmp_path: Path, pins_toml: str) -> None:
+    with pytest.raises(_runtime.OtpPinError, match=r"^pins\.toml holds no \[exact\] erlang$"):
+        _runtime.otp_pin(project(tmp_path, pins_toml))
 
 
-def test_a_project_without_pixi_toml_is_refused_by_its_path(tmp_path: Path) -> None:
-    with pytest.raises(_runtime.OtpPinError, match=re.escape(str(tmp_path / "pixi.toml"))):
+@pytest.mark.parametrize(
+    "pins_toml",
+    [
+        pytest.param('[exact]\nerlang = "29.1.1"\n', id="no minor or floor table"),
+        pytest.param('exact = "otp"\n', id="exact is not a table"),
+        pytest.param("[exact", id="not TOML"),
+    ],
+)
+def test_a_file_not_in_the_held_versions_shape_is_refused(tmp_path: Path, pins_toml: str) -> None:
+    with pytest.raises(_runtime.OtpPinError, match=r"^pins\.toml"):
+        _runtime.otp_pin(project(tmp_path, pins_toml))
+
+
+def test_a_project_without_pins_toml_is_refused_by_its_path(tmp_path: Path) -> None:
+    with pytest.raises(_runtime.OtpPinError, match=re.escape(str(tmp_path / "pins.toml"))):
         _runtime.otp_pin(tmp_path)
 
 
-def test_a_pixi_toml_that_is_not_text_is_refused(tmp_path: Path) -> None:
-    (tmp_path / "pixi.toml").write_bytes(b"\xff\xfe")
+def test_a_pins_toml_that_is_not_text_is_refused(tmp_path: Path) -> None:
+    (tmp_path / "pins.toml").write_bytes(b"\xff\xfe")
     with pytest.raises(_runtime.OtpPinError, match="utf-8"):
         _runtime.otp_pin(tmp_path)
 

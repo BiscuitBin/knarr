@@ -14,7 +14,10 @@ ROOT = Path(__file__).resolve().parents[2]
 # Each module belongs to exactly one group. Inputs name implementation dependencies,
 # not documents/configuration the actual gate already validates on every run.
 GROUPS = {
-    "policy": ("dependency_pins hook_configs workflows fake_worker_manifest checker_suite", ()),
+    "policy": (
+        "dependency_pins hook_configs workflows fake_worker_manifest checker_suite pins",
+        (),
+    ),
     "docs": (
         "validate_docs",
         ("scripts/checks/validate_docs.py", "scripts/checks/render_markdown.mjs"),
@@ -135,6 +138,11 @@ SHARED = (
     "Justfile",
     "pixi.*",
     "tools*.txt",
+    # The held versions and the flake that asserts them (Decision 0017), and
+    # the one reader of pins.toml, which _runtime.py and env_check.py import.
+    "pins.toml",
+    "flake.*",
+    "scripts/checks/_pins.py",
     "gleam.toml",
     "manifest.toml",
     "fixtures/fake_worker/gleam.toml",

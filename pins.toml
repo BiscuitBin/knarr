@@ -1,0 +1,14 @@
+# Decision 0017's held versions. flake.nix asserts each; the checkers read
+# them with tomllib. Move one by moving the input that carries it.
+[exact]
+erlang = "29.1.2"
+gleam = "1.19.0"
+allium = "3.6.1"
+kind = "0.33.0"
+kwokctl = "0.8.0"
+
+[minor]
+kubectl = "1.36"
+
+[floor]
+rebar3 = "3.28.0"

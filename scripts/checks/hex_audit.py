@@ -6,7 +6,7 @@ with one querybatch request:
 
 - every hex package manifest.toml locks, by its Hex name and version, in OSV's
     `Hex` ecosystem;
-- the `erlang` pin in pixi.toml, as the `OTP-<version>` tag of
+- the `erlang` version pins.toml holds, as the `OTP-<version>` tag of
     github.com/erlang/otp, in OSV's `GIT` ecosystem, which is where OSV records
     the OTP advisories.
 

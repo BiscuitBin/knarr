@@ -28,6 +28,14 @@ test/birdie_snapshots/*.new
 # editorconfig-checker), installed into .tools/bin by `just initialize`.
 .tools/
 
+# With KNARR_TOOLS=nix, `just initialize` builds each tool group into an
+# out-link of its own here (Decision 0017), one per worktree, which also keeps
+# its store paths from garbage collection. A `nix build` run by hand without
+# --out-link leaves a `result` link, or `result-<output>`, instead.
+.nix/
+result
+result-*
+
 # What Python writes when the gate checkers and their tests run. The Justfile
 # also exports PYTHONDONTWRITEBYTECODE=1 and pytest runs without its cache
 # plugin; these lines catch a run outside the recipes.

@@ -5,10 +5,13 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from conftest import run_checker
+import _tools
+import validate_docs
+from conftest import REPOSITORY, run_checker
 
 PROSE = (
     "This page explains the documentation contract for contributors maintaining the project. "
@@ -391,3 +394,32 @@ def test_cli_contract(handbook: Path, broken: bool) -> None:
         if broken
         else "Validated 1 pages" in result.stdout
     )
+
+
+def test_markdown_it_is_found_from_markdownlint_cli2s_module_not_its_bin(
+    handbook: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under Nix bin/markdownlint-cli2 is a wrapper script, so markdown-it is not beside it."""
+    commands = []
+
+    def render(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        pages = json.loads(str(_["input"]))
+        return subprocess.CompletedProcess(command, 0, json.dumps(dict.fromkeys(pages, "")), "")
+
+    # The checker's own boundary only: _tools still asks the real seam.
+    stand_in = SimpleNamespace(run=render, CalledProcessError=subprocess.CalledProcessError)
+    monkeypatch.setattr(validate_docs, "subprocess", stand_in)
+    check(handbook)
+    module = _tools.module(REPOSITORY, "markdownlint-cli2")
+    assert [command[2] for command in commands] == [str(module / "markdownlint-cli2-bin.mjs")]
+
+
+def test_an_unknown_backend_leaves_the_markdown_parser_unavailable_by_name(
+    handbook: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KNARR_TOOLS", "conda")
+    result = check(handbook)
+    assert result.returncode == 1
+    assert "Markdown parser unavailable" in result.stdout + result.stderr
+    assert "KNARR_TOOLS is 'conda'" in result.stdout + result.stderr

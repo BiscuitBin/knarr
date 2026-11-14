@@ -16,6 +16,16 @@ No YAML parser is pinned, so pixi.lock is read line by line. The reader knows
 lock version 7 and `- conda:` entries only, and refuses anything else rather
 than guess.
 
+Under KNARR_TOOLS=nix it proves three things instead, as Decision 0017's
+environment check names them, with one evaluation that neither fetches nor
+touches flake.lock:
+
+- the default group's out-link resolves into the store;
+- it is the environment this commit's flake.nix and flake.lock describe;
+- gleam, erlang and allium report the versions pins.toml holds exactly, rebar3
+    one at or above its floor, and openssl the version the flake built Erlang
+    against.
+
 Usage: python3 scripts/checks/env_check.py [project-directory]
 
 SPDX-License-Identifier: Apache-2.0
@@ -26,13 +36,26 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import NoReturn
 
+import _pins
+import _tools
+
 ENVIRONMENT = "default"
 LOCK_VERSION = 7
 ARCHIVES = (".conda", ".tar.bz2")
+NIX_EVAL = ("nix", "eval", "--json", "--offline", "--no-update-lock-file")
+# What the check needs from the flake: the out path this commit describes, and
+# the OpenSSL its Erlang is built with, which pins.toml does not name.
+DESCRIBE = "environment: { out = environment.outPath; openssl = environment.opensslVersion; }"
+# The full OTP version is in a file; erlang:system_info(otp_release) is the major only.
+OTP_VERSION = (
+    '{ok, V} = file:read_file(filename:join([code:root_dir(), "releases", '
+    'erlang:system_info(otp_release), "OTP_VERSION"])), io:put_chars(string:trim(V)), halt().'
+)
 
 
 def _refuse(message: str) -> NoReturn:
@@ -141,8 +164,90 @@ def _tool_drift(project: Path, platform: str) -> list[str]:
     return drift
 
 
+def _reported(command: list[str], field: int) -> str | None:
+    """The version a tool prints about itself, or None when it cannot run."""
+    try:
+        result = subprocess.run(command, check=False, capture_output=True, text=True)
+    except OSError:
+        return None
+    fields = result.stdout.split()
+    return fields[field] if result.returncode == 0 and len(fields) > field else None
+
+
+def _numbers(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", version))
+
+
+def _held_drift(project: Path, tools: Path, openssl: str) -> list[str]:
+    try:
+        held = _pins.held(project)
+    except _pins.PinsError as error:
+        _refuse(str(error))
+    exact = held["exact"]
+    reported = {
+        "gleam": _reported([str(tools / "gleam"), "--version"], 1),
+        "erlang": _reported([str(tools / "erl"), "-noshell", "-eval", OTP_VERSION], 0),
+        "allium": _reported([str(tools / "allium"), "--version"], 1),
+        "rebar3": _reported([str(tools / "rebar3"), "--version"], 1),
+        "openssl": _reported([str(tools / "openssl"), "version"], 1),
+    }
+    drift = [f"  {name} cannot run" for name, have in reported.items() if have is None]
+    for name in ("gleam", "erlang", "allium"):
+        have = reported[name]
+        if have is not None and have != exact[name]:
+            drift.append(f"  {name} reports {have}, pins.toml holds {exact[name]}")
+    floor = held["floor"]["rebar3"]
+    if reported["rebar3"] is not None and _numbers(reported["rebar3"]) < _numbers(floor):
+        drift.append(f"  rebar3 reports {reported['rebar3']}, below {floor}")
+    if reported["openssl"] is not None and reported["openssl"] != openssl:
+        drift.append(f"  openssl reports {reported['openssl']}, Erlang is built with {openssl}")
+    return drift
+
+
+def _nix(project: Path) -> int:
+    project = project.resolve()
+    link = _tools.prefix(project, ENVIRONMENT)
+    try:
+        have = link.readlink()
+    except OSError:
+        _refuse(f"{link} is not an out-link; run just initialize")
+    if not (have / "bin").is_dir():
+        _refuse(f"{link} points at {have}, which is not in the store; run just initialize")
+    result = subprocess.run(
+        [*NIX_EVAL, f"{project}#{ENVIRONMENT}", "--apply", DESCRIBE],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        described = json.loads(result.stdout) if result.returncode == 0 else None
+        want, openssl = described["out"], described["openssl"]
+    except ValueError, KeyError, TypeError:
+        drift = [f"  this commit's flake does not evaluate offline: {result.stderr.strip()}"]
+    else:
+        if str(have) != want:
+            drift = [f"  {link} is {have}, but this commit describes {want}"]
+        else:
+            drift = _held_drift(project, have / "bin", openssl)
+    if not drift:
+        print(f"env-check: {link} is {have}, and the held versions match")
+        return 0
+    print("\n".join(drift))
+    print(
+        "the installed tools differ from this commit's flake.lock or pins.toml; run just "
+        "initialize (it needs network for anything not already cached)"
+    )
+    return 1
+
+
 def main() -> int:
     project = Path(sys.argv[1]) if len(sys.argv) > 1 else Path()
+    try:
+        backend = _tools.backend()
+    except _tools.SelectorError as error:
+        _refuse(str(error))
+    if backend == "nix":
+        return _nix(project)
     prefix = project / ".pixi" / "envs" / ENVIRONMENT
     platform = _platform(prefix)
     drift = [*_package_drift(project, prefix, platform), *_tool_drift(project, platform)]

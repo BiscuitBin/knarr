@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import secrets
 import shutil
+import stat
 import string
 import subprocess
 from pathlib import Path
@@ -34,13 +35,33 @@ def pinned() -> Path:
         pytest.fail(f"{error}; run just initialize")
 
 
+def writable_copy(source: Path, destination: Path) -> None:
+    """Copy a tool so a case may overwrite it, whatever mode the source has.
+
+    Under Nix the pinned binary is a read-only store file. shutil.copy2 and
+    shutil.copy both keep that mode, and the cases below that rewrite the copy
+    then fail for every user but root (nix-migration ticket 05).
+    """
+    shutil.copyfile(source, destination)
+    destination.chmod(0o755)
+
+
+def test_the_fixtures_copy_is_writable_even_from_a_read_only_store_file(tmp_path: Path) -> None:
+    store = tmp_path / "store-ripsecrets"
+    store.write_text("#!/bin/sh\nexit 0\n")
+    store.chmod(0o555)
+    copy = tmp_path / "ripsecrets"
+    writable_copy(store, copy)
+    assert stat.S_IMODE(copy.stat().st_mode) == 0o755
+
+
 @pytest.fixture
 def worktree(repository: Path, pinned: Path) -> Path:
     tools = tool_directory(repository)
     tools.mkdir(parents=True)
     (repository / ".gitignore").write_text(f"{tools.relative_to(repository).parts[0]}/\n")
     (repository / "clean.txt").write_text("nothing to see\n")
-    shutil.copy2(pinned, tools / "ripsecrets")
+    writable_copy(pinned, tools / "ripsecrets")
     return repository
 
 

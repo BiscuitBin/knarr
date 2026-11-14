@@ -1,4 +1,8 @@
-"""The Allium CLI gate judges reports, including diagnostics hidden by status 0."""
+"""The Allium CLI gate judges reports, including diagnostics hidden by status 0.
+
+The expected version is tools.txt's line for this platform under pixi, and
+pins.toml's under Nix (Decision 0017), which also covers aarch64-linux.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +17,8 @@ import pytest
 
 import run_allium
 from conftest import run_checker, tool_directory
+
+CLEAN = {"spec_file": "specifications/root.allium", "diagnostics": [], "findings": []}
 
 
 def install_fake(repository: Path, output: str, status: int = 0, version: str = "3.6.1") -> None:
@@ -33,6 +39,7 @@ def install_fake(repository: Path, output: str, status: int = 0, version: str = 
             for platform in ("linux-64", "osx-arm64")
         )
     )
+    (repository / "pins.toml").write_text('[exact]\nallium = "3.6.1"\n[minor]\n[floor]\n')
     (repository / "checks.toml").write_text('[allium]\nspecs = "specifications"\n')
     specs = repository / "specifications"
     specs.mkdir(exist_ok=True)
@@ -217,3 +224,53 @@ def test_cli_rejects_invalid_arguments(repository: Path, arguments: tuple[str, .
     result = run_checker("run_allium", repository, *arguments, cli=True)
     assert result.returncode == 2
     assert "usage:" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("backend", "host", "message"),
+    [
+        ("pixi", ("Linux", "aarch64"), "tools.txt pins no Allium for this platform"),
+        ("nix", ("Linux", "aarch64"), None),
+        ("nix", ("Darwin", "arm64"), None),
+    ],
+)
+def test_the_backend_decides_where_the_version_is_pinned(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    backend: str,
+    host: tuple[str, str],
+    message: str | None,
+) -> None:
+    monkeypatch.setenv("KNARR_TOOLS", backend)
+    install_fake(repository, json.dumps(CLEAN))
+    monkeypatch.setattr(run_allium.platform, "system", lambda: host[0])
+    monkeypatch.setattr(run_allium.platform, "machine", lambda: host[1])
+    result = run(repository)
+    if message is None:
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode == 1
+        assert message in result.stderr
+
+
+def test_under_nix_the_version_is_the_one_pins_toml_holds(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KNARR_TOOLS", "nix")
+    install_fake(repository, json.dumps(CLEAN))
+    (repository / "tools.txt").unlink()
+    assert run(repository).returncode == 0
+    (repository / "pins.toml").write_text('[exact]\nallium = "3.6.2"\n[minor]\n[floor]\n')
+    result = run(repository)
+    assert result.returncode == 1
+    assert "Allium does not match pins.toml (3.6.2); run just initialize" in result.stderr
+
+
+def test_an_unknown_backend_is_refused_by_name(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_fake(repository, json.dumps(CLEAN))
+    monkeypatch.setenv("KNARR_TOOLS", "conda")
+    result = run(repository)
+    assert result.returncode == 1
+    assert "KNARR_TOOLS is 'conda'" in result.stderr
