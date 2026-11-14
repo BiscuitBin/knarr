@@ -1,0 +1,31 @@
+date: 2026-11-14T23:21Z
+context: 2b6dd72 Build both images from the flake
+[runtime 1/6] FROM docker.io/library/ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c
+[build 1/9] FROM docker.io/nixos/nix:2.35.6@sha256:b49cb33f3a7e5cf3933ad8774529de0e3807ec5cf54987aa7ccdfb49f2fc55ed
+[build 5/9] RUN mkdir -p /out/nix/store /out/opt/knarr && nix path-info --recursive /opt/knarr/runtime-link > /opt/knarr/runtime-closure.txt && xargs cp --archive --target-directory=/out/nix/store < /opt/knarr/runtime-closure.txt && ln -s "$(readlink /opt/knarr/runtime-link)" /out/opt/knarr/runtime
+CACHED
+[build 6/9] COPY gleam.toml manifest.toml ./
+CACHED
+[build 2/9] WORKDIR /opt/knarr
+CACHED
+[build 3/9] COPY flake.nix flake.lock pins.toml nix/
+CACHED
+[build 4/9] RUN nix build ./nix#default --no-update-lock-file --out-link /opt/knarr/tools && nix build ./nix#runtime --no-update-lock-file --out-link /opt/knarr/runtime-link
+CACHED
+[build 7/9] RUN gleam deps download
+CACHED
+[build 8/9] COPY src src
+[build 9/9] RUN gleam export erlang-shipment && erl -noshell -eval 'io:put_chars(erlang:system_info(otp_release)), halt().' > /opt/build-otp
+DONE 2.4s
+[runtime 2/6] WORKDIR /opt/knarr
+CACHED
+[runtime 3/6] COPY --from=build /out/ /
+CACHED
+[runtime 4/6] COPY --from=build /opt/knarr/build/erlang-shipment /opt/knarr/shipment
+CACHED
+[runtime 5/6] COPY --from=build /opt/build-otp /opt/build-otp
+CACHED
+[runtime 6/6] COPY --chmod=0755 scripts/container-entrypoint.sh /opt/knarr/container-entrypoint.sh
+CACHED
+DONE 0.1s
+source restored and rebuilt

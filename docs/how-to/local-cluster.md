@@ -69,11 +69,13 @@ as recorded in [Decision 0007](../decisions/0007-local-cluster.md).
 
 ## Image and checks
 
-The image is a Gleam erlang-shipment with the locked pixi runtime environment,
-copied at its original absolute prefix. `just image-build` and
-`just fake-worker-image-build` build for the host architecture: linux/amd64 on
-an x86_64 host, as in CI, and linux/arm64 on an Apple-silicon host, from the
-lock's `linux-aarch64` entries. Pass a platform as the second argument to
+The image is a Gleam erlang-shipment with the flake's runtime closure, Erlang
+and OpenSSL, at its own `/nix/store` paths, and `/opt/knarr/runtime` linked to
+it ([Decision 0017](../decisions/0017-nix-owns-the-toolchain.md)). The build
+runs Nix inside its first stage, so the host needs only Docker.
+`just image-build` and `just fake-worker-image-build` build for the host
+architecture: linux/amd64 on an x86_64 host, as in CI, and linux/arm64 on an
+Apple-silicon host. Pass a platform as the second argument to
 override it, as in `just image-build knarr:local linux/amd64`, but an amd64
 image does not build or run under Rosetta: OTP 29's amd64 BEAM fails there in
 `prim_tty`. `just image-check` runs the image at its own architecture. The
@@ -115,7 +117,8 @@ validates its render against the same schemas, and holds its version to
 `gleam.toml`'s (Decision 0015); the chart tests pin its static security
 settings. The chart is knarr's only packaging: helm-chart ticket 06 retired
 the kustomize tree under `deploy/`. Container checks separately prove both image stages use
-the pixi manifest's OTP major (with lock agreement checked by the gate) and that the runtime starts with a read-only root.
+the OTP major `pins.toml` holds, that knarr's image passes the six TLS cases
+with its own Erlang and OpenSSL, and that the runtime starts with a read-only root.
 The kind smoke job proves actual endpoint access; the kwok job proves cluster
 readiness only. Both jobs remain outside aggregate `check`.
 

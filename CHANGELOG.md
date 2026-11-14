@@ -8,6 +8,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 - The README now covers what knarr does, how to install its Helm chart and where the user guides are. Local setup, the gate, audits, moving pins and specifications moved to the contributing guide, `CONTRIBUTING.md`.
 - Decision 0017: Nix owns the toolchain, superseding Decision 0003's pixi. One flake and its `flake.lock` will own every tool and the Erlang runtime both images ship, with Erlang/OTP 29.1.2 built against OpenSSL 3.5.9 in place of pixi's 3.6.5, Gleam held at 1.19.0 and tilt dropped. The nix-migration round's tickets carry it out; nothing in the toolchain changes yet.
+- Both images, knarr's and the fake worker's, build from the flake (nix-migration ticket 09). The build stage is `nixos/nix:2.35.6` by tag and digest, and the image ships the flake's runtime closure, Erlang/OTP 29.1.2 with OpenSSL 3.5.9 in place of conda-forge's 3.6.5, under `/nix/store`, with `/opt/knarr/runtime` linked to it. rebar3 comes from the flake, and the perl prune step is gone because the closure has no perl. The local linux/arm64 image is 114.3 MB against the pixi image's 103.6 MB. `just runtime-scan` cannot decide on it until nix-migration ticket 11, so no release is tagged in between.
 
 ## [0.3.1] - 2026-10-30
 

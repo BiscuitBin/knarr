@@ -1,0 +1,45 @@
+date: 2026-11-14T23:17Z
+docker: 29.6.1, linux/arm64
+host: 18 cores, shared with ticket 08 running concurrently
+pixi: da7fd81 Rerun ticket 07's Nix evidence on the branch as handed back
+nix:  2b6dd72 Build both images from the flake
+
+== knarr, pixi (Dockerfile)
+  FROM ghcr.io/prefix-dev/pixi:0.81.0@sha256:788ae451641666e2d1f79d3dbe35392dfc7e9b394b16a3acb75c347f3badb2ab AS build
+  FROM ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c AS runtime
+  cold (--no-cache)                    17 seconds
+  warm (nothing changed)                0 seconds
+  after an edit under src/              4 seconds
+  source restored                       1 seconds
+  size (docker image inspect .Size): 103.6 MB
+  architecture arm64, user 10001:10001
+
+== fake-worker, pixi (fixtures/fake_worker/Dockerfile)
+  FROM ghcr.io/prefix-dev/pixi:0.81.0@sha256:788ae451641666e2d1f79d3dbe35392dfc7e9b394b16a3acb75c347f3badb2ab AS build
+  FROM ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c AS runtime
+  cold (--no-cache)                    18 seconds
+  warm (nothing changed)                0 seconds
+  after an edit under src/              3 seconds
+  source restored                       0 seconds
+  size (docker image inspect .Size): 121.8 MB
+  architecture arm64, user 10001:10001
+
+== knarr, nix (Dockerfile)
+  FROM nixos/nix:2.35.6@sha256:b49cb33f3a7e5cf3933ad8774529de0e3807ec5cf54987aa7ccdfb49f2fc55ed AS build
+  FROM ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c AS runtime
+  cold (--no-cache)                    50 seconds
+  warm (nothing changed)                1 seconds
+  after an edit under src/             11 seconds
+  source restored                       1 seconds
+  size (docker image inspect .Size): 114.3 MB
+  architecture arm64, user 10001:10001
+
+== fake-worker, nix (fixtures/fake_worker/Dockerfile)
+  FROM nixos/nix:2.35.6@sha256:b49cb33f3a7e5cf3933ad8774529de0e3807ec5cf54987aa7ccdfb49f2fc55ed AS build
+  FROM ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c AS runtime
+  cold (--no-cache)                    45 seconds
+  warm (nothing changed)                0 seconds
+  after an edit under src/             11 seconds
+  source restored                       0 seconds
+  size (docker image inspect .Size): 113.7 MB
+  architecture arm64, user 10001:10001

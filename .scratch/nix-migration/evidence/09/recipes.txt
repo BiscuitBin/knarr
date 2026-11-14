@@ -1,0 +1,19 @@
+date: 2026-11-14T23:26Z
+worktree at: 2b6dd72 Build both images from the flake, every admitted file as committed
+
+$ just image-build knarr-09:nix
+exit 0 after 1 seconds
+    naming to docker.io/library/knarr-09:nix done
+
+$ just fake-worker-image-build fake-worker-09:nix
+exit 0 after 3 seconds
+    naming to docker.io/library/fake-worker-09:nix done
+
+$ just image-check knarr-09:nix
+exit 0 after 3 seconds
+  tls_check: all 6 cases matched
+  image: OTP 29, numeric user and read-only runtime verified
+
+$ just fake-worker-image-check fake-worker-09:nix
+exit 0 after 6 seconds
+  image: OTP 29, numeric user and read-only runtime verified
