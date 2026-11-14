@@ -1,0 +1,25 @@
+date: 2026-11-14T14:06Z
+nix (Nix) 2.35.6 on aarch64-linux
+store before: 126 paths, 813M
+just on PATH: absent
+
+== The one command a fresh clone runs before it has just
+$ nix build ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --out-link .pixi/envs/default
+cold: 11 seconds
+147 paths copied from cache.nixos.org
+built here: builder.pl.drv allium-aarch64-unknown-linux-gnu.tar.gz.drv python3-3.14.10-env.drv allium-3.6.1.drv knarr-tools.drv 
+again, nothing to do: 2 seconds
+store after: 6414 paths, 3.2G
+environment closure: 870.5MiB
+git status --short: 0 lines
+
+== just, from the out-link
+just 1.59.0
+Available recipes:
+    [audit]
+    hex-audit                                       # Check the hex packages and the OTP pin against OSV.dev advisories (needs network)
+    image-scan image=cluster_image                  # Scan the OS packages of an image for fixable high and critical vulnerabilities with grype (needs network)
+
+== just without an out-link
+$ nix shell ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --command just --version
+just 1.59.0

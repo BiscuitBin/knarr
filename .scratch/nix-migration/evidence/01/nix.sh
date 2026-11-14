@@ -9,6 +9,8 @@
 #   /out       <worktree>/ai_tmp/out, writable (transcripts on their way out)
 # Usage: sh nix.sh [--offline] <command> [argument...]
 #   --offline runs the container with --network none.
+#   KNARR_NIX_STORE names another volume for /nix; fresh.sh's run uses an
+#   empty one, which Docker fills from the image.
 set -eu
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 root=$(CDPATH='' cd -- "$here/../../../.." && pwd -P)
@@ -23,7 +25,7 @@ fi
 mkdir -p "$root/ai_tmp/out"
 # shellcheck disable=SC2086 # $network is empty or one word
 exec docker run --rm $network \
-  --volume=knarr-nix-store:/nix \
+  --volume="${KNARR_NIX_STORE:-knarr-nix-store}":/nix \
   --volume=knarr-nix-01-work:/work \
   --volume="$here":/evidence:ro \
   --volume="$root/ai_tmp":/bundle:ro \

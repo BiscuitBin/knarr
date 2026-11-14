@@ -1,6 +1,6 @@
-date: 2026-11-14T13:48Z
+date: 2026-11-14T14:02Z
 nix (Nix) 2.35.6 on aarch64-linux
-clone of 01-nix-container-spike at 93c4fb0
+clone of 01-nix-container-spike at 9e98deb
 
 == The environment, built from the flake this branch tracks in its evidence directory
 nix build ./.scratch/nix-migration/evidence/01#default --out-link .pixi/envs/default: 1 seconds (store already populated)
@@ -46,3 +46,6 @@ locked:  /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
   prek /nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek
 moved:   /nix/store/48v2xkqaxpbmhy3dk82qwqy2asdi6hmj-knarr-tools
   prek /nix/store/rmbhxvawxxcr6km230vfx74m26kmnsgf-prek-0.5.7/bin/prek
+
+== Gleam as the candidate revision carries it, for the version-difference list
+gleam 1.19.2

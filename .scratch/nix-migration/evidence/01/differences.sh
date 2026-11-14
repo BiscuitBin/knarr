@@ -21,7 +21,7 @@ reported() { # the version a tool in the prototype environment reports
     erlang) erl -noshell -eval '{ok, V} = file:read_file(filename:join([code:root_dir(), "releases", erlang:system_info(otp_release), "OTP_VERSION"])), io:put_chars(string:trim(V)), halt().' ;;
     kubernetes-helm) helm version --template '{{.Version}}' | sed 's/^v//; s/+.*//' ;;
     kustomize) kustomize version | sed 's/^v//' ;;
-    markdownlint-cli2) markdownlint-cli2 --version | sed 's/^markdownlint-cli2 v\([^ ]*\).*/\1/' ;;
+    markdownlint-cli2) markdownlint-cli2 --version 2> /dev/null | head -n 1 | sed 's/^markdownlint-cli2 v\([^ ]*\).*/\1/' ;;
     shellcheck) shellcheck --version | sed -n 's/^version: //p' ;;
     hadolint) hadolint --version | sed 's/.* //' ;;
     kubeconform) kubeconform -v | sed 's/^v//' ;;
@@ -61,6 +61,7 @@ status=0
 just fix > "$logs/diff-fix.log" 2>&1 || status=$?
 printf 'just fix: exit %s; git status --short: %s lines\n' "$status" "$(git status --short | wc -l)"
 git status --short
+printf 'the hooks that rewrote a file: %s\n' "$(grep -B 3 'files were modified' "$logs/diff-fix.log" | sed -n 's/^- hook id: //p' | sort -u | tr '\n' ' ')"
 git checkout --quiet .
 
 printf '\n== Gleam 1.19.2, the candidate'"'"'s own, in a copy of the clone (not the prototype'"'"'s Gleam)\n'
