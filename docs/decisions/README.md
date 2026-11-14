@@ -12,7 +12,7 @@ These records explain accepted choices and the evidence or source material behin
 
 1. [0001: Specifications decide behaviour](0001-specs-decide-behaviour.md).
 2. [0002: Effects live behind sans-IO boundaries](0002-sans-io-boundaries.md).
-3. [0003: Tool manager](0003-tool-manager.md), settled by ticket 01.
+3. [0003: Tool manager](0003-tool-manager.md), settled by ticket 01, superseded by 0017.
 4. [0004: Gate checkers](0004-gate-checkers.md), settled by ticket 02.
 5. [0005: A project-managed Allium binary](0005-project-managed-allium-cli.md), implemented by ticket 07.
 6. [0006: Apache-2.0](0006-apache-2-0.md).
@@ -26,5 +26,6 @@ These records explain accepted choices and the evidence or source material behin
 14. [0014: Dependency updates and audit](0014-dependency-updates-and-audit.md), settled by ticket 27.
 15. [0015: knarr ships a Helm chart](0015-helm-chart.md), settled by helm chart ticket 01.
 16. [0016: knarr's home is the biscuitbin org](0016-biscuitbin-org.md), settled by org transfer ticket 01.
+17. [0017: Nix owns the toolchain](0017-nix-owns-the-toolchain.md), settled by nix migration ticket 06.
 
 Read the [project direction](../project/README.md) for proposals and open questions. A later change to an accepted choice should amend or supersede its record explicitly, preserving enough context for a reader to understand why the choice changed.

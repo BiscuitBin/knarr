@@ -7,6 +7,7 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 ### Changed
 
 - The README now covers what knarr does, how to install its Helm chart and where the user guides are. Local setup, the gate, audits, moving pins and specifications moved to the contributing guide, `CONTRIBUTING.md`.
+- Decision 0017: Nix owns the toolchain, superseding Decision 0003's pixi. One flake and its `flake.lock` will own every tool and the Erlang runtime both images ship, with Erlang/OTP 29.1.2 built against OpenSSL 3.5.9 in place of pixi's 3.6.5, Gleam held at 1.19.0 and tilt dropped. The nix-migration round's tickets carry it out; nothing in the toolchain changes yet.
 
 ## [0.3.1] - 2026-10-30
 

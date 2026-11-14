@@ -33,6 +33,7 @@ Knarr is a Kubernetes controller that biases scale-down toward idle or cheap wor
 - [Decision 0013: In-cluster Kubernetes client](decisions/0013-in-cluster-client.md): verified TLS, token reload and the Role's verbs.
 - [Decision 0015: knarr ships a Helm chart](decisions/0015-helm-chart.md): the Helm chart that becomes knarr's only supported install.
 - [Decision 0016: knarr's home is the biscuitbin org](decisions/0016-biscuitbin-org.md): the move to `github.com/biscuitbin/knarr` and the `ghcr.io/biscuitbin` registry paths from `v0.3.0`.
+- [Decision 0017: Nix owns the toolchain](decisions/0017-nix-owns-the-toolchain.md): one flake and `flake.lock` own every tool and the image runtime, superseding Decision 0003's pixi.
 
 ## Maintainer documents
 

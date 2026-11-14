@@ -10,6 +10,8 @@ requires: []
 
 Adapted on 2026-10-07 from libpawdoku's [Decision 0011: Tool manager](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0011-tool-manager.md) at commit `51d8b55`. There pixi owned the tools and rustup kept the compiler. Here pixi owns the compiler too.
 
+Superseded by [Decision 0017](0017-nix-owns-the-toolchain.md) on 2026-11-14: one Nix flake and its `flake.lock` own every tool and the image runtime. The pixi backend this record describes stays the default until nix-migration ticket 10 and is deleted by ticket 13. The body below is unchanged.
+
 ## Context
 
 knarr is a Gleam application on the BEAM (OVERVIEW §1, §8). Every build, test and image ticket needs one pin set for the Gleam compiler, Erlang/OTP, the repository tools and the local-cluster tools. libpawdoku showed that one pixi manifest and one hashed lockfile can replace several installers. It also showed which traps to test before anyone relies on them: a lock check that rewrites the lock, and a tool whose release cannot be installed the expected way.
