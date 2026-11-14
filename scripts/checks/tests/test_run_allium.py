@@ -12,12 +12,12 @@ from unittest.mock import patch
 import pytest
 
 import run_allium
-from conftest import run_checker
+from conftest import run_checker, tool_directory
 
 
 def install_fake(repository: Path, output: str, status: int = 0, version: str = "3.6.1") -> None:
     """Stand in for the external binary, using its version and report protocol."""
-    binary = repository / ".tools/bin/allium"
+    binary = tool_directory(repository) / "allium"
     binary.parent.mkdir(parents=True, exist_ok=True)
     binary.write_text(
         f"#!{sys.executable}\n"
@@ -47,7 +47,7 @@ def run(
     output, status, version = json.loads((repository / "allium-response.json").read_text())
 
     def execute(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess:
-        binary = repository / ".tools/bin/allium"
+        binary = tool_directory(repository) / "allium"
         assert argv[0] == str(binary)
         if not binary.exists():
             raise FileNotFoundError(binary)
@@ -170,7 +170,7 @@ def test_recursive_modules_and_back_to_back_reports_pass(repository: Path) -> No
 def test_missing_or_wrong_binary_requires_initialize(repository: Path, version: str) -> None:
     install_fake(repository, "", version=version)
     if version == "missing":
-        (repository / ".tools/bin/allium").unlink()
+        (tool_directory(repository) / "allium").unlink()
     result = run(repository, cli=True)
     assert result.returncode == 1
     assert "run just initialize" in result.stderr

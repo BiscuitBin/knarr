@@ -10,7 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from conftest import REPOSITORY
+from conftest import REPOSITORY, tool_directory
 
 WRAPPER = REPOSITORY / "scripts" / "with-env.sh"
 
@@ -18,9 +18,10 @@ WRAPPER = REPOSITORY / "scripts" / "with-env.sh"
 def checkout(tmp_path: Path, *, initialized: bool) -> Path:
     root = tmp_path / "checkout"
     (root / "scripts").mkdir(parents=True)
-    shutil.copy(WRAPPER, root / "scripts" / "with-env.sh")
+    for script in (WRAPPER, WRAPPER.with_name("tool-dirs.sh")):
+        shutil.copy(script, root / "scripts" / script.name)
     if initialized:
-        bin_dir = root / ".pixi" / "envs" / "default" / "bin"
+        bin_dir = tool_directory(root)
         bin_dir.mkdir(parents=True)
         (bin_dir / "python3").write_text("#!/bin/sh\n")
         (bin_dir / "python3").chmod(0o755)

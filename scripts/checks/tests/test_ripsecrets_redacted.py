@@ -18,27 +18,29 @@ from pathlib import Path
 
 import pytest
 
-from conftest import CHECKS, REPOSITORY
+import _tools
+from conftest import CHECKS, REPOSITORY, tool_directory
 
 WRAPPER = CHECKS / "ripsecrets-redacted.sh"
-PINNED = REPOSITORY / ".tools" / "bin" / "ripsecrets"
 FOUND = "ripsecrets found credential material; the matched values are suppressed"
 UNAVAILABLE = "ripsecrets is unavailable; run just initialize"
 
 
 @pytest.fixture(scope="module")
 def pinned() -> Path:
-    if not os.access(PINNED, os.X_OK):
-        pytest.fail(f"{PINNED} is missing; run just initialize")
-    return PINNED
+    try:
+        return _tools.tool(REPOSITORY, "ripsecrets")
+    except FileNotFoundError as error:
+        pytest.fail(f"{error}; run just initialize")
 
 
 @pytest.fixture
 def worktree(repository: Path, pinned: Path) -> Path:
-    (repository / ".tools" / "bin").mkdir(parents=True)
-    (repository / ".gitignore").write_text(".tools/\n")
+    tools = tool_directory(repository)
+    tools.mkdir(parents=True)
+    (repository / ".gitignore").write_text(f"{tools.relative_to(repository).parts[0]}/\n")
     (repository / "clean.txt").write_text("nothing to see\n")
-    shutil.copy2(pinned, repository / ".tools" / "bin" / "ripsecrets")
+    shutil.copy2(pinned, tools / "ripsecrets")
     return repository
 
 
@@ -123,7 +125,7 @@ def test_a_flag_shaped_argument_is_a_path(planted: Path) -> None:
 
 
 def test_any_other_status_is_kept_and_its_output_suppressed(worktree: Path, token: str) -> None:
-    stand_in = worktree / ".tools" / "bin" / "ripsecrets"
+    stand_in = tool_directory(worktree) / "ripsecrets"
     stand_in.write_text(f'#!/bin/sh\necho "{token}"; echo "{token}" >&2; exit 3\n')
     result = wrap(worktree)
     assert outcome(result) == (3, "ripsecrets failed with status 3; output suppressed", "")
@@ -133,7 +135,7 @@ def test_any_other_status_is_kept_and_its_output_suppressed(worktree: Path, toke
 def test_without_the_pinned_binary_another_on_path_is_never_used(
     worktree: Path, tmp_path: Path
 ) -> None:
-    (worktree / ".tools" / "bin" / "ripsecrets").unlink()
+    (tool_directory(worktree) / "ripsecrets").unlink()
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     (elsewhere / "ripsecrets").write_text("#!/bin/sh\nexit 0\n")
@@ -143,8 +145,8 @@ def test_without_the_pinned_binary_another_on_path_is_never_used(
 
 
 def test_a_pinned_path_that_is_not_executable_is_refused(worktree: Path) -> None:
-    (worktree / ".tools" / "bin" / "ripsecrets").write_text("not a binary\n")
-    (worktree / ".tools" / "bin" / "ripsecrets").chmod(0o644)
+    (tool_directory(worktree) / "ripsecrets").write_text("not a binary\n")
+    (tool_directory(worktree) / "ripsecrets").chmod(0o644)
     assert outcome(wrap(worktree)) == (2, "", UNAVAILABLE)
 
 

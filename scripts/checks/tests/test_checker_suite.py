@@ -57,6 +57,14 @@ def test_unknown_and_shared_inputs_run_everything(paths):
     assert all(result[name] for name in suite.CLUSTERS)
 
 
+def test_the_tool_directory_seam_is_shared_and_owned_by_the_environment_group():
+    # Every recipe and hook asks the script for its tools, and the checkers ask the helper.
+    for path in ("scripts/tool-dirs.sh", "scripts/checks/_tools.py"):
+        assert suite.matches(path, suite.SHARED)
+        assert suite.matches(path, suite.GROUPS["environment"][1])
+    assert "scripts/checks/tests/test_tool_dirs.py" in suite.modules({"environment"})
+
+
 def test_missing_history_selects_everything():
     assert suite.changed_paths("0" * 40, "HEAD", False) is None
 

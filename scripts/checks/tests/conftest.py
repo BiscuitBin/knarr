@@ -21,6 +21,11 @@ REPOSITORY = CHECKS.parent.parent
 sys.path.insert(0, str(CHECKS))
 
 
+def tool_directory(checkout: Path) -> Path:
+    """Where a test plants a stand-in tool: the first of the checkout's tool directories."""
+    return importlib.import_module("_tools").directories(checkout)[0]
+
+
 def git(repository: Path, *arguments: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(repository), *arguments], check=True, capture_output=True, text=True

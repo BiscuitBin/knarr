@@ -21,11 +21,13 @@ GROUPS = {
     ),
     "agents": ("validate_agents", ("scripts/checks/validate_agents.py",)),
     "environment": (
-        "env_check install_tools install_hooks with_env",
+        "env_check initialize install_tools install_hooks with_env tool_dirs",
         (
             "scripts/initialize.sh",
             "scripts/install-*.sh",
             "scripts/with-env.sh",
+            "scripts/tool-dirs.sh",
+            "scripts/checks/_tools.py",
             "scripts/checks/env_check.py",
         ),
     ),
@@ -138,6 +140,9 @@ SHARED = (
     "scripts/checks/checker_suite.py",
     "scripts/checks/tests/conftest.py",
     "scripts/checks/_project.py",
+    # Every recipe, hook and checker finds its tools through these two.
+    "scripts/tool-dirs.sh",
+    "scripts/checks/_tools.py",
     "scripts/initialize.sh",
     "scripts/install-tools.sh",
     ".github/actions/**",

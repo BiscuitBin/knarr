@@ -27,6 +27,7 @@ from typing import Any
 from urllib.parse import unquote
 
 import _project
+import _tools
 
 REQUIRED_FIELDS = {"path", "title", "kind", "audience", "canonical_for", "requires"}
 METADATA_FIELDS = {"title", "kind", "audience", "canonical_for", "requires"}
@@ -101,13 +102,12 @@ def _documents(texts: dict[Path, str], errors: list[str]) -> dict[Path, _Documen
     rendered = {}
     if markdown:
         checker = Path(__file__).resolve()
-        tools = checker.parents[2] / ".pixi/envs/default/bin"
         try:
             result = subprocess.run(
                 [
-                    str(tools / "node"),
+                    str(_tools.tool(checker.parents[2], "node")),
                     str(checker.with_name("render_markdown.mjs")),
-                    str(tools / "markdownlint-cli2"),
+                    str(_tools.tool(checker.parents[2], "markdownlint-cli2")),
                 ],
                 input=json.dumps(markdown),
                 capture_output=True,

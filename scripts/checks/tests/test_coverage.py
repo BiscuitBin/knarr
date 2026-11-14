@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+import _tools
 from conftest import git
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -23,7 +24,8 @@ def prepare(project: Path) -> None:
         shutil.copyfile(ROOT / "scripts/checks" / name, project / "scripts/checks" / name)
     for name in ("gleam.toml", "manifest.toml", "Justfile", ".gitignore"):
         shutil.copyfile(ROOT / name, project / name)
-    shutil.copyfile(ROOT / "scripts/cluster-name.sh", project / "scripts/cluster-name.sh")
+    for name in ("cluster-name.sh", "tool-dirs.sh"):
+        shutil.copyfile(ROOT / "scripts" / name, project / "scripts" / name)
     for name in (".pixi", ".tools"):
         (project / name).symlink_to(ROOT / name, target_is_directory=True)
 
@@ -47,7 +49,7 @@ def coverage_template() -> Iterator[Path]:
         # Reuse compiled dependencies, but compile only the tiny probe application.
         shutil.rmtree(project / "build/dev/erlang/knarr")
         result = subprocess.run(
-            [str(ROOT / ".pixi/envs/default/bin/just"), "build"],
+            [str(_tools.tool(ROOT, "just")), "build"],
             cwd=project,
             capture_output=True,
             text=True,
@@ -170,7 +172,7 @@ def run_coverage(project: Path, **environment: str) -> subprocess.CompletedProce
     baseline = git(project, "status", "--porcelain", "--untracked-files=all")
     diff = git(project, "diff")
     result = subprocess.run(
-        [str(ROOT / ".pixi/envs/default/bin/just"), "coverage"],
+        [str(_tools.tool(ROOT, "just")), "coverage"],
         cwd=project,
         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **environment},
         capture_output=True,

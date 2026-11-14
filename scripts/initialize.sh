@@ -7,7 +7,8 @@
 set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 cd "$root"
-PATH="$root/.pixi/envs/default/bin:$root/.pixi/envs/cluster/bin:$root/.tools/bin:$PATH"
+tool_dirs=$(sh scripts/tool-dirs.sh dirs "$root")
+PATH="$tool_dirs:$PATH"
 PYTHONDONTWRITEBYTECODE=1
 export PATH PYTHONDONTWRITEBYTECODE
 git rev-parse --is-inside-work-tree > /dev/null
@@ -21,8 +22,9 @@ command -v pixi > /dev/null ||
 pixi install --locked
 
 # What conda-forge lacks (rebar3, ripsecrets, editorconfig-checker), each
-# refused unless its sha256 matches tools.txt.
-sh scripts/install-tools.sh tools.txt .tools/bin
+# refused unless its sha256 matches tools.txt. They go in the last tool
+# directory, after everything pixi installs.
+sh scripts/install-tools.sh tools.txt "${tool_dirs##*:}"
 
 # Gleam's hex packages into build/, so later builds run offline. The pre-check
 # first: `gleam deps download` would silently rewrite a drifted manifest.toml.
