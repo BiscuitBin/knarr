@@ -5,8 +5,8 @@
 **What to build:** The repository has one way to get its tools.
 
 - `pixi.toml`, `pixi.lock`, `tools.txt`, the installer script and its tests are deleted, with their git attributes, ignore entries and tool excludes.
-- The seam loses the pixi backend and the `KNARR_TOOLS` selector. `lock-check` and `env-check` lose their pixi halves, and the Allium runner reads its expected version from the held-versions file.
-- The temporary test that held `pixi.toml`'s `erlang` pin equal to the held-versions file is deleted.
+- The seam loses the pixi backend and the `KNARR_TOOLS` selector, with the refusals of an unknown value in the `tool` verb, `with-env.sh`, `initialize.sh` and the `check` guard. `lock-check` and `env-check` lose their pixi halves, and the Allium runner loses its `tools.txt` branch: from 07 it already reads `pins.toml` under the Nix backend.
+- The temporary test that held `pixi.toml`'s `erlang` pin equal to `pins.toml` is deleted.
 - The checker suite's groups and shared-input list stop naming the deleted files.
 - `just initialize` refuses when a leftover `.pixi/` or `.tools/` directory exists, and says to remove it. The bootstrap evidence scripts CI runs prepend those directories, so a stale copy would shadow the Nix tools.
 - A last sweep of live text: comments, recipe descriptions, hook-config headers and any handbook page still naming pixi.

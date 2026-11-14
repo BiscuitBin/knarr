@@ -26,13 +26,13 @@ Where the evidence changes a later ticket in this round, this ticket corrects th
 
 **Status:** ready-for-agent
 
-- [ ] Decision 0017 exists with the house frontmatter and sections, and each Verify answer links an evidence file.
-- [ ] It is registered in `docs/manifest.yml`, `docs/decisions/README.md` and `docs/README.md`, and `CHANGELOG.md` has an Unreleased entry.
-- [ ] Decision 0003 gains one "superseded by Decision 0017" note. Its body is unchanged.
-- [ ] The record lists every fact not yet run on aarch64-darwin, and no Verify answer claims the Mac.
-- [ ] The held-version list names, for each entry, what depends on the exact version.
+- [x] Decision 0017 exists with the house frontmatter and sections, and each Verify answer links an evidence file.
+- [x] It is registered in `docs/manifest.yml`, `docs/decisions/README.md` and `docs/README.md`, and `CHANGELOG.md` has an Unreleased entry.
+- [x] Decision 0003 gains one "superseded by Decision 0017" note. Its body is unchanged.
+- [x] The record lists every fact not yet run on aarch64-darwin, and no Verify answer claims the Mac.
+- [x] The held-version list names, for each entry, what depends on the exact version.
 - [ ] Tickets 07 to 13 and the round README agree with the record. Any **Blocked by** line that changed is reflected in the diagram and the waves table.
-- [ ] `just docs-check` passes.
-- [ ] `just check` ends with "All checks passed and the worktree is unchanged."
+- [x] `just docs-check` passes.
+- [x] `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes

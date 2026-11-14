@@ -13,6 +13,7 @@
   - the path prek writes into the git hook still resolves after a lock move;
   - a fresh clone with only Nix installed can reach `just`.
 - **The gate, offline.** The whole of `just check` run from that prefix with the network off, with timings for the lock and environment checks and a record of anything they write.
+- **What the host supplies.** [Decision 0017](../../../docs/decisions/0017-nix-owns-the-toolchain.md) leaves `sed`, `awk`, `find`, `diff` and the CA store to the host and takes `perl` from the flake. On the Mac those are the BSD utilities and the keychain: whether Nix-built lychee and Erlang load the keychain's certificates with the network off, and whether the flake's perl is the one the release scripts find.
 - **Differences from Linux.** Every place the Mac disagrees with 01's evidence or with what Decision 0017 recorded as unverified on darwin: a package missing from the binary cache, a tool that behaves differently, or a finding that is not on 01's version-difference list.
 
 Where a finding contradicts Decision 0017, this ticket adds a dated note to the record and corrects ticket 10.

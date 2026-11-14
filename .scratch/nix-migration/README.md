@@ -7,7 +7,7 @@ What the maintainer settled before the tickets were drafted:
 - Nix replaces pixi in the prerequisite list. Docker, git and a POSIX shell stay on the host. Nothing else on a machine is managed by Nix: no nix-darwin, no home-manager, no global profile.
 - Hex packages stay with gleam. `gleam.toml` and `manifest.toml` keep pinning them, and `just initialize` keeps one `gleam deps download` step.
 - The shipped image moves too, so the round ends with `pixi.toml`, `pixi.lock`, `tools.txt` and `scripts/install-tools.sh` deleted.
-- One locked nixpkgs revision supplies ordinary tools. An exact version is held only where evidence or a rule depends on it: Erlang/OTP with its OpenSSL, Gleam, and the Kubernetes skew caps (kind, kubectl, node images).
+- One locked nixpkgs revision supplies ordinary tools. An exact version is held only where evidence or a rule depends on it: Erlang/OTP with its OpenSSL, Gleam, and the Kubernetes skew caps (kind, kubectl, node images). Corrected by 06 from 01's evidence: the flake has three locked nixpkgs inputs, not one. The main input follows `nixpkgs-unstable` and supplies every ordinary tool and Erlang; a second, pinned by revision, exists only to hold Gleam 1.19.0; a third, following `nixos-26.05`, exists only to hold kubectl inside the skew cap. OpenSSL is not held exactly: it is whatever the held Erlang is built against, 3.5.9 at the candidate ([Decision 0017](../../docs/decisions/0017-nix-owns-the-toolchain.md)).
 - The other pinned downloads are out of scope: the kind node and kwok images, the KEDA manifest, the observability chart tarballs, the vendored Kubernetes schemas, action SHAs and the Ubuntu base digest stay as they are.
 
 The order is expand–contract, because pixi paths are read by the gate itself (`lock-check`, `env-check`, the pin tests) and no partial swap lands green. 01 and 05 gather the Nix facts and 06 records the decision. 04 confirms them on the Mac before 10. 02 and 03 put one seam in front of the tool directories while everything still runs on pixi. 07 adds the flake beside pixi, selected by `KNARR_TOOLS`. 08 and 09 move the cluster tools and the images. 10 flips the default. 13 deletes pixi.
@@ -75,7 +75,7 @@ The maintainer chose on 2026-11-14 to start the round before installing Nix on t
 
 From 07 until 13 the repository carries both backends. `KNARR_TOOLS=pixi|nix` selects one for a whole command, never a mix. The tracked default is pixi until 10 and Nix after it. One backend is authoritative for each commit: the gate must pass on the default, and the other is a measurement.
 
-The OTP version has one owner throughout. Until 07 it is the `erlang` pin in `pixi.toml`. From 07 it is the held-versions file the flake reads, and a test holds `pixi.toml` equal to it until 13 deletes `pixi.toml`.
+The OTP version has one owner throughout. Until 07 it is the `erlang` pin in `pixi.toml`. From 07 it is the held-versions file the flake reads, `pins.toml`, and a test holds `pixi.toml` equal to it until 13 deletes `pixi.toml`.
 
 ## No release between 09 and 11
 

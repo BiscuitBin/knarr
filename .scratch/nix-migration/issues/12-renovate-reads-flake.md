@@ -2,10 +2,12 @@
 
 **Context:** [Decision 0014](../../../docs/decisions/0014-dependency-updates-and-audit.md) has Renovate propose every pin move. Its `pixi` manager tracks `pixi.toml` and `pixi.lock`, package rules group and hold the conda pins, and the pin tests assert those rules. [09](09-images-from-flake.md) and [10](10-nix-becomes-the-gate.md) already moved the rules for the build-stage image and the setup action. What is left is the manager itself. [05](05-nix-ci-renovate-spike.md) recorded what Renovate's nix manager extracts.
 
-**What to build:** Renovate proposes moves of the flake's inputs and of each pin in the held-versions file, in place of the pixi ones.
+**What to build:** Renovate proposes moves of the flake's inputs, in place of the pixi ones, and says when a held version in `pins.toml` has a newer release.
+
+[01](01-nix-container-spike.md) found that a held version moves by moving the revision of the input that carries it, then editing `pins.toml`: the flake asserts each held package against the file, so an edit to `pins.toml` alone fails evaluation, and a move of the main input that loses a held version fails too. Nothing proposes such a move automatically. Finding a revision that carries the new version is manual work today; 01 found Gleam's by reading the channel releases on releases.nixos.org ([holds.txt](../evidence/01/holds.txt)).
 
 - The nix manager replaces the `pixi` manager, with lock maintenance for `flake.lock` under the same dashboard-approval rule the pixi lock had.
-- Each held version has a way to be proposed. Where 05 showed the nix manager cannot read the held-versions file, a regex manager does.
+- Each held version has a way to be noticed. Where 05 showed the nix manager cannot read `pins.toml`, a regex manager does. A proposal that edits `pins.toml` alone cannot pass the gate, so the routine for completing it (find a revision, move the input, rerun the gate) is written in the contributing guide, and the ticket records which held versions stay a manual move.
 - Erlang and the local-cluster group keep waiting for approval. The Kubernetes 1.35 and etcd 3.6 caps are unchanged.
 - The pin tests' conda and local-cluster cases are rewritten for the new rules.
 - The contributing guide's pin-move routine names the Nix commands, and Decision 0014 gains an amendment note.
