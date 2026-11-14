@@ -10,7 +10,7 @@
 
 **MVP critical path:** no.
 
-**Status:** ready-for-agent
+**Status:** done on its branch, awaiting a pull request. See [the hand-back notes](#hand-back-notes).
 
 - [x] One function under `scripts/` reads the `erlang` pin from `pixi.toml`, and `image-check` and `hex-audit` both call it. Test fixtures that write a sample `pixi.toml` are not readers.
 - [x] The absolute prefix `/opt/knarr/.pixi/envs/runtime` is assigned in one place under `scripts/checks/`, and the other checker and the tests import it. Comments, and tests that quote a Dockerfile line, are not counted. The ticket records the `git grep` output.
