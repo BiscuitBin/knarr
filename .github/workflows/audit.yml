@@ -31,7 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
   # OSV.dev's advisories for the hex packages manifest.toml locks and for the
-  # OTP release pixi.toml pins (Decision 0014).
+  # OTP release pins.toml holds (Decisions 0014 and 0017).
   hex-advisories:
     name: Hex advisories
     runs-on: ubuntu-24.04

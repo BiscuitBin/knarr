@@ -15,6 +15,7 @@ exclude: >-
     \.pixi/|
     \.tools/|
     \.nix/|
+    result(-[^/]*)?/|
     build/|
     ai_tmp/|
     pixi\.lock$

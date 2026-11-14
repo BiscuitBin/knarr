@@ -26,6 +26,8 @@
     ".pixi",
     ".tools",
     ".nix",
+    "result",
+    "result-*",
     "build",
     "ai_tmp",
     ".agents/skills/allium",

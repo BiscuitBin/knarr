@@ -6,6 +6,8 @@ exclude = [
   ".pixi/**",
   ".tools/**",
   ".nix/**",
+  "result/**",
+  "result-*/**",
   "build/**",
   "ai_tmp/**",
   "manifest.toml",

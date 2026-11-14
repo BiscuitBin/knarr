@@ -1,6 +1,8 @@
 #!/bin/sh
 # Ticket 07 evidence: the gate under KNARR_TOOLS=nix, with the network off, in
-# the clone setup.sh initialized. No tracked file differs from the commit.
+# the clone setup.sh initialized. No tracked file differs from the commit. A
+# `result` link from a plain `nix build` is in the tree while the gate runs, to
+# show that every tool skips it as it skips .nix/.
 # Usage (Mac): sh host.sh --offline sh /evidence/gate.sh > gate.txt
 set -eu
 clone=/work/clone
@@ -40,7 +42,9 @@ printf 'new store paths: %s; git status --short: %s lines\n' \
 printf 'files written outside the clone: %s\n' \
   "$(find "$HOME" /tmp -type f -newer /work/mark 2> /dev/null | sed "s,^$HOME/,~/," | tr '\n' ' ')"
 
-printf '\n== KNARR_TOOLS=nix just check\n'
+printf '\n== KNARR_TOOLS=nix just check, with a result link left by a nix build without --out-link\n'
+nix build --offline --no-update-lock-file .#default 2> /dev/null
+printf 'result -> %s; git status --short: %s lines\n' "$(readlink result)" "$(git status --short | wc -l)"
 start=$(date +%s.%N)
 status=0
 "$just" check > "$logs/check.log" 2>&1 || status=$?
@@ -50,3 +54,4 @@ printf '\n'
 grep -E 'allium (check|analyse):|Validated [0-9]+ pages|env-check:' "$logs/check.log" || true
 tail -n 1 "$logs/check.log"
 printf 'git status --short: %s lines\n' "$(git status --short | wc -l)"
+rm result

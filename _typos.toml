@@ -9,6 +9,8 @@ extend-exclude = [
   ".pixi/",
   ".tools/",
   ".nix/",
+  "result",
+  "result-*",
   "pixi.lock",
   "flake.lock",
   "build/",

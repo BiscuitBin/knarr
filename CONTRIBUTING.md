@@ -112,7 +112,7 @@ propose most of these edits as pull requests, held until ticket 44 activates
 it ([Decision 0014](docs/decisions/0014-dependency-updates-and-audit.md)). A
 proposal lands like any other change, and a reviewer checks the same steps:
 
-- **A conda package:** edit its `==` line in `pixi.toml`, run `pixi update <package>`, read the `pixi.lock` diff, commit both files, and rerun `just initialize`.
+- **A conda package:** edit its `==` line in `pixi.toml`, run `pixi update <package>`, read the `pixi.lock` diff, commit both files, and rerun `just initialize`. Erlang's version is held in `pins.toml` too ([Decision 0017](docs/decisions/0017-nix-owns-the-toolchain.md)): move its `[exact] erlang` with the pin; `test_pins.py` fails while the two differ, and the flake refuses a lock whose Erlang differs from it.
 - **A tools.txt download:** replace both platforms' lines with the new URL and sha256, and rerun `just initialize`.
 - **A Gleam dependency:** edit `gleam.toml`, run `gleam deps download` (or `gleam deps update`), read the `manifest.toml` diff, and commit both. The gate fails while the two disagree. The fake worker fixture is a second Gleam project, so a package it shares with knarr moves in `fixtures/fake_worker/gleam.toml` and its `manifest.toml` too, through `gleam deps download` there; `test_fake_worker_manifest.py` fails while the two projects lock different versions.
 
