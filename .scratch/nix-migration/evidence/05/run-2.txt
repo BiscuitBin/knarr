@@ -1,0 +1,532 @@
+
+=== Checker tests, no store cache
+--- Run sh .scratch/nix-migration/evidence/05/setup.sh default
+  date: 2026-11-14T21:36:04Z
+  runner: Linux x86_64, Ubuntu 24.04.5 LTS, 4 cores, 15 GiB memory
+  commit: cb3cd00877c55572f2defc14ec550d9ceeb6ed03
+  nix (Nix) 2.35.6, system x86_64-linux
+    experimental-features = fetch-tree flakes nix-command
+    sandbox = true
+    build-users-group = nixbld
+    max-jobs = 4
+    substituters = https://cache.nixos.org/
+    trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+    always-allow-substitutes = true
+    access-tokens: empty (no token)
+  store before: 73 paths, 115M
+  
+  nix build ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --out-link .pixi/envs/default: 28.4s
+    these 4 derivations will be built:
+    these 155 paths will be fetched (428.2 MiB download, 1.3 GiB unpacked):
+    -> /nix/store/…-knarr-tools
+    closure:  861.6 MiB
+  
+  store after: 6996 paths, 2.5G
+  git status --short: 0 lines
+  
+  == Hex packages, as just initialize fetches them
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml unchanged
+  both gleam deps download: 0.3s
+  
+  == Where each tool resolves on the Justfile PATH (the runner image ships its own copies of some)
+  gleam              /nix/store/…-gleam-1.19.0/bin/gleam
+  erl                /nix/store/…-erlang-29.1.2/lib/erlang/bin/erl
+  rebar3             /nix/store/…-rebar3-3.28.0/bin/rebar3
+  python3            /nix/store/…-python3-3.14.10-env/bin/python3.14
+  node               /nix/store/…-nodejs-slim-24.22.2/bin/node
+  just               /nix/store/…-just-1.59.0/bin/just
+  prek               /nix/store/…-prek-0.5.10/bin/prek
+  lychee             /nix/store/…-lychee-0.24.2/bin/lychee
+  markdownlint-cli2  /nix/store/…-markdownlint-cli2-0.24.0/bin/markdownlint-cli2
+  helm               /nix/store/…-kubernetes-helm-4.3.1/bin/helm
+  kubeconform        /nix/store/…-kubeconform-0.8.0/bin/kubeconform
+  hadolint           /nix/store/…-hadolint-2.14.0/bin/hadolint
+  allium             /nix/store/…-allium-3.6.1/bin/allium
+  kind               /usr/local/bin/kind
+  kubectl            /usr/bin/kubectl
+  kwokctl            not on PATH
+  grype              not on PATH
+  versions: gleam 1.19.0; OTP 29, erts 17.1.1; allium 3.6.1; just 1.59.0
+  allium on x86_64: ELF 64-bit LSB pie executable, x86-64, interpreter /nix/store/…-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+--- Run sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+  gate-scratch.patch without its run_allium.py hunk; git status --short:
+     M Justfile
+     M scripts/checks/validate_docs.py
+  uid 1001; .tools/bin/ripsecrets is -r-xr-xr-x, owner root in /nix/store/…
+  
+  just test-checkers-all: exit 1 in 192.0s
+  ================== 2 failed, 792 passed in 175.88s (0:02:55) ===================
+  failures by file:
+        2 scripts/checks/tests/test_ripsecrets_redacted.py
+  skipped:
+  error: recipe `test-checkers-all` failed on line 143 with exit code 1
+     M Justfile
+     M scripts/checks/validate_docs.py
+  ##[error]Process completed with exit code 1.
+
+=== Gate, no store cache
+--- Run sh .scratch/nix-migration/evidence/05/setup.sh default
+  date: 2026-11-14T21:36:04Z
+  runner: Linux x86_64, Ubuntu 24.04.5 LTS, 4 cores, 15 GiB memory
+  commit: cb3cd00877c55572f2defc14ec550d9ceeb6ed03
+  nix (Nix) 2.35.6, system x86_64-linux
+    experimental-features = fetch-tree flakes nix-command
+    sandbox = true
+    build-users-group = nixbld
+    max-jobs = 4
+    substituters = https://cache.nixos.org/
+    trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+    always-allow-substitutes = true
+    access-tokens: empty (no token)
+  store before: 73 paths, 115M
+  
+  nix build ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --out-link .pixi/envs/default: 28.2s
+    these 4 derivations will be built:
+    these 155 paths will be fetched (428.2 MiB download, 1.3 GiB unpacked):
+    -> /nix/store/…-knarr-tools
+    closure:  861.6 MiB
+  
+  store after: 6996 paths, 2.5G
+  git status --short: 0 lines
+  
+  == Hex packages, as just initialize fetches them
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml unchanged
+  both gleam deps download: 0.3s
+  
+  == Where each tool resolves on the Justfile PATH (the runner image ships its own copies of some)
+  gleam              /nix/store/…-gleam-1.19.0/bin/gleam
+  erl                /nix/store/…-erlang-29.1.2/lib/erlang/bin/erl
+  rebar3             /nix/store/…-rebar3-3.28.0/bin/rebar3
+  python3            /nix/store/…-python3-3.14.10-env/bin/python3.14
+  node               /nix/store/…-nodejs-slim-24.22.2/bin/node
+  just               /nix/store/…-just-1.59.0/bin/just
+  prek               /nix/store/…-prek-0.5.10/bin/prek
+  lychee             /nix/store/…-lychee-0.24.2/bin/lychee
+  markdownlint-cli2  /nix/store/…-markdownlint-cli2-0.24.0/bin/markdownlint-cli2
+  helm               /nix/store/…-kubernetes-helm-4.3.1/bin/helm
+  kubeconform        /nix/store/…-kubeconform-0.8.0/bin/kubeconform
+  hadolint           /nix/store/…-hadolint-2.14.0/bin/hadolint
+  allium             /nix/store/…-allium-3.6.1/bin/allium
+  kind               /usr/local/bin/kind
+  kubectl            /usr/bin/kubectl
+  kwokctl            not on PATH
+  grype              not on PATH
+  versions: gleam 1.19.0; OTP 29, erts 17.1.1; allium 3.6.1; just 1.59.0
+  allium on x86_64: ELF 64-bit LSB pie executable, x86-64, interpreter /nix/store/…-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+--- Run sh .scratch/nix-migration/evidence/05/gate.sh check
+  gate-scratch.patch without its run_allium.py hunk; git status --short:
+     M Justfile
+     M scripts/checks/validate_docs.py
+  uid 1001; .tools/bin/ripsecrets is -r-xr-xr-x, owner root in /nix/store/…
+  
+  just check: exit 0 in 137.5s
+  ==> just lock-check ==> just env-check ==> just manifest-check ==> just docs-check ==> just agents-check ==> just check-specs ==> just analyse-specs ==> just format-check ==> just lint-gleam ==> just test ==> just snapshots-check ==> just fake-worker-lint ==> just fake-worker-test ==> just test-checkers ==> just packaging-check ==> just chart-check ==> just toml-check ==> just lint ==> just check-clean 
+  All checks passed and the worktree is unchanged.
+     M Justfile
+     M scripts/checks/validate_docs.py
+
+=== Cluster shape setup, store cache
+--- Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+  Searching for a cache with the key "knarr-nix-spike05-x86_64-linux-cluster-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Cache hit for: knarr-nix-spike05-x86_64-linux-cluster-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7
+  Found a cache with the given "primary-key".
+  Restoring a cache with the key "knarr-nix-spike05-x86_64-linux-cluster-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Finished restoring the cache.
+  Merging databases.
+  Merging store databases "/home/runner/work/_temp/bebe1224-d2c3-4912-a095-c4a979350fc0/old.sqlite" and "/home/runner/work/_temp/bebe1224-d2c3-4912-a095-c4a979350fc0/new.sqlite"
+--- Run sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+  date: 2026-11-14T21:36:33Z
+  runner: Linux x86_64, Ubuntu 24.04.5 LTS, 4 cores, 15 GiB memory
+  commit: cb3cd00877c55572f2defc14ec550d9ceeb6ed03
+  nix (Nix) 2.35.6, system x86_64-linux
+    experimental-features = fetch-tree flakes nix-command
+    sandbox = true
+    build-users-group = nixbld
+    max-jobs = 4
+    substituters = https://cache.nixos.org/
+    trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+    always-allow-substitutes = true
+    access-tokens: empty (no token)
+  store before: 7990 paths, 3.3G
+  
+  nix build ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --out-link .pixi/envs/default: 4.6s
+    -> /nix/store/…-knarr-tools
+    closure:  861.6 MiB
+  
+  nix build ./.scratch/nix-migration/evidence/01#cluster --no-update-lock-file --out-link .pixi/envs/cluster: 1.4s
+    -> /nix/store/…-knarr-cluster-tools
+    closure:  391.4 MiB
+  
+  store after: 7990 paths, 3.3G
+  git status --short: 0 lines
+  
+  == Hex packages, as just initialize fetches them
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml unchanged
+  both gleam deps download: 0.3s
+  
+  == Where each tool resolves on the Justfile PATH (the runner image ships its own copies of some)
+  gleam              /nix/store/…-gleam-1.19.0/bin/gleam
+  erl                /nix/store/…-erlang-29.1.2/lib/erlang/bin/erl
+  rebar3             /nix/store/…-rebar3-3.28.0/bin/rebar3
+  python3            /nix/store/…-python3-3.14.10-env/bin/python3.14
+  node               /nix/store/…-nodejs-slim-24.22.2/bin/node
+  just               /nix/store/…-just-1.59.0/bin/just
+  prek               /nix/store/…-prek-0.5.10/bin/prek
+  lychee             /nix/store/…-lychee-0.24.2/bin/lychee
+  markdownlint-cli2  /nix/store/…-markdownlint-cli2-0.24.0/bin/markdownlint-cli2
+  helm               /nix/store/…-kubernetes-helm-4.3.1/bin/helm
+  kubeconform        /nix/store/…-kubeconform-0.8.0/bin/kubeconform
+  hadolint           /nix/store/…-hadolint-2.14.0/bin/hadolint
+  allium             /nix/store/…-allium-3.6.1/bin/allium
+  kind               /nix/store/…-kind-0.33.0/bin/kind
+  kubectl            /nix/store/…-kubectl-1.36.3/bin/kubectl
+  kwokctl            /nix/store/…-kwok-0.8.0/bin/kwokctl
+  grype              not on PATH
+  versions: gleam 1.19.0; OTP 29, erts 17.1.1; allium 3.6.1; just 1.59.0
+  cluster: kind v0.33.0; kubectl v1.36.3; kwokctl v0.8.0
+  allium on x86_64: ELF 64-bit LSB pie executable, x86-64, interpreter /nix/store/…-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+--- Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+  Trying to save a new cache with the key "knarr-nix-spike05-x86_64-linux-cluster-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Searching for a cache with the key "knarr-nix-spike05-x86_64-linux-cluster-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Cache hit for: knarr-nix-spike05-x86_64-linux-cluster-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7
+  Cache hit occurred on the "primary-key".
+  Not saving a new cache.
+
+=== Checker tests, store cache restored, never written
+--- Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+  Searching for a cache with the key "knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Cache hit for: knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7
+  Found a cache with the given "primary-key".
+  Restoring a cache with the key "knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Finished restoring the cache.
+  Merging databases.
+  Merging store databases "/home/runner/work/_temp/95a93015-dcbf-4043-be16-2d2337a32255/old.sqlite" and "/home/runner/work/_temp/95a93015-dcbf-4043-be16-2d2337a32255/new.sqlite"
+--- Run sh .scratch/nix-migration/evidence/05/setup.sh default
+  date: 2026-11-14T21:36:30Z
+  runner: Linux x86_64, Ubuntu 24.04.5 LTS, 4 cores, 15 GiB memory
+  commit: cb3cd00877c55572f2defc14ec550d9ceeb6ed03
+  nix (Nix) 2.35.6, system x86_64-linux
+    experimental-features = fetch-tree flakes nix-command
+    sandbox = true
+    build-users-group = nixbld
+    max-jobs = 4
+    substituters = https://cache.nixos.org/
+    trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+    always-allow-substitutes = true
+    access-tokens: empty (no token)
+  store before: 6996 paths, 2.5G
+  
+  nix build ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --out-link .pixi/envs/default: 3.7s
+    -> /nix/store/…-knarr-tools
+    closure:  861.6 MiB
+  
+  store after: 6996 paths, 2.5G
+  git status --short: 0 lines
+  
+  == Hex packages, as just initialize fetches them
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml unchanged
+  both gleam deps download: 0.6s
+  
+  == Where each tool resolves on the Justfile PATH (the runner image ships its own copies of some)
+  gleam              /nix/store/…-gleam-1.19.0/bin/gleam
+  erl                /nix/store/…-erlang-29.1.2/lib/erlang/bin/erl
+  rebar3             /nix/store/…-rebar3-3.28.0/bin/rebar3
+  python3            /nix/store/…-python3-3.14.10-env/bin/python3.14
+  node               /nix/store/…-nodejs-slim-24.22.2/bin/node
+  just               /nix/store/…-just-1.59.0/bin/just
+  prek               /nix/store/…-prek-0.5.10/bin/prek
+  lychee             /nix/store/…-lychee-0.24.2/bin/lychee
+  markdownlint-cli2  /nix/store/…-markdownlint-cli2-0.24.0/bin/markdownlint-cli2
+  helm               /nix/store/…-kubernetes-helm-4.3.1/bin/helm
+  kubeconform        /nix/store/…-kubeconform-0.8.0/bin/kubeconform
+  hadolint           /nix/store/…-hadolint-2.14.0/bin/hadolint
+  allium             /nix/store/…-allium-3.6.1/bin/allium
+  kind               /usr/local/bin/kind
+  kubectl            /usr/bin/kubectl
+  kwokctl            not on PATH
+  grype              not on PATH
+  versions: gleam 1.19.0; OTP 29, erts 17.1.1; allium 3.6.1; just 1.59.0
+  allium on x86_64: ELF 64-bit LSB pie executable, x86-64, interpreter /nix/store/…-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+--- Run sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+  gate-scratch.patch without its run_allium.py hunk; git status --short:
+     M Justfile
+     M scripts/checks/validate_docs.py
+  uid 1001; .tools/bin/ripsecrets is -r-xr-xr-x, owner root in /nix/store/…
+  
+  just test-checkers-all: exit 1 in 176.3s
+  ================== 2 failed, 792 passed in 163.22s (0:02:43) ===================
+  failures by file:
+        2 scripts/checks/tests/test_ripsecrets_redacted.py
+  skipped:
+  error: recipe `test-checkers-all` failed on line 143 with exit code 1
+     M Justfile
+     M scripts/checks/validate_docs.py
+  ##[error]Process completed with exit code 1.
+
+=== Cluster shape and amd64 image, no store cache
+--- Run sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+  date: 2026-11-14T21:36:05Z
+  runner: Linux x86_64, Ubuntu 24.04.5 LTS, 4 cores, 15 GiB memory
+  commit: cb3cd00877c55572f2defc14ec550d9ceeb6ed03
+  nix (Nix) 2.35.6, system x86_64-linux
+    experimental-features = fetch-tree flakes nix-command
+    sandbox = true
+    build-users-group = nixbld
+    max-jobs = 4
+    substituters = https://cache.nixos.org/
+    trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+    always-allow-substitutes = true
+    access-tokens: empty (no token)
+  store before: 73 paths, 115M
+  
+  nix build ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --out-link .pixi/envs/default: 29.2s
+    these 4 derivations will be built:
+    these 155 paths will be fetched (428.2 MiB download, 1.3 GiB unpacked):
+    -> /nix/store/…-knarr-tools
+    closure:  861.6 MiB
+  
+  nix build ./.scratch/nix-migration/evidence/01#cluster --no-update-lock-file --out-link .pixi/envs/cluster: 15.9s
+    these 7 paths will be fetched (100.5 MiB download, 352.5 MiB unpacked):
+    -> /nix/store/…-knarr-cluster-tools
+    closure:  391.4 MiB
+  
+  store after: 7990 paths, 3.3G
+  git status --short: 0 lines
+  
+  == Hex packages, as just initialize fetches them
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml unchanged
+  both gleam deps download: 0.3s
+  
+  == Where each tool resolves on the Justfile PATH (the runner image ships its own copies of some)
+  gleam              /nix/store/…-gleam-1.19.0/bin/gleam
+  erl                /nix/store/…-erlang-29.1.2/lib/erlang/bin/erl
+  rebar3             /nix/store/…-rebar3-3.28.0/bin/rebar3
+  python3            /nix/store/…-python3-3.14.10-env/bin/python3.14
+  node               /nix/store/…-nodejs-slim-24.22.2/bin/node
+  just               /nix/store/…-just-1.59.0/bin/just
+  prek               /nix/store/…-prek-0.5.10/bin/prek
+  lychee             /nix/store/…-lychee-0.24.2/bin/lychee
+  markdownlint-cli2  /nix/store/…-markdownlint-cli2-0.24.0/bin/markdownlint-cli2
+  helm               /nix/store/…-kubernetes-helm-4.3.1/bin/helm
+  kubeconform        /nix/store/…-kubeconform-0.8.0/bin/kubeconform
+  hadolint           /nix/store/…-hadolint-2.14.0/bin/hadolint
+  allium             /nix/store/…-allium-3.6.1/bin/allium
+  kind               /nix/store/…-kind-0.33.0/bin/kind
+  kubectl            /nix/store/…-kubectl-1.36.3/bin/kubectl
+  kwokctl            /nix/store/…-kwok-0.8.0/bin/kwokctl
+  grype              not on PATH
+  versions: gleam 1.19.0; OTP 29, erts 17.1.1; allium 3.6.1; just 1.59.0
+  cluster: kind v0.33.0; kubectl v1.36.3; kwokctl v0.8.0
+  allium on x86_64: ELF 64-bit LSB pie executable, x86-64, interpreter /nix/store/…-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+--- Run sh .scratch/nix-migration/evidence/05/image.sh
+  docker pull nixos/nix: 30.5s
+  docker pull ubuntu:24.04: 1.0s
+  date: 2026-11-14T21:37Z
+  docker: 28.0.4, linux/amd64
+  context: 32 files, 392K
+  
+  == Build times (both base images already pulled)
+  cold (--no-cache: every Nix path fetched again)        58 seconds
+  warm (nothing changed)                                  0 seconds
+  after an edit under src/ (flake layers cached)         13 seconds
+  source restored                                         0 seconds
+  
+  == The image
+  architecture amd64, user 10001:10001, entrypoint ["/opt/knarr/container-entrypoint.sh","/opt/knarr/shipment/entrypoint.sh"]
+  size (docker image inspect .Size): 282.1 MB
+  size (docker images):              282MB
+  layers of the final stage:
+    0B
+    0B
+    0B
+    0B
+    0B
+    292B
+    2B
+    1.55MB
+    202MB
+    0B
+    0B
+    78.2MB
+    0B
+    0B
+    0B
+  
+  == The runtime closure in the image
+  /opt/knarr/runtime -> /nix/store/…-knarr-runtime
+  19 store paths, 212M under /nix/store
+    acl-2.4.0   attr-2.6.0   bash-5.3p20   coreutils-9.12   erlang-29.1.2   gawk-5.4.1   gcc-16.2.0-lib   gcc-16.2.0-libgcc   glibc-2.44-57   gmp-with-cxx-6.3.0   gnused-4.10   knarr-runtime   libidn2-2.3.8   libunistring-1.4.2   ncurses-6.6   openssl-3.5.9   openssl-3.5.9-bin   xgcc-16.2.0-libgcc   zlib-1.3.2 
+  perl in the closure: 0
+  perl files under /nix/store: 0
+  bin: c_rehash ct_run dialyzer epmd erl erl_call erlc escript openssl run_erl to_erl typer 
+  largest paths:
+     134.0 MB  erlang-29.1.2
+      35.5 MB  glibc-2.44-57
+      10.4 MB  gcc-16.2.0-lib
+       9.0 MB  openssl-3.5.9
+       8.5 MB  ncurses-6.6
+  shipment: 2.7M
+  
+  == image-check's restrictions, applied by hand
+  docker run --pull=never --platform=linux/amd64 --read-only --cap-drop=ALL --security-opt=no-new-privileges
+    --tmpfs=/tmp:rw,noexec,nosuid,size=16m --memory=268435456 --memory-swap=268435456 (the chart limit, 256Mi)
+  ulimit -Sn through the entrypoint: 65536
+  OTP: build stage 29, runtime 29
+  id: uid=10001 gid=10001 groups=10001
+  
+  == The six TLS cases (bootstrap ticket 01's tls/run.sh) on the image's Erlang and OpenSSL
+  date: 2026-11-14T21:38Z
+  host: Linux x86_64
+  env: /opt/knarr/runtime
+  openssl: OpenSSL 3.5.9 29 Sep 2026 (Library: OpenSSL 3.5.9 29 Sep 2026) (/opt/knarr/runtime/bin/openssl)
+  escript: /opt/knarr/runtime/bin/escript
+  server.pem: OK
+  server-dns.pem: OK
+  X509v3 Subject Alternative Name: 
+      DNS:localhost, IP Address:127.0.0.1
+  otp_release 29, erts 17.1.1
+  crypto:info_lib() [{<<"OpenSSL">>,810549392,<<"OpenSSL 3.5.9 29 Sep 2026">>}]
+  ssl:versions() ['tlsv1.3','tlsv1.2']
+  ok   right CA, by name localhost                  want ok         got {ok,[{protocol,'tlsv1.3'}, ...
+  ok   right CA, by IP tuple (IP SAN)               want ok         got {ok,[{protocol,'tlsv1.3'}, ...
+  ok   wrong CA (ca-b), by name                     want unknown_ca got {error,{tls_alert,{unknown_ca, ...
+  ok   wrong CA (ca-b), by IP tuple                 want unknown_ca got {error,{tls_alert,{unknown_ca, ...
+  ok   right CA, wrong name (SNI wrong.example)     want hostname   got {error,{tls_alert,{bad_certificate, ...
+  ok   right CA, IP tuple, cert has no IP SAN       want hostname   got {error,{tls_alert,{bad_certificate, ...
+  tls_check: all 6 cases matched
+  
+  == The restricted container starts and serves
+  /readyz: ok (after 3 probes)
+  /metrics: knarr_startups_total 1
+  memory usage / limit: 49.63MiB / 256MiB
+  
+  == scripts/checks/image.py on this image, unchanged
+  exit 1
+    no conda-meta in /opt/knarr/.pixi/envs/runtime
+    RuntimeError: perl is still in the runtime environment
+  
+  image.sh, all of it: 77.3s
+--- Kind cluster from the cluster group (non-blocking)
+  test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+  python3 scripts/checks/cluster.py up "/home/runner/work/knarr/knarr"
+  Creating cluster "knarr-12fc945d" ...
+   • Ensuring node image (kindest/node:v1.35.8) 🖼️  ...
+   ✓ Ensuring node image (kindest/node:v1.35.8) 🖼️
+   • Preparing nodes 📦   ...
+   ✓ Preparing nodes 📦 
+   • Writing configuration 📜  ...
+   ✓ Writing configuration 📜
+   • Starting control-plane 🕹️  ...
+   ✓ Starting control-plane 🕹️
+   • Installing CNI 🔌  ...
+   ✓ Installing CNI 🔌
+   • Installing StorageClass 💾  ...
+   ✓ Installing StorageClass 💾
+   • Waiting ≤ 3m0s for control-plane = Ready ⏳  ...
+   ✓ Waiting ≤ 3m0s for control-plane = Ready ⏳
+   • Ready after 18s 💚
+  Set kubectl context to "kind-knarr-12fc945d"
+  You can now use your cluster with:
+  
+  kubectl cluster-info --context kind-knarr-12fc945d --kubeconfig /home/runner/work/knarr/knarr/.cluster/kubeconfig
+  
+  Have a question, bug, or feature request? Let us know! https://kind.sigs.k8s.io/#community 🙂
+  node/knarr-12fc945d-control-plane condition met
+  test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+  python3 scripts/checks/cluster.py ready "/home/runner/work/knarr/knarr"
+  node/knarr-12fc945d-control-plane condition met
+  cluster-up and cluster-ready: 39 seconds
+  The connection to the server localhost:8080 was refused - did you specify the right host or port?
+  Client Version: v1.37.2
+  Kustomize Version: v5.8.1
+  ##[error]Process completed with exit code 1.
+--- Run PATH="$PWD/.pixi/envs/default/bin:$PATH" just cluster-down
+  test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+  python3 scripts/checks/cluster.py down "/home/runner/work/knarr/knarr"
+  Deleting cluster "knarr-12fc945d" ...
+  Deleted nodes: ["knarr-12fc945d-control-plane"]
+
+=== Gate, store cache
+--- Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+  Searching for a cache with the key "knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Cache hit for: knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7
+  Found a cache with the given "primary-key".
+  Restoring a cache with the key "knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Finished restoring the cache.
+  Merging databases.
+  Merging store databases "/home/runner/work/_temp/96328924-8d72-4203-9d9b-c8b05d4cd045/old.sqlite" and "/home/runner/work/_temp/96328924-8d72-4203-9d9b-c8b05d4cd045/new.sqlite"
+--- Run sh .scratch/nix-migration/evidence/05/setup.sh default
+  date: 2026-11-14T21:36:25Z
+  runner: Linux x86_64, Ubuntu 24.04.5 LTS, 4 cores, 15 GiB memory
+  commit: cb3cd00877c55572f2defc14ec550d9ceeb6ed03
+  nix (Nix) 2.35.6, system x86_64-linux
+    experimental-features = fetch-tree flakes nix-command
+    sandbox = true
+    build-users-group = nixbld
+    max-jobs = 4
+    substituters = https://cache.nixos.org/
+    trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+    always-allow-substitutes = true
+    access-tokens: empty (no token)
+  store before: 6996 paths, 2.5G
+  
+  nix build ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --out-link .pixi/envs/default: 4.8s
+    -> /nix/store/…-knarr-tools
+    closure:  861.6 MiB
+  
+  store after: 6996 paths, 2.5G
+  git status --short: 0 lines
+  
+  == Hex packages, as just initialize fetches them
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml [requirements] matches gleam.toml
+  manifest.toml unchanged
+  both gleam deps download: 0.3s
+  
+  == Where each tool resolves on the Justfile PATH (the runner image ships its own copies of some)
+  gleam              /nix/store/…-gleam-1.19.0/bin/gleam
+  erl                /nix/store/…-erlang-29.1.2/lib/erlang/bin/erl
+  rebar3             /nix/store/…-rebar3-3.28.0/bin/rebar3
+  python3            /nix/store/…-python3-3.14.10-env/bin/python3.14
+  node               /nix/store/…-nodejs-slim-24.22.2/bin/node
+  just               /nix/store/…-just-1.59.0/bin/just
+  prek               /nix/store/…-prek-0.5.10/bin/prek
+  lychee             /nix/store/…-lychee-0.24.2/bin/lychee
+  markdownlint-cli2  /nix/store/…-markdownlint-cli2-0.24.0/bin/markdownlint-cli2
+  helm               /nix/store/…-kubernetes-helm-4.3.1/bin/helm
+  kubeconform        /nix/store/…-kubeconform-0.8.0/bin/kubeconform
+  hadolint           /nix/store/…-hadolint-2.14.0/bin/hadolint
+  allium             /nix/store/…-allium-3.6.1/bin/allium
+  kind               /usr/local/bin/kind
+  kubectl            /usr/bin/kubectl
+  kwokctl            not on PATH
+  grype              not on PATH
+  versions: gleam 1.19.0; OTP 29, erts 17.1.1; allium 3.6.1; just 1.59.0
+  allium on x86_64: ELF 64-bit LSB pie executable, x86-64, interpreter /nix/store/…-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+--- Run sh .scratch/nix-migration/evidence/05/gate.sh check
+  gate-scratch.patch without its run_allium.py hunk; git status --short:
+     M Justfile
+     M scripts/checks/validate_docs.py
+  uid 1001; .tools/bin/ripsecrets is -r-xr-xr-x, owner root in /nix/store/…
+  
+  just check: exit 0 in 135.2s
+  ==> just lock-check ==> just env-check ==> just manifest-check ==> just docs-check ==> just agents-check ==> just check-specs ==> just analyse-specs ==> just format-check ==> just lint-gleam ==> just test ==> just snapshots-check ==> just fake-worker-lint ==> just fake-worker-test ==> just test-checkers ==> just packaging-check ==> just chart-check ==> just toml-check ==> just lint ==> just check-clean 
+  All checks passed and the worktree is unchanged.
+     M Justfile
+     M scripts/checks/validate_docs.py
+--- Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+  Trying to save a new cache with the key "knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Searching for a cache with the key "knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7".
+  Cache hit for: knarr-nix-spike05-x86_64-linux-default-1d42eb974126f7ab4ae70782553049b33f009fc0b001ff090d135dc4985424e7
+  Cache hit occurred on the "primary-key".
+  Not saving a new cache.

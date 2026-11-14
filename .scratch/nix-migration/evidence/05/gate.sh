@@ -19,6 +19,10 @@ printf 'gate-scratch.patch without its run_allium.py hunk; git status --short:\n
 git status --short | sed 's/^/  /'
 
 just=./.pixi/envs/default/bin/just
+# The ripsecrets tests copy .tools/bin/ripsecrets with shutil.copy2, which
+# keeps the mode, and then write to the copy. Ticket 01 ran them as root.
+printf 'uid %s; .tools/bin/ripsecrets is %s\n' "$(id -u)" \
+  "$(stat -L -c '%A, owner %U' .tools/bin/ripsecrets) in $(readlink -f .tools/bin/ripsecrets | cut -c1-11)…"
 start=$(date +%s.%N)
 status=0
 "$just" "$recipe" > "$log" 2>&1 || status=$?

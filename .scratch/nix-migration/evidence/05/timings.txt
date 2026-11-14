@@ -1,0 +1,192 @@
+run 43642997847, attempt 1, commit a797c38bcb3e0c9d8bb2ed41da401f85582412d2, push on spike/nix-ci-05, completed failure
+https://github.com/BiscuitBin/knarr/actions/runs/43642997847
+
+Checker tests, no store cache: failure, 234 s on GitHub Actions 1000001598
+      1 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     30 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    193 s  failure  Run sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+      1 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Checker tests, store cache restored, never written: failure, 232 s on GitHub Actions 1000001599
+      1 s  success  Set up job
+      2 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+      0 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+     31 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    193 s  failure  Run sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+      0 s  skipped  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Cluster shape and amd64 image, no store cache: success, 214 s on GitHub Actions 1000001596
+      1 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      3 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     49 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+    112 s  success  Run sh .scratch/nix-migration/evidence/05/image.sh
+     42 s  success  Kind cluster from the cluster group (non-blocking)
+      3 s  success  Run PATH="$PWD/.pixi/envs/default/bin:$PATH" just cluster-down
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Cluster shape setup, store cache: success, 69 s on GitHub Actions 1000001600
+      2 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+      1 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+     40 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+     20 s  success  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Gate, no store cache: success, 157 s on GitHub Actions 1000001597
+      1 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      3 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     30 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    120 s  success  Run sh .scratch/nix-migration/evidence/05/gate.sh check
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Gate, store cache: success, 166 s on GitHub Actions 1000001601
+      1 s  success  Set up job
+      2 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      3 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+      0 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+     30 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    118 s  success  Run sh .scratch/nix-migration/evidence/05/gate.sh check
+     10 s  success  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      1 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+run 43643668469, attempt 1, commit cb3cd00877c55572f2defc14ec550d9ceeb6ed03, push on spike/nix-ci-05, completed failure
+https://github.com/BiscuitBin/knarr/actions/runs/43643668469
+
+Checker tests, no store cache: failure, 233 s on GitHub Actions 1000001616
+      1 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     31 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    192 s  failure  Run sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Checker tests, store cache restored, never written: failure, 219 s on GitHub Actions 1000001620
+      2 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      3 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     27 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      8 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    176 s  failure  Run sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+      0 s  skipped  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Cluster shape and amd64 image, no store cache: success, 209 s on GitHub Actions 1000001619
+      1 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     48 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+    109 s  success  Run sh .scratch/nix-migration/evidence/05/image.sh
+     41 s  success  Kind cluster from the cluster group (non-blocking)
+      2 s  success  Run PATH="$PWD/.pixi/envs/default/bin:$PATH" just cluster-down
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Cluster shape setup, store cache: success, 49 s on GitHub Actions 1000001618
+      2 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     29 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+     11 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+      0 s  success  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      1 s  success  Complete job
+
+Gate, no store cache: success, 176 s on GitHub Actions 1000001617
+      1 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      5 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     30 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    138 s  success  Run sh .scratch/nix-migration/evidence/05/gate.sh check
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Gate, store cache: success, 174 s on GitHub Actions 1000001621
+      1 s  success  Set up job
+      2 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     21 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      8 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    136 s  success  Run sh .scratch/nix-migration/evidence/05/gate.sh check
+      0 s  success  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+run 43644038497, attempt 1, commit 23f498478943b73f65a4a081f5c08d559b60b9d4, push on spike/nix-ci-05, completed failure
+https://github.com/BiscuitBin/knarr/actions/runs/43644038497
+
+Checker tests, no store cache: failure, 224 s on GitHub Actions 1000001640
+      1 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     36 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    178 s  failure  Run sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Checker tests, store cache restored, never written: failure, 189 s on GitHub Actions 1000001637
+      2 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      3 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     21 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      6 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    154 s  failure  Run sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+      0 s  skipped  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Cluster shape and amd64 image, no store cache: success, 171 s on GitHub Actions 1000001641
+      1 s  success  Set up job
+      2 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     36 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+     85 s  success  Run sh .scratch/nix-migration/evidence/05/image.sh
+     39 s  success  Kind cluster from the cluster group (non-blocking)
+      1 s  success  Run PATH="$PWD/.pixi/envs/default/bin:$PATH" just cluster-down
+      1 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Cluster shape setup, store cache: success, 48 s on GitHub Actions 1000001639
+      1 s  success  Set up job
+      2 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     28 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+     11 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+      0 s  success  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      1 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Gate, no store cache: success, 171 s on GitHub Actions 1000001636
+      1 s  success  Set up job
+      2 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      4 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     30 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    132 s  success  Run sh .scratch/nix-migration/evidence/05/gate.sh check
+      0 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
+Gate, store cache: success, 177 s on GitHub Actions 1000001638
+      1 s  success  Set up job
+      1 s  success  Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      5 s  success  Run cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086
+     21 s  success  Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      9 s  success  Run sh .scratch/nix-migration/evidence/05/setup.sh default
+    136 s  success  Run sh .scratch/nix-migration/evidence/05/gate.sh check
+      0 s  success  Post Run nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569
+      1 s  success  Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      0 s  success  Complete job
+
