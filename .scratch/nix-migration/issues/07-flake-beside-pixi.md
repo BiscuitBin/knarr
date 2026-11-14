@@ -13,6 +13,7 @@
 - **Nix commands.** Every Nix command a recipe or script runs carries `--no-update-lock-file`; without it a drifted lock is rewritten and the command exits 0. No recipe runs `nix develop`, `nix shell` or `nix run`.
 - **lock-check.** Under the Nix backend it runs `nix flake lock --no-update-lock-file --offline`, the check Decision 0017 names.
 - **env-check.** Under the Nix backend it proves three things, as 01's [env-check.sh](../evidence/01/env-check.sh) does: the out-link resolves into the store; it is the environment this commit describes; and the versions `pins.toml` holds match what is installed, with openssl compared against the OpenSSL the flake built Erlang with.
+- **Tests that copy a store file.** On the x86_64 runner [05](05-nix-ci-renovate-spike.md) saw two ripsecrets wrapper tests fail under the Nix environment ([README](../evidence/05/README.md#4-the-checker-tests-on-the-runner)): their `worktree` fixture copies `.tools/bin/ripsecrets` with `shutil.copy2`, which keeps a store file's read-only mode, and then writes to the copy as a non-root user. The fixture copies without the mode (`shutil.copy`, or a `chmod` after the copy), and any other test that copies a tool and writes to the copy does the same.
 - **Ignores.** The out-link and Nix's `result` links get ignore entries and the same tool excludes `.pixi/` has, so the read-only gate does not see them as changes. `flake.lock` gets the treatment `pixi.lock` has: excluded from the spelling check, marked generated in the git attributes, and still diffable.
 
 CI has no Nix until [10](10-nix-becomes-the-gate.md). Every checker test this ticket adds must pass on a runner with no Nix present, and the boxes that need the Nix backend are proved by local transcripts in the hand-back notes.
@@ -32,6 +33,7 @@ CI has no Nix until [10](10-nix-becomes-the-gate.md). Every checker test this ti
 - [ ] The Nix lock check exits non-zero on a drifted copy and leaves `flake.lock` byte-identical.
 - [ ] The Nix environment check fails after a simulated lock move, with a message that says to run `just initialize`.
 - [ ] After a simulated lock move and a fresh `KNARR_TOOLS=nix just initialize`, a commit runs the hooks with the new environment's prek, and the hook names no store path.
+- [ ] Under `KNARR_TOOLS=nix`, run as a non-root user, the ripsecrets wrapper tests pass, and `just test-checkers-all` has no failure from a read-only store file.
 - [ ] An unknown `KNARR_TOOLS` value leaves `just --list` working, and `just check`, a hook and `just initialize` each exit 2 with a message naming the variable.
 - [ ] A policy test holds `pixi.toml`'s `erlang` pin equal to the held-versions file, and another checks `flake.lock`'s shape with the standard library, so the lock cannot rot while pixi is the default.
 - [ ] `flake.nix` passes the spelling, editorconfig and secrets hooks, and `flake.lock` does not trip the spelling or large-file hooks.
