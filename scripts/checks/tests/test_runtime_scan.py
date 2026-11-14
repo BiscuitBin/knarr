@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import _runtime
 import runtime_scan
 
 IMAGE = "knarr:test"
@@ -122,7 +123,7 @@ def test_the_runtime_environment_is_copied_out_and_scanned_with_image_scans_thre
     copy = tmp_path / "runtime-scan/runtime"
     assert docker.commands == [
         ["docker", "create", "--pull=never", IMAGE],
-        ["docker", "cp", f"{CONTAINER}:/opt/knarr/.pixi/envs/runtime", str(copy)],
+        ["docker", "cp", f"{CONTAINER}:{_runtime.PREFIX}", str(copy)],
         ["docker", "rm", "--force", CONTAINER],
         ["grype", "-vv", f"dir:{copy}", "--only-fixed", "--fail-on", "high"],
     ]

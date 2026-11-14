@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import _runtime
 import hex_audit
 from conftest import REPOSITORY
 
@@ -88,14 +89,53 @@ def test_a_manifest_it_cannot_read_cannot_be_audited(manifest: str) -> None:
         hex_audit.hex_packages(manifest)
 
 
-def test_the_otp_release_is_the_exact_erlang_pin() -> None:
-    assert hex_audit.otp_release(PIXI_TOML) == "29.1.1"
+def test_the_subjects_end_with_the_otp_pin_the_shared_reader_returns(project: Path) -> None:
+    assert hex_audit.subjects(project) == SUBJECTS
 
 
 @pytest.mark.parametrize("pin", ['">=29.1.1"', '"29.1.*"', '"==29.1.1,<30"'])
-def test_an_erlang_pin_that_is_not_exact_cannot_be_audited(pin: str) -> None:
-    with pytest.raises(hex_audit.CannotDecideError, match="erlang"):
-        hex_audit.otp_release(PIXI_TOML.replace('"==29.1.1"', pin))
+def test_an_erlang_pin_that_is_not_exact_cannot_be_audited(project: Path, pin: str) -> None:
+    (project / "pixi.toml").write_text(PIXI_TOML.replace('"==29.1.1"', pin))
+    with pytest.raises(
+        hex_audit.CannotDecideError, match=r"^the erlang pin .+ is not one exact version$"
+    ) as refused:
+        hex_audit.subjects(project)
+    assert isinstance(refused.value.__cause__, _runtime.OtpPinError)
+
+
+def _never_asked(_body: object) -> object:
+    raise AssertionError("the audit asked OSV.dev without an OTP pin")
+
+
+@pytest.mark.parametrize(
+    ("pixi_toml", "reason"),
+    [
+        pytest.param(
+            PIXI_TOML.replace("==29.1.1", ">=29.1.1"),
+            "the erlang pin '>=29.1.1' is not one exact version",
+            id="not exact",
+        ),
+        pytest.param(
+            '[dependencies]\ngleam = "==1.19.0"\n',
+            "pixi.toml has no erlang pin in [feature.otp]: 'feature'",
+            id="missing",
+        ),
+        pytest.param(None, "pixi.toml'", id="no pixi.toml"),
+    ],
+)
+def test_main_cannot_decide_without_an_exact_otp_pin(
+    project: Path, capsys: pytest.CaptureFixture[str], pixi_toml: str | None, reason: str
+) -> None:
+    if pixi_toml is None:
+        (project / "pixi.toml").unlink()
+    else:
+        (project / "pixi.toml").write_text(pixi_toml)
+    code = hex_audit.main([str(project)], post=_never_asked)
+    out, err = capsys.readouterr()
+    assert code == 2
+    assert out == ""
+    assert err.startswith("hex-audit: cannot decide: ")
+    assert err.rstrip().endswith(reason)
 
 
 def test_the_query_asks_for_each_hex_release_and_the_otp_tag() -> None:

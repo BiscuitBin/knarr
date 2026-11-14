@@ -14,16 +14,16 @@ import secrets
 import subprocess
 import sys
 import time
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import _runtime
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME_ENV = "/opt/knarr/.pixi/envs/runtime"
 # Decision 0003's Verify 1: Erlang ssl against the openssl CLI's certificates.
 TLS_CHECK = ROOT / ".scratch/bootstrap/evidence/01/tls"
 
@@ -123,9 +123,9 @@ def verify_runtime_environment(image, common):
         image,
         "-c",
         f"""set -eu
-test -d {RUNTIME_ENV}/conda-meta || {{ echo 'no conda-meta in {RUNTIME_ENV}'; exit 1; }}
-test ! -e {RUNTIME_ENV}/bin/perl || {{ echo '{RUNTIME_ENV}/bin/perl'; exit 1; }}
-for record in {RUNTIME_ENV}/conda-meta/perl-*.json; do test ! -e "$record" || {{ echo "$record"; exit 1; }}; done""",
+test -d {_runtime.PREFIX}/conda-meta || {{ echo 'no conda-meta in {_runtime.PREFIX}'; exit 1; }}
+test ! -e {_runtime.PREFIX}/bin/perl || {{ echo '{_runtime.PREFIX}/bin/perl'; exit 1; }}
+for record in {_runtime.PREFIX}/conda-meta/perl-*.json; do test ! -e "$record" || {{ echo "$record"; exit 1; }}; done""",
     )
     print(
         checked(
@@ -136,7 +136,7 @@ for record in {RUNTIME_ENV}/conda-meta/perl-*.json; do test ! -e "$record" || {{
             "--entrypoint=sh",
             image,
             "/opt/tls-check/run.sh",
-            RUNTIME_ENV,
+            _runtime.PREFIX,
             "/tmp/tls",  # noqa: S108 - the container's own tmpfs
         )
     )
@@ -325,10 +325,7 @@ def main():
     if len(arguments) != 1:
         raise ValueError("usage: image.py [--fake-worker] <image>")
     image = arguments[0]
-    pin = tomllib.loads((ROOT / "pixi.toml").read_text())["feature"]["otp"]["dependencies"][
-        "erlang"
-    ]
-    expected = pin.removeprefix("==").split(".")[0]
+    expected = _runtime.otp_pin(ROOT).split(".")[0]
     inspected = json.loads(output("docker", "image", "inspect", image))[0]
     config = inspected["Config"]
     if config["User"] != "10001:10001":
