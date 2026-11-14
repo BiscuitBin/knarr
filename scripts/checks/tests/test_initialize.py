@@ -8,6 +8,7 @@ the network.
 
 from __future__ import annotations
 
+import platform
 import shutil
 import subprocess
 from pathlib import Path
@@ -25,6 +26,12 @@ HEX = [
     "prek install --overwrite --hook-type pre-commit",
 ]
 MISSING = {"pixi": "pixi is not installed", "nix": "Nix is not installed"}
+# install-tools.sh refuses a host tools.txt has no lines for, such as
+# aarch64-linux, where only the Nix backend runs (Decision 0017).
+TOOLS_TXT_HOST = (platform.system(), platform.machine()) in (
+    ("Darwin", "arm64"),
+    ("Linux", "x86_64"),
+)
 
 
 def stub(directory: Path, name: str, calls: Path, label: str, extra: str = "") -> None:
@@ -57,6 +64,7 @@ def initialize(
     )
 
 
+@pytest.mark.skipif(not TOOLS_TXT_HOST, reason="tools.txt pins no line for this host")
 def test_pixi_installs_the_lock_and_the_downloads_into_the_last_directory(
     repository: Path, tmp_path: Path
 ) -> None:
