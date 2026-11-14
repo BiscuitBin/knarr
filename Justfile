@@ -239,7 +239,7 @@ runtime-scan image=cluster_image: audit-tools
 
 [private]
 audit-tools:
-    sh scripts/tool-dirs.sh tool grype > /dev/null || { echo 'run just audit-install' >&2; exit 2; }
+    sh scripts/tool-group.sh check audit
 
 [group('check')]
 [doc('Fail on unformatted Gleam')]
@@ -325,7 +325,7 @@ image_platform := if arch() == "aarch64" { "linux/arm64" } else { "linux/amd64" 
 
 [private]
 cluster-tools:
-    sh scripts/tool-dirs.sh tool kind > /dev/null || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+    sh scripts/tool-group.sh check cluster
 
 [group('cluster')]
 [doc('Create or reuse this worktree cluster (may download images)')]
@@ -372,14 +372,14 @@ cluster-diagnostics: cluster-tools
     python3 scripts/checks/cluster.py diagnostics "{{ justfile_directory() }}"
 
 [group('setup')]
-[doc('Install the locked optional cluster environment (needs network)')]
+[doc('Install the optional cluster tools, kind and kubectl, and kwokctl under Nix (pixi, or KNARR_TOOLS=nix; needs network)')]
 cluster-install:
-    pixi install --locked -e cluster
+    sh scripts/tool-group.sh install cluster
 
 [group('setup')]
-[doc('Install the locked optional audit environment, grype (needs network)')]
+[doc('Install the optional audit tools: grype (pixi, or KNARR_TOOLS=nix; needs network)')]
 audit-install:
-    pixi install --locked -e audit
+    sh scripts/tool-group.sh install audit
 
 [group('cluster')]
 [doc('Verify image OTP ownership and restricted runtime startup')]

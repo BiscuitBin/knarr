@@ -283,8 +283,11 @@ PINS = """\
 erlang = "29.1.2"
 gleam = "1.19.0"
 allium = "3.6.1"
+kind = "0.33.0"
+kwokctl = "0.8.0"
 
 [minor]
+kubectl = "1.36"
 
 [floor]
 rebar3 = "3.28.0"
@@ -322,16 +325,25 @@ def flake(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return project
 
 
-def describes(tmp_path: Path, out: Path | str, openssl: str = "3.5.9", status: int = 0) -> None:
-    """The stand-in nix: records its arguments and answers with what the flake describes."""
+def describes(
+    tmp_path: Path,
+    out: Path | str,
+    openssl: str = "3.5.9",
+    status: int = 0,
+    cluster: Path | str = "",
+) -> None:
+    """The stand-in nix: records its arguments and answers with what the flake describes,
+    for the default group or, asked for `#cluster`, the cluster group."""
     host = tmp_path / "host"
     host.mkdir(exist_ok=True)
     answer = json.dumps({"out": str(out), "openssl": openssl})
+    cluster_answer = json.dumps({"out": str(cluster), "openssl": openssl})
     (host / "nix").write_text(
         "#!/bin/sh\n"
         f'printf "%s\\n" "$*" >> "{tmp_path / "nix-calls"}"\n'
         f"[ {status} = 0 ] || {{ echo 'error: cannot fetch input' >&2; exit {status}; }}\n"
-        f"printf '%s' '{answer}'\n"
+        f"case \"$*\" in *'#cluster '*) printf '%s' '{cluster_answer}' ;;"
+        f" *) printf '%s' '{answer}' ;; esac\n"
     )
     (host / "nix").chmod(0o755)
 
@@ -419,6 +431,119 @@ def test_nix_without_an_out_link_into_the_store_it_refuses(
     assert result.returncode == 2
     assert "run just initialize" in result.stderr
     assert not (tmp_path / "nix-calls").exists()
+
+
+# What each tool in the cluster group prints, as the versions in PINS have it.
+CLUSTER_REPORTS = {
+    "kind": "kind v0.33.0 go1.27.3 linux/arm64",
+    "kubectl": "Client Version: v1.36.3",
+    "kwokctl": "kwokctl version v0.8.0 go1.27.3 (linux/arm64)",
+}
+
+
+@pytest.fixture
+def cluster(flake: Path, tmp_path: Path) -> Path:
+    """The flake project with its cluster group installed as this commit describes it."""
+    group = tmp_path / "store" / "2222-knarr-cluster-tools"
+    (group / "bin").mkdir(parents=True)
+    for name, text in CLUSTER_REPORTS.items():
+        report(group / "bin", name, text)
+    (flake / ".nix" / "cluster").symlink_to(group)
+    describes(tmp_path, environment_of(flake), cluster=group)
+    return flake
+
+
+def cluster_of(project: Path) -> Path:
+    return (project / ".nix" / "cluster").readlink()
+
+
+def test_nix_without_the_cluster_group_asks_about_the_default_group_alone(
+    flake: Path, tmp_path: Path
+) -> None:
+    result = check(flake)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "#cluster" not in (tmp_path / "nix-calls").read_text()
+
+
+def test_nix_an_installed_cluster_group_that_matches_passes(cluster: Path, tmp_path: Path) -> None:
+    result = check(cluster)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert str(cluster_of(cluster)) in result.stdout
+    default, group = (tmp_path / "nix-calls").read_text().splitlines()
+    assert f"{cluster.resolve()}#default" in default
+    assert group.startswith("eval --json --offline --no-update-lock-file ")
+    assert f"{cluster.resolve()}#cluster " in group
+
+
+def test_nix_a_moved_cluster_group_fails_and_says_to_reinstall_it(
+    cluster: Path, tmp_path: Path
+) -> None:
+    moved = tmp_path / "store" / "3333-knarr-cluster-tools"
+    describes(tmp_path, environment_of(cluster), cluster=moved)
+    result = check(cluster)
+    assert result.returncode == 1
+    assert f"{cluster_of(cluster)}, but this commit describes {moved}" in result.stdout
+    assert "run just cluster-install" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("tool", "text", "drift"),
+    [
+        ("kind", "kind v0.32.0 go1.26 linux/arm64", "kind reports 0.32.0, pins.toml holds 0.33.0"),
+        (
+            "kubectl",
+            "Client Version: v1.37.2",
+            "kubectl reports 1.37.2, pins.toml holds minor 1.36",
+        ),
+        (
+            "kwokctl",
+            "kwokctl version v0.7.0 go1.26 (linux/arm64)",
+            "kwokctl reports 0.7.0, pins.toml holds 0.8.0",
+        ),
+    ],
+)
+def test_nix_a_cluster_tool_that_differs_from_its_hold_fails(
+    cluster: Path, tool: str, text: str, drift: str
+) -> None:
+    report(cluster_of(cluster) / "bin", tool, text)
+    result = check(cluster)
+    assert result.returncode == 1
+    assert drift in result.stdout
+    assert "run just cluster-install" in result.stdout
+
+
+def test_nix_kubectl_may_move_within_its_minor(cluster: Path) -> None:
+    report(cluster_of(cluster) / "bin", "kubectl", "Client Version: v1.36.9")
+    result = check(cluster)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_nix_a_missing_cluster_tool_fails(cluster: Path) -> None:
+    (cluster_of(cluster) / "bin" / "kwokctl").unlink()
+    result = check(cluster)
+    assert result.returncode == 1
+    assert "kwokctl cannot run" in result.stdout
+    assert "run just cluster-install" in result.stdout
+
+
+def test_nix_a_collected_cluster_group_fails_and_says_to_reinstall_it(
+    cluster: Path, tmp_path: Path
+) -> None:
+    link = cluster / ".nix" / "cluster"
+    link.unlink()
+    link.symlink_to(tmp_path / "store" / "collected")
+    result = check(cluster)
+    assert result.returncode == 1
+    assert "which is not in the store" in result.stdout
+    assert "run just cluster-install" in result.stdout
+    assert "#cluster" not in (tmp_path / "nix-calls").read_text()
+
+
+def test_nix_a_default_group_drift_still_says_to_initialize(cluster: Path, tmp_path: Path) -> None:
+    describes(tmp_path, tmp_path / "store" / "1111-knarr-tools", cluster=cluster_of(cluster))
+    result = check(cluster)
+    assert result.returncode == 1
+    assert "run just initialize" in result.stdout
 
 
 def test_an_unknown_backend_is_refused_by_name(

@@ -11,8 +11,12 @@ requires: []
 ## Setup and deployment
 
 Install the repository tools with `just initialize`, then the optional cluster
-environment with `pixi install --locked -e cluster`. These operations download
-packages; agents need explicit network authorization. Docker must be running.
+tools with `just cluster-install`. With `KNARR_TOOLS=nix` both build the
+flake's groups instead of pixi's environments, and every recipe below finds
+its tools there
+([Decision 0017](../decisions/0017-nix-owns-the-toolchain.md)). These
+operations download packages; agents need explicit network authorization.
+Docker must be running.
 The image build also downloads its locked build dependencies and base images.
 
 Run `just cluster-up`, `just image-build`, `just deploy`, then `just smoke`.

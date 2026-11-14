@@ -24,12 +24,13 @@ GROUPS = {
     ),
     "agents": ("validate_agents", ("scripts/checks/validate_agents.py",)),
     "environment": (
-        "env_check initialize install_tools install_hooks with_env tool_dirs",
+        "env_check initialize install_tools install_hooks with_env tool_dirs tool_group",
         (
             "scripts/initialize.sh",
             "scripts/install-*.sh",
             "scripts/with-env.sh",
             "scripts/tool-dirs.sh",
+            "scripts/tool-group.sh",
             "scripts/checks/_tools.py",
             "scripts/checks/env_check.py",
         ),

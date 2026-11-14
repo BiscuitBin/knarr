@@ -26,6 +26,12 @@ touches flake.lock:
     one at or above its floor, and openssl the version the flake built Erlang
     against.
 
+When the optional cluster group is installed (`just cluster-install`), it
+proves the same of that group's out-link, with a second evaluation: it is the
+group this commit describes, kind and kwokctl report the versions pins.toml
+holds exactly, and kubectl one in the minor it holds. Without the group it
+asks nothing more. The audit group's grype is not held, so it is not checked.
+
 Usage: python3 scripts/checks/env_check.py [project-directory]
 
 SPDX-License-Identifier: Apache-2.0
@@ -45,6 +51,7 @@ import _pins
 import _tools
 
 ENVIRONMENT = "default"
+CLUSTER = "cluster"
 LOCK_VERSION = 7
 ARCHIVES = (".conda", ".tar.bz2")
 NIX_EVAL = ("nix", "eval", "--json", "--offline", "--no-update-lock-file")
@@ -178,11 +185,15 @@ def _numbers(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in re.findall(r"\d+", version))
 
 
-def _held_drift(project: Path, tools: Path, openssl: str) -> list[str]:
+def _held(project: Path) -> dict[str, dict[str, str]]:
     try:
-        held = _pins.held(project)
+        return _pins.held(project)
     except _pins.PinsError as error:
         _refuse(str(error))
+
+
+def _held_drift(project: Path, tools: Path, openssl: str) -> list[str]:
+    held = _held(project)
     exact = held["exact"]
     reported = {
         "gleam": _reported([str(tools / "gleam"), "--version"], 1),
@@ -204,6 +215,62 @@ def _held_drift(project: Path, tools: Path, openssl: str) -> list[str]:
     return drift
 
 
+def _describe(project: Path, group: str) -> tuple[str, str] | str:
+    """The out path and OpenSSL version this commit's flake gives `group`, or why
+    it could not say."""
+    result = subprocess.run(
+        [*NIX_EVAL, f"{project}#{group}", "--apply", DESCRIBE],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        described = json.loads(result.stdout) if result.returncode == 0 else None
+        return described["out"], described["openssl"]
+    except ValueError, KeyError, TypeError:
+        return f"  this commit's flake does not evaluate offline: {result.stderr.strip()}"
+
+
+def _cluster_drift(project: Path) -> tuple[list[str], str | None]:
+    """The installed cluster group's drift, and its out-link's target when it has one.
+
+    Nothing is asked when the group is not installed: it is optional."""
+    link = _tools.prefix(project, CLUSTER)
+    if not os.path.lexists(link):
+        return [], None
+    try:
+        have = link.readlink()
+    except OSError:
+        return [f"  {link} is not an out-link"], None
+    if not (have / "bin").is_dir():
+        return [f"  {link} points at {have}, which is not in the store"], None
+    described = _describe(project, CLUSTER)
+    if isinstance(described, str):
+        return [described], None
+    if str(have) != described[0]:
+        return [f"  {link} is {have}, but this commit describes {described[0]}"], None
+    held = _held(project)
+    tools = have / "bin"
+    reported = {
+        "kind": _reported([str(tools / "kind"), "version"], 1),
+        "kubectl": _reported([str(tools / "kubectl"), "version", "--client"], 2),
+        "kwokctl": _reported([str(tools / "kwokctl"), "--version"], 2),
+    }
+    drift = []
+    for name, have_version in reported.items():
+        if have_version is None:
+            drift.append(f"  {name} cannot run")
+            continue
+        version = have_version.removeprefix("v")
+        if name == "kubectl":
+            minor = held["minor"][name]
+            if ".".join(version.split(".")[:2]) != minor:
+                drift.append(f"  {name} reports {version}, pins.toml holds minor {minor}")
+        elif version != held["exact"][name]:
+            drift.append(f"  {name} reports {version}, pins.toml holds {held['exact'][name]}")
+    return drift, str(have)
+
+
 def _nix(project: Path) -> int:
     project = project.resolve()
     link = _tools.prefix(project, ENVIRONMENT)
@@ -213,30 +280,33 @@ def _nix(project: Path) -> int:
         _refuse(f"{link} is not an out-link; run just initialize")
     if not (have / "bin").is_dir():
         _refuse(f"{link} points at {have}, which is not in the store; run just initialize")
-    result = subprocess.run(
-        [*NIX_EVAL, f"{project}#{ENVIRONMENT}", "--apply", DESCRIBE],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    try:
-        described = json.loads(result.stdout) if result.returncode == 0 else None
-        want, openssl = described["out"], described["openssl"]
-    except ValueError, KeyError, TypeError:
-        drift = [f"  this commit's flake does not evaluate offline: {result.stderr.strip()}"]
+    described = _describe(project, ENVIRONMENT)
+    if isinstance(described, str):
+        drift = [described]
+    elif str(have) != described[0]:
+        drift = [f"  {link} is {have}, but this commit describes {described[0]}"]
     else:
-        if str(have) != want:
-            drift = [f"  {link} is {have}, but this commit describes {want}"]
-        else:
-            drift = _held_drift(project, have / "bin", openssl)
-    if not drift:
+        drift = _held_drift(project, have / "bin", described[1])
+    cluster_drift, cluster = _cluster_drift(project)
+    if not drift and not cluster_drift:
         print(f"env-check: {link} is {have}, and the held versions match")
+        if cluster is not None:
+            print(
+                f"env-check: {_tools.prefix(project, CLUSTER)} is {cluster}, and the held versions match"
+            )
         return 0
-    print("\n".join(drift))
-    print(
-        "the installed tools differ from this commit's flake.lock or pins.toml; run just "
-        "initialize (it needs network for anything not already cached)"
-    )
+    if drift:
+        print("\n".join(drift))
+        print(
+            "the installed tools differ from this commit's flake.lock or pins.toml; run just "
+            "initialize (it needs network for anything not already cached)"
+        )
+    if cluster_drift:
+        print("\n".join(cluster_drift))
+        print(
+            "the installed cluster group differs from this commit's flake.lock or pins.toml; "
+            "run just cluster-install (it needs network for anything not already cached)"
+        )
     return 1
 
 

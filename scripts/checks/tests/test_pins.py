@@ -120,6 +120,39 @@ def test_pixi_toml_pins_the_erlang_pins_toml_holds() -> None:
     assert pin == "==" + _pins.version(REPOSITORY, "exact", "erlang")
 
 
+def test_pixi_and_tools_txt_pin_the_cluster_tools_pins_toml_holds() -> None:
+    """Both backends install the same kind, kubectl minor and kwokctl until ticket 13."""
+    pixi = tomllib.loads((REPOSITORY / "pixi.toml").read_text(encoding="utf-8"))
+    cluster = pixi["feature"]["cluster"]["dependencies"]
+    assert cluster["kubernetes-kind"] == "==" + _pins.version(REPOSITORY, "exact", "kind")
+    kubectl = cluster["kubernetes-client"].removeprefix("==")
+    assert kubectl.rsplit(".", 1)[0] == _pins.version(REPOSITORY, "minor", "kubectl")
+    lines = (REPOSITORY / "tools.txt").read_text(encoding="utf-8").splitlines()
+    kwokctl = {line.split()[1] for line in lines if line.startswith("kwokctl ")}
+    assert kwokctl == {_pins.version(REPOSITORY, "exact", "kwokctl")}
+
+
+# Where cluster.py pins each server's Kubernetes version: the kind node image,
+# the kwok API server image, and the version kwokctl is told to run.
+SERVERS = (
+    r"kindest/node:v(\d+)\.(\d+)\.",
+    r"kube-apiserver:v(\d+)\.(\d+)\.",
+    r'"KWOK_KUBE_VERSION"\] = "v(\d+)\.(\d+)\.',
+)
+
+
+def test_kubectl_is_held_within_one_minor_of_every_pinned_cluster() -> None:
+    """kubectl reaches a server one minor either side (Decision 0007's skew cap)."""
+    source = (REPOSITORY / "scripts" / "checks" / "cluster.py").read_text(encoding="utf-8")
+    major, minor = (int(part) for part in _pins.version(REPOSITORY, "minor", "kubectl").split("."))
+    for pattern in SERVERS:
+        found = re.findall(pattern, source)
+        assert found, pattern
+        for server_major, server_minor in found:
+            assert int(server_major) == major, pattern
+            assert abs(int(server_minor) - minor) <= 1, pattern
+
+
 def test_the_flake_lock_locks_the_three_inputs_and_nothing_else() -> None:
     lock = json.loads((REPOSITORY / "flake.lock").read_text(encoding="utf-8"))
     assert lock["version"] == 7
