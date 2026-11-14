@@ -1,6 +1,6 @@
-date: 2026-11-14T14:02Z
+date: 2026-11-14T14:30Z
 nix (Nix) 2.35.6 on aarch64-linux
-clone of 01-nix-container-spike at 9e98deb
+clone of 01-nix-container-spike at 3388942
 
 == The environment, built from the flake this branch tracks in its evidence directory
 nix build ./.scratch/nix-migration/evidence/01#default --out-link .pixi/envs/default: 1 seconds (store already populated)
@@ -11,7 +11,7 @@ git status --short: 0 lines
 
 == Hex packages, with only the environment directories prefixed
 manifest.toml [requirements] matches gleam.toml
- Downloaded 38 packages in 0.02s
+ Downloaded 38 packages in 0.03s
  Downloaded 22 packages in 0.01s
 manifest.toml unchanged
 git status --short: 0 lines

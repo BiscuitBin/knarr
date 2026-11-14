@@ -1,9 +1,9 @@
-date: 2026-11-14T14:15Z
+date: 2026-11-14T14:30Z
 host: Linux aarch64, Ubuntu 24.04.5 LTS
 nix (Nix) 2.35.6
 PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/nix/var/nix/profiles/default/bin
 network: off
-clone: 01-nix-container-spike at 9e98deb, git status --short: 0 lines
+clone: 01-nix-container-spike at 3388942, git status --short: 0 lines
 .pixi/envs/default -> /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
 .tools/bin -> ../.pixi/envs/default/bin
 on this host without the prefix: python3 absent, node absent, perl /usr/bin/perl, sed /usr/bin/sed
@@ -11,10 +11,10 @@ on this host without the prefix: python3 absent, node absent, perl /usr/bin/perl
 == 1. The checker tests run through the interpreter's own pytest
 sys.executable /work/gate/clone/.pixi/envs/default/bin/python3
 pytest 9.1.1 from /nix/store/ripj02n2fvni4s26p22qgr42h5zn3b06-python3-3.14.10-env/lib/python3.14/site-packages/pytest/__init__.py
-test-checkers          pass                0.26s
+test-checkers          pass                0.28s
 ============================= 168 passed in 0.11s ==============================
-test-checkers-all      FAIL (exit 1)     140.86s
-============ 65 failed, 714 passed, 13 skipped in 136.41s (0:02:16) ============
+test-checkers-all      FAIL (exit 1)     140.77s
+============ 65 failed, 714 passed, 13 skipped in 136.62s (0:02:16) ============
 failures by file:
      15 scripts/checks/tests/test_run_allium.py
      50 scripts/checks/tests/test_validate_docs.py
@@ -58,17 +58,17 @@ docs-check             FAIL (exit 1)       0.05s
 agents-check           pass                0.05s
 check-specs            FAIL (exit 1)       0.03s
 analyse-specs          FAIL (exit 1)       0.03s
-format-check           pass                0.05s
-lint-gleam             pass                0.99s
-test                   pass               94.93s
-snapshots-check        pass                0.45s
-fake-worker-lint       pass                0.57s
+format-check           pass                0.06s
+lint-gleam             pass                0.96s
+test                   pass               95.04s
+snapshots-check        pass                0.41s
+fake-worker-lint       pass                0.54s
 fake-worker-test       pass                4.83s
-test-checkers          pass                0.24s
-packaging-check        pass                0.10s
-chart-check            pass                0.15s
-toml-check             pass                0.09s
-lint                   pass                2.16s
+test-checkers          pass                0.26s
+packaging-check        pass                0.09s
+chart-check            pass                0.14s
+toml-check             pass                0.07s
+lint                   pass                1.60s
 why each one failed:
   lock-check     lock-check: 1: pixi: not found
   env-check      env-check: .pixi/envs/default/conda-meta/pixi is missing; run just initialize
@@ -80,12 +80,12 @@ just check itself stops at the first:
   exit 127: lock-check: 1: pixi: not found
 
 == 5. The Nix lock and environment checks: time, and what they write
-run 1: lock check 0.04s, environment check 2.24s
-run 2: lock check 0.03s, environment check 1.64s
-run 3: lock check 0.02s, environment check 1.58s
+run 1: lock check 0.02s, environment check 1.48s
+run 2: lock check 0.02s, environment check 1.49s
+run 3: lock check 0.02s, environment check 1.50s
 env-check: .pixi/envs/default is /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools, and the held versions match
 git status --short: 0 lines; new store paths: 0
-files written outside the clone: ~/.cache/nix/fetcher-cache-v4.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-wal ~/.cache/nix/eval-cache-v6/876dba63f2f72f6d0b822bf7b9dc7baa7a4fcc346e7c22852547d4fb1d5278f3.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-shm 
+files written outside the clone: ~/.cache/nix/fetcher-cache-v4.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-wal ~/.cache/nix/eval-cache-v6/99e2995001517b13b6461f8315aa46a1c459fe93b10dd6c8b36df12ee3320d03.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-shm 
 a drifted environment is refused:
   exit 2: env-check: .pixi/envs/default is /nix/store/48v2xkqaxpbmhy3dk82qwqy2asdi6hmj-knarr-tools, but this commit describes /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
 
@@ -93,12 +93,12 @@ a drifted environment is refused:
  M Justfile
  M scripts/checks/run_allium.py
  M scripts/checks/validate_docs.py
-just check: exit 0 in 107.40s
+just check: exit 0 in 106.14s
 ==> just lock-check ==> just env-check ==> just manifest-check ==> just docs-check ==> just agents-check ==> just check-specs ==> just analyse-specs ==> just format-check ==> just lint-gleam ==> just test ==> just snapshots-check ==> just fake-worker-lint ==> just fake-worker-test ==> just test-checkers ==> just packaging-check ==> just chart-check ==> just toml-check ==> just lint ==> just check-clean 
 All checks passed and the worktree is unchanged.
  M Justfile
  M scripts/checks/run_allium.py
  M scripts/checks/validate_docs.py
-test-checkers-all      pass              138.85s
-================= 779 passed, 13 skipped in 138.30s (0:02:18) ==================
+test-checkers-all      pass              136.35s
+================= 779 passed, 13 skipped in 135.75s (0:02:15) ==================
 git status --short after removing the patch: 0 lines

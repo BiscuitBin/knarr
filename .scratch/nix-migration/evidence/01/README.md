@@ -46,7 +46,7 @@ One row for every line of `pixi.toml` and `tools.txt`, at the candidate. [packag
 | `lychee` (pixi) | 0.24.2 | `lychee` | 0.24.2 | yes, yes, yes | |
 | `taplo` (pixi) | 0.10.0 | `taplo` | 0.10.0 | yes, yes, yes | |
 | `markdownlint-cli2` (pixi) | 0.23.3 | `markdownlint-cli2` | 0.24.0 | yes, yes, yes | **Floor: its bundled markdown-it, under Node.** Met, but not at the path the docs checker looks in; see [the PATH prefix](#7-the-gate-from-a-path-prefix). |
-| Node (conda dependency of markdownlint-cli2) | 26.10.0 | `nodejs` | 24.22.2 | yes, yes, yes | `nodejs` is a link farm over `nodejs-slim` that Nix always builds locally, in under a second. |
+| Node (conda dependency of markdownlint-cli2) | 26.10.0 | `nodejs-slim` | 24.22.2 | yes, yes, yes | Node without npm, which is what markdownlint-cli2's wrapper runs. `nodejs` is a link farm over it that Nix never substitutes and builds locally. |
 | `actionlint` (pixi) | 1.7.12 | `actionlint` | 1.7.12 | yes, yes, yes | |
 | `shellcheck` (pixi) | 0.11.0 | `shellcheck` | 0.11.0 | yes, yes, yes | |
 | `python` (pixi) | 3.14.8 | `python314` | 3.14.10 | yes, yes, yes | **Floor: 3.14 or later.** Met. |
@@ -74,12 +74,12 @@ What a machine with an empty store builds and fetches for each group of the prot
 
 | Group | aarch64-linux | x86_64-linux | aarch64-darwin |
 | --- | --- | --- | --- |
-| `default` | 6 built, 146 fetched, 413 MiB down, 1.3 GiB unpacked | 6 built, 155 fetched, 428 MiB, 1.3 GiB | 6 built, 141 fetched, 519 MiB, 2.2 GiB |
+| `default` | 5 built, 145 fetched, 413 MiB down, 1.3 GiB unpacked | 5 built, 154 fetched, 428 MiB, 1.3 GiB | 5 built, 140 fetched, 519 MiB, 2.2 GiB |
 | `cluster` | 2 built, 44 fetched, 126 MiB, 486 MiB | 2 built, 44 fetched, 135 MiB, 489 MiB | 2 built, 47 fetched, 105 MiB, 453 MiB |
 | `audit` | 2 built, 38 fetched, 59 MiB, 231 MiB | 2 built, 38 fetched, 62 MiB, 223 MiB | 2 built, 40 fetched, 52 MiB, 245 MiB |
 | `runtime` | 2 built, 38 fetched, 92 MiB, 285 MiB | 2 built, 38 fetched, 92 MiB, 273 MiB | 2 built, 41 fetched, 82 MiB, 294 MiB |
 
-Nothing compiles. The derivations built locally are the environments themselves (`buildEnv` and its `builder.pl`), the Python environment that joins the interpreter and pytest, the `nodejs` link farm, and allium's fetch and patch. On aarch64-linux the `default` group built from an empty store in 15 seconds on this machine's network.
+Nothing compiles. The derivations built locally are the environments themselves (`buildEnv` and its `builder.pl`), the Python environment that joins the interpreter and pytest, and allium's fetch and patch. On aarch64-linux the `default` group built from an empty store in 11 seconds on this machine's network ([fresh.txt](fresh.txt)).
 
 ### 3. Held versions
 
@@ -189,7 +189,7 @@ Outside the flake directory the check writes one file, Nix's own `fetcher-cache-
 
 **What the machine still has to supply.** These are facts about the repository, not about Nix, and each was hidden by pixi or by the host:
 
-- `sed`, `awk`, `find` and `diff`, and `/usr/bin:/bin` holding the usual utilities: two checker tests run with exactly that `PATH`.
+- `sed`, `awk`, `find` and `diff`, and `/usr/bin:/bin` holding the usual utilities: two checker test files run their cases with exactly that `PATH`.
 - `perl`, for `scripts/release/stamp-chart.sh` and `scripts/release/lib.sh`. Today the recipes find conda's perl in `.pixi/envs/default/bin`, where Erlang's conda package puts it. The Nix environment has none, so those scripts use the machine's perl unless the flake adds one.
 - A system CA store, with the network off too. Without it `just lint` fails 12 times with `No CA certificates were loaded from the system` (lychee builds its client before it knows it is offline), and the Erlang HTTP tests fail with `FailedLoadCacerts(NoCacertsFound)`.
 
@@ -286,4 +286,23 @@ Not yet recorded.
 
 ## What was evaluated but not run
 
-Not yet recorded.
+Everything above ran on aarch64-linux. For the other two systems the flake was evaluated and the cache was asked; nothing was fetched, built or run.
+
+### aarch64-darwin, for ticket 04 and Decision 0017
+
+1. **Every package's darwin output is in the binary cache.** All rows of the package table, the held gleam 1.19.0, erlang 29.1.2 with openssl 3.5.9, rebar3 3.28.0 and kubectl 1.36.3 answered `cached=yes`. None was downloaded, so no darwin signature or content was checked.
+2. **The plan for each group**: `default` builds 5 derivations locally and fetches about 519 MiB (2.2 GiB unpacked); `cluster`, `audit` and `runtime` build 2 each. The locally built derivations (the environments, the Python environment, allium) have never been built on darwin.
+3. **allium's darwin asset** has the sha256 `tools.txt` pins and is a Mach-O arm64 executable. Its derivation evaluates for darwin, where it does no patching. Whether the unpatched binary runs from the store there was not tried.
+4. **Erlang on darwin**: OTP 29.1.2 built against OpenSSL 3.5.9, by evaluation. `crypto:info_lib()`, the six TLS cases, and gleam 1.19.0 and rebar3 against it were not run.
+5. **The closure sizes differ.** By the cache's own numbers ([systems.txt](systems.txt)), `python314`'s closure is 1366 MiB on darwin against 229 MiB on aarch64-linux, and markdownlint-cli2's is 1507 MiB against 377 MiB. The `default` group unpacks to 2.2 GiB against 1.3 GiB. What the extra is was not looked into.
+6. **The four PATH-prefix cases, the offline gate, and the lock and environment check timings** were run on Linux only. Case 2 (the wrapper script) and case 3 (prek's store path) come from how nixpkgs packages those tools, so they should hold on darwin; that is an inference.
+7. **A linked worktree** was a `git worktree add` inside the container. The maintainer's worktrees on the Mac were not used.
+8. **What the machine supplies** differs on darwin: `sed`, `awk`, `find`, `diff` and `perl` are the BSD and system ones in `/usr/bin`, and the CA store is the keychain. Nix-built lychee and Erlang were not checked against it.
+9. **Nix itself**: the installer, flakes without machine configuration (here it was `NIX_CONFIG` in the container's environment and nothing else), the daemon and the sandbox (the container ran single-user as root with `sandbox = false`), the out-link as a garbage-collection root, and the store shared between worktrees. All of that is ticket 04's.
+10. **grype on darwin** was not run; the scan runs on Linux in CI.
+
+### x86_64-linux, for ticket 05
+
+1. Every package's x86_64-linux output is in the binary cache, the held ones included, and each group's plan is the same shape as on aarch64-linux.
+2. allium's x86_64 asset has the sha256 `tools.txt` pins and is dynamically linked like the aarch64 one, so it needs the same patching. That derivation was evaluated, not built.
+3. The gate, the image for linux/amd64, the six TLS cases in it and grype were not run on x86_64. The released image used for the size comparison is linux/amd64, so that comparison crosses architectures.

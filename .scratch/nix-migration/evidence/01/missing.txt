@@ -1,4 +1,4 @@
-date: 2026-11-14T13:27Z
+date: 2026-11-14T14:30Z
 nix (Nix) 2.35.6 on aarch64-linux
 
 == allium 3.6.1 (juxt/allium-tools; not in nixpkgs)

@@ -1,13 +1,13 @@
-date: 2026-11-14T14:06Z
+date: 2026-11-14T14:41Z
 nix (Nix) 2.35.6 on aarch64-linux
 store before: 126 paths, 813M
 just on PATH: absent
 
 == The one command a fresh clone runs before it has just
 $ nix build ./.scratch/nix-migration/evidence/01#default --no-update-lock-file --out-link .pixi/envs/default
-cold: 11 seconds
+cold: 16 seconds
 147 paths copied from cache.nixos.org
-built here: builder.pl.drv allium-aarch64-unknown-linux-gnu.tar.gz.drv python3-3.14.10-env.drv allium-3.6.1.drv knarr-tools.drv 
+built here: builder.pl.drv allium-aarch64-unknown-linux-gnu.tar.gz.drv allium-3.6.1.drv python3-3.14.10-env.drv knarr-tools.drv 
 again, nothing to do: 2 seconds
 store after: 6414 paths, 3.2G
 environment closure: 870.5MiB

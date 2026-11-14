@@ -1,5 +1,5 @@
-date: 2026-11-14T14:06Z
-clone: 01-nix-container-spike at 9e98deb
+date: 2026-11-14T14:39Z
+clone: 01-nix-container-spike at 3388942
 
 == Versions: the pin, and what the prototype environment reports
 tool                   pinned     prototype
@@ -57,18 +57,23 @@ chart-check      exit 0
   ripsecrets (output redacted).............................................Passed
 
 == The repairing formatters (just fix), prototype versions: what they would rewrite
-just fix: exit 0; git status --short: 12 lines
+just fix: exit 0; git status --short: 17 lines
  M .scratch/helm-chart/evidence/05/15-published-install-upgrade.txt
  M .scratch/helm-chart/evidence/05/16-published-uninstall-order.txt
  M .scratch/helm-chart/evidence/05/17-published-migration.txt
  M .scratch/helm-chart/evidence/05/18-published-kubectl-only.txt
  M .scratch/helm-chart/evidence/07/verify.txt
+ M .scratch/nix-migration/evidence/01/differences.txt
+ M .scratch/nix-migration/evidence/01/fresh.txt
  M .scratch/nix-migration/evidence/01/gate-scratch.patch
  M .scratch/nix-migration/evidence/01/gate.txt
+ M .scratch/nix-migration/evidence/01/host-needs.txt
+ M .scratch/nix-migration/evidence/01/image.txt
  M .scratch/nix-migration/evidence/01/lock-offline.txt
  M .scratch/nix-migration/evidence/01/lock.txt
  M .scratch/nix-migration/evidence/01/missing.txt
  M .scratch/nix-migration/evidence/01/packages.txt
+ M .scratch/nix-migration/evidence/01/tls-pairs.txt
  M .scratch/org-transfer/evidence/05/upgrade.txt
 the hooks that rewrote a file: trailing-whitespace 
 

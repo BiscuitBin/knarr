@@ -1,4 +1,4 @@
-date: 2026-11-14T13:26Z
+date: 2026-11-14T14:27Z
 nix (Nix) 2.35.6 on aarch64-linux
 
 == The channel heads on 2026-11-14 (aarch64-linux versions)
@@ -93,11 +93,11 @@ default   /nix/store/mm4dqphhravgip1i35fwfk9nalh6irii-nodejs-slim-24.22.2-corepa
 default   /nix/store/mzmsjj454wk6pgc9slwdz9hqxjmavbcq-nodejs-slim-24.22.2-npm cache.nixos.org-1
 default   /nix/store/pl77fywj3l09rzgsssy5drc52lpk9n0d-nodejs-24.22.2         cache.nixos.org-1
 default   /nix/store/ripj02n2fvni4s26p22qgr42h5zn3b06-python3-3.14.10-env    ultimate
-default   /nix/store/g3s8sya77p5ilp9j78pmcmcims5h1cs5-knarr-tools            ultimate
+default   /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools            ultimate
 cluster   /nix/store/36vq1cv9dlbcmxcf1bby2c15xmhk5ljm-kwok-0.8.0             cache.nixos.org-1
 cluster   /nix/store/g6ckyy2r7p3a9swsnfz2imdl6a7f11g6-kubectl-1.36.3         cache.nixos.org-1
 cluster   /nix/store/gsl37l0zg777bgvqpsbql2if18n31acy-kind-0.33.0            cache.nixos.org-1
-cluster   /nix/store/d2bw2nmr9m7s21jqyrqgjxgfh0h28lha-knarr-cluster-tools    ultimate
+cluster   /nix/store/jriwl9f6q7j7dlglyplzmjfh63r8qrlm-knarr-cluster-tools    ultimate
 
 == One Erlang and one OpenSSL in each closure
 default: 1 erlang, 1 openssl library

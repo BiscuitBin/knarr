@@ -1,6 +1,6 @@
-date: 2026-11-14T13:27Z
+date: 2026-11-14T14:30Z
 nix (Nix) 2.35.6 on aarch64-linux, git 2.54.0
-clone: 753 tracked files, 7.8M
+clone: 790 tracked files, 8.0M
 
 == 1. An untracked flake.nix is invisible
 ?? flake.lock
@@ -30,30 +30,30 @@ $ nix eval .#probe
   true
 
 == 4. What an evaluation copies to the store
-nix flake metadata names the source /nix/store/cbw7qbagfnaavs0cinl77kbnpk8fls1z-source: no such path in the store
-store paths before: 29449, after metadata and two evaluations: 29449
-after editing one tracked file and evaluating again: 29449
+nix flake metadata names the source /nix/store/5mqrzn58vzghqd7246clvv50mws1jwax-source: no such path in the store
+store paths before: 30107, after metadata and two evaluations: 30107
+after editing one tracked file and evaluating again: 30107
 A flake that uses its own source in a derivation does copy it; this output only asks for it:
-  /nix/store/dc3ry3kv95jxay4hpq2b66f7zybjsvrg-source: 755 files, 8.3M
-  (the clone has 755 tracked files, with the two staged flake files)
+  /nix/store/fszpwbzca9daa8h3hrbz0ndbhr8q1xwy-source: 792 files, 8.5M
+  (the clone has 792 tracked files, with the two staged flake files)
   build/ignored-junk.bin (ignored, 20 MB): absent; untracked-junk.bin (untracked, 5 MB): absent; .git: absent
-  after another edit: /nix/store/y60zgb82h2y51d5j9vprg27kcm9ry6y2-source, a second copy; store paths now 29449
+  after another edit: /nix/store/sdxc665kgsnxm2dmfx5azifp2svm67qi-source, a second copy; store paths now 30109
 
 == 5. Evaluation time: a dirty tree against a committed one
-dirty (flake staged, not committed): first 1.19s, again 1.20s, again 1.19s
+dirty (flake staged, not committed): first 1.27s, again 1.19s, again 1.20s
 $ nix eval --raw .#packages.aarch64-linux.default.outPath
   exit 0
   warning: Git tree '/work/git/clone' is dirty
-committed (clean tree): first 1.23s, again 1.21s, again 1.18s
+committed (clean tree): first 1.26s, again 1.19s, again 1.19s
 $ nix eval --raw .#packages.aarch64-linux.default.outPath
   exit 0
-  /nix/store/g3s8sya77p5ilp9j78pmcmcims5h1cs5-knarr-tools
+  /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
 the lock check, clean tree: 0.02s
   Resolved URL:  git+file:///work/git/clone
-  Locked URL:    git+file:///work/git/clone?ref=refs/heads/01-nix-container-spike&rev=3f52032c1caf9d742cadf314a7bd6acea850fcd5
-  Path:          /nix/store/cbw7qbagfnaavs0cinl77kbnpk8fls1z-source
-  Revision:      3f52032c1caf9d742cadf314a7bd6acea850fcd5
-  Revisions:     358
+  Locked URL:    git+file:///work/git/clone?ref=refs/heads/01-nix-container-spike&rev=892d29d1abf13542e361f357967ec78f3d82b4d4
+  Path:          /nix/store/5mqrzn58vzghqd7246clvv50mws1jwax-source
+  Revision:      892d29d1abf13542e361f357967ec78f3d82b4d4
+  Revisions:     365
 
 == 6. A linked worktree
 .git is a regular file: gitdir: /work/git/clone/.git/worktrees/linked
@@ -61,13 +61,13 @@ $ nix eval .#held.gleam
   exit 0
   "1.19.0"
   Resolved URL:  git+file:///work/git/linked
-  Locked URL:    git+file:///work/git/linked?ref=refs/heads/probe-linked&rev=3f52032c1caf9d742cadf314a7bd6acea850fcd5
-  Path:          /nix/store/cbw7qbagfnaavs0cinl77kbnpk8fls1z-source
-  Revision:      3f52032c1caf9d742cadf314a7bd6acea850fcd5
-  Revisions:     358
+  Locked URL:    git+file:///work/git/linked?ref=refs/heads/probe-linked&rev=892d29d1abf13542e361f357967ec78f3d82b4d4
+  Path:          /nix/store/5mqrzn58vzghqd7246clvv50mws1jwax-source
+  Revision:      892d29d1abf13542e361f357967ec78f3d82b4d4
+  Revisions:     365
 $ nix build .#runtime --out-link /work/git/linked/.nix-probe/runtime
   exit 0
-out-link: /nix/store/2435za8knym8jcbgy1as3fgnlmm7xh1f-knarr-runtime
+out-link: /nix/store/fz2pjsccxf6674xvfd95m5qv21x4414v-knarr-runtime
 ?? .nix-probe/
 $ nix eval .#held.gleam
   exit 0
@@ -89,10 +89,10 @@ $ nix eval .#held.gleam
 
 == 8. The flake in a subdirectory of the repository (where this prototype is tracked)
   Resolved URL:  git+file:///work/git/clone?dir=.scratch/nix-migration/evidence/01
-  Locked URL:    git+file:///work/git/clone?dir=.scratch/nix-migration/evidence/01&ref=refs/heads/01-nix-container-spike&rev=3f52032c1caf9d742cadf314a7bd6acea850fcd5
-  Path:          /nix/store/cbw7qbagfnaavs0cinl77kbnpk8fls1z-source
-  Revision:      3f52032c1caf9d742cadf314a7bd6acea850fcd5
-  Revisions:     358
+  Locked URL:    git+file:///work/git/clone?dir=.scratch/nix-migration/evidence/01&ref=refs/heads/01-nix-container-spike&rev=892d29d1abf13542e361f357967ec78f3d82b4d4
+  Path:          /nix/store/5mqrzn58vzghqd7246clvv50mws1jwax-source
+  Revision:      892d29d1abf13542e361f357967ec78f3d82b4d4
+  Revisions:     365
 $ nix eval ./.scratch/nix-migration/evidence/01#held.gleam
   exit 0
   "1.19.0"
@@ -102,9 +102,9 @@ $ nix eval .#held.gleam
   exit 0
   "1.19.0"
   Resolved URL:  path:/work/git/plain
-  Locked URL:    path:/work/git/plain?lastModified=1794662843&narHash=sha256-CHg9JtHXd/aqvxHlAxM8XjiAAJCOIRsqbqne70gPpNs%3D
-  Path:          /nix/store/ljdynm5jp04mwhjaq91xzhzqvicx2cw7-source
-  756 files, 28M; junk.bin (20 MB, never tracked): copied
+  Locked URL:    path:/work/git/plain?lastModified=1794666645&narHash=sha256-fBCRTXNNnaYmdQ5cN24WxMxaqzST6IN1jU0rAb0SAcs%3D
+  Path:          /nix/store/p9m3ny3gyzyxmbc6cfbnaf4gk7c2z53g-source
+  793 files, 28M; junk.bin (20 MB, never tracked): copied
   after one edit and one evaluation: 1 more store path, 28M
 $ nix eval .#held.gleam
   exit 0

@@ -1,4 +1,4 @@
-date: 2026-11-14T13:25Z
+date: 2026-11-14T14:26Z
 host: Linux aarch64
 nix (Nix) 2.35.6
 system: aarch64-linux
@@ -13,32 +13,37 @@ aarch64-darwin  /nix/store/h35yp7i2h8m1fzx9sljmcjklfrvj2mcp-erlang-29.1.2  cache
 
 == nix build --dry-run on a foreign system says what would be built and what fetched
 -- aarch64-linux default
-these 6 derivations will be built:
+these 5 derivations will be built:
   /nix/store/9vp2qsp2ylwwqvbhacwy7r583hrrii5n-allium-aarch64-unknown-linux-gnu.tar.gz.drv
   /nix/store/94349c39xxjkx04l7y7kksywm6miaihv-allium-3.6.1.drv
   /nix/store/icm60vy05i40rxzhvrr5f3grvs3nmbhk-builder.pl.drv
-  /nix/store/l19p5v6lqdx0p188xkqayxld6b3iqgdp-nodejs-24.22.2.drv
   /nix/store/xr5g6r069q0zynsrbflkv6a0lmx86s63-python3-3.14.10-env.drv
-  /nix/store/g8bk1ni0ahdzqv55k9cwp6h39651c9f7-knarr-tools.drv
-these 146 paths will be fetched (413.1 MiB download, 1.3 GiB unpacked):
+  /nix/store/464mr4ncp2jqywnh8wivfpswn8sc4i78-knarr-tools.drv
+these 145 paths will be fetched (413.1 MiB download, 1.3 GiB unpacked):
 -- x86_64-linux default
-these 6 derivations will be built:
+these 5 derivations will be built:
   /nix/store/xrwzb9p67w9vcfv9gqpsd500yj23ph5z-allium-x86_64-unknown-linux-gnu.tar.gz.drv
   /nix/store/62vkxyjc6hz6zlcny2mpp6ipbxvqcq9s-allium-3.6.1.drv
   /nix/store/wmcdy2ch1f2571zs7mf99hbpi1wimbwb-builder.pl.drv
   /nix/store/h0yyxmnpzmihqwk9lssq2qxd8il0mwi4-python3-3.14.10-env.drv
-  /nix/store/my4m3k693hpr9cf87fnlidwqc84z1vvj-nodejs-24.22.2.drv
-  /nix/store/f9fcpy2kpjlyfm57gl84lhn6npxppvc1-knarr-tools.drv
-these 155 paths will be fetched (428.2 MiB download, 1.3 GiB unpacked):
+  /nix/store/v924pzwqyh2smxmnjaj5jflybwnmay14-knarr-tools.drv
+these 154 paths will be fetched (428.2 MiB download, 1.3 GiB unpacked):
 -- aarch64-darwin default
-these 6 derivations will be built:
-  /nix/store/255rbcvs2q5vqyy7pjqsrki6scc39bkl-nodejs-24.22.2.drv
+these 5 derivations will be built:
   /nix/store/2mrs0bn5ydm69jgy9xyldja03kbgbr93-builder.pl.drv
   /nix/store/946h8cibj74xjmddgr8yhkd4mh9cznb7-python3-3.14.10-env.drv
   /nix/store/zmqafqc1xiy6w34nn6lxpc63jjl2spyx-allium-aarch64-apple-darwin.tar.gz.drv
   /nix/store/d30bncqa6xp6d3bg4y61zvnrakvghf9y-allium-3.6.1.drv
-  /nix/store/r8sr106hhp9z0z785i3mvplgwy98sdgr-knarr-tools.drv
-these 141 paths will be fetched (519.1 MiB download, 2.2 GiB unpacked):
+  /nix/store/qjdbz4jqwky5f8wywi7iqddvs5miicgf-knarr-tools.drv
+these 140 paths will be fetched (519.1 MiB download, 2.2 GiB unpacked):
+
+== Closure sizes, asked of the cache without fetching
+beam_minimal.interpreters.erlang_29    aarch64-linux 203 MiB; x86_64-linux 193 MiB; aarch64-darwin 136 MiB;
+beam.interpreters.erlang_29            aarch64-linux 1172 MiB; x86_64-linux 1097 MiB; aarch64-darwin 241 MiB;
+python314                              aarch64-linux 229 MiB; x86_64-linux 212 MiB; aarch64-darwin 1366 MiB;
+nodejs-slim                            aarch64-linux 194 MiB; x86_64-linux 185 MiB; aarch64-darwin 171 MiB;
+markdownlint-cli2                      aarch64-linux 377 MiB; x86_64-linux 361 MiB; aarch64-darwin 1507 MiB;
+kubernetes-helm                        aarch64-linux 127 MiB; x86_64-linux 121 MiB; aarch64-darwin 68 MiB;
 
 == A foreign-system derivation cannot be built here
 this derivation will be built:

@@ -3,8 +3,13 @@
 # and as the image. grype is the prototype flake's audit group. The image is
 # the archive the host saved first:
 #   docker save knarr-nix-proto:01 --output ai_tmp/knarr-nix-proto.tar
-# grype downloads its vulnerability database on first use (needs network).
-# Usage (host): sh nix.sh sh /evidence/grype.sh > grype.txt
+# grype would download its vulnerability database on first use. This run made
+# no download: it used the database the host's grype had already cached,
+# copied to scratch beforehand, and ran with the network off:
+#   cp -R ~/Library/Caches/grype/db/6 ai_tmp/grype-db/
+# What grype catalogues does not depend on the database's age; what it matches
+# does, and the transcript prints the database's build date.
+# Usage (host): sh nix.sh --offline sh /evidence/grype.sh > grype.txt
 # lib.sh sets rev, systems and flake, and the gate runs shellcheck without -x.
 # shellcheck disable=SC2154
 # shellcheck source=lib.sh disable=SC1091
@@ -15,11 +20,14 @@ fresh_proto /work/grype/proto
 nix build /work/grype/proto#audit --out-link /work/grype/audit 2> /dev/null
 nix build /work/grype/proto#runtime --out-link /work/grype/runtime 2> /dev/null
 PATH=/work/grype/audit/bin:$PATH
+cp -R /bundle/grype-db /work/grype/db
 GRYPE_CHECK_FOR_APP_UPDATE=false
-export GRYPE_CHECK_FOR_APP_UPDATE
+GRYPE_DB_CACHE_DIR=/work/grype/db
+GRYPE_DB_AUTO_UPDATE=false
+GRYPE_DB_VALIDATE_AGE=false
+export GRYPE_CHECK_FOR_APP_UPDATE GRYPE_DB_CACHE_DIR GRYPE_DB_AUTO_UPDATE GRYPE_DB_VALIDATE_AGE
 printf 'date: %s\n%s (pixi.toml pins 0.120.1)\n' "$(date -u +%Y-%m-%dT%H:%MZ)" "$(grype --version)"
-grype db update > /dev/null 2>&1
-grype db status 2>&1 | grep -E '^(Built|Schema|Status)' | sed 's/^/  /'
+printf 'database: %s\n' "$(jq -r .source /work/grype/db/6/import.json | sed 's/.*vulnerability-db_\(v[0-9.]*\)_\([0-9-]*\)T.*/\1, built \2/')"
 
 # The directory source: the closure's store paths under nix/store, as the image
 # carries them and as `docker cp <container>:/nix` would copy them out.
