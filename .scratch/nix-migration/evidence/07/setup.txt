@@ -1,6 +1,6 @@
-date: 2026-11-14T22:46Z
+date: 2026-11-14T23:00Z
 nix (Nix) 2.35.6 on aarch64
-clone of 07-flake-beside-pixi at 4b02ea5
+clone of 07-flake-beside-pixi at 3ebae67
 tracked: flake.lock flake.nix pins.toml 
 
 == KNARR_TOOLS=nix sh scripts/initialize.sh (there is no just before it)

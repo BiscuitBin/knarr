@@ -1,15 +1,15 @@
-date: 2026-11-14T22:48Z
+date: 2026-11-14T23:03Z
 nix (Nix) 2.35.6 on aarch64
 network: off
-clone at 4b02ea5
+clone at 3ebae67
 the pinned ripsecrets: /nix/store/h7bfzh88qmfxn7aj40mcr0hllrir8nm3-ripsecrets-0.1.11/bin/ripsecrets, mode 555, owner root
 running as: uid=1000(ubuntu) gid=1000(ubuntu) groups=1000(ubuntu)
 
 == The ripsecrets wrapper tests
-exit 0: 14 passed in 0.67s
+exit 0: 14 passed in 0.66s
 
 == KNARR_TOOLS=nix just test-checkers-all
-exit 0: ================= 916 passed, 14 skipped in 139.75s (0:02:19) ==================
+exit 0: ================= 916 passed, 14 skipped in 138.69s (0:02:18) ==================
 failures and errors: 0
 read-only or permission failures: 0
 git status --short: 0 lines

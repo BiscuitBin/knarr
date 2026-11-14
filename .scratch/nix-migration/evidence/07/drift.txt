@@ -1,7 +1,7 @@
-date: 2026-11-14T22:48Z
+date: 2026-11-14T23:02Z
 nix (Nix) 2.35.6 on aarch64
 network: off
-copy of /work/clone at 4b02ea5
+copy of /work/clone at 3ebae67
 
 == The copy as committed
 just lock-check: exit 0

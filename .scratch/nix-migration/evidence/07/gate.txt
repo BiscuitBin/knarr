@@ -1,20 +1,21 @@
-date: 2026-11-14T22:46Z
+date: 2026-11-14T23:00Z
 host: Linux aarch64, Ubuntu 24.04.5 LTS
 nix (Nix) 2.35.6
 network: off
-clone at 4b02ea5, git status --short: 0 lines
+clone at 3ebae67, git status --short: 0 lines
 KNARR_TOOLS=nix; pixi on PATH: absent; .pixi: absent; .tools: absent
 
 == The lock and environment checks: time, and what they write
-run 1: just lock-check 0.03s, just env-check 1.64s
-run 2: just lock-check 0.03s, just env-check 1.60s
-run 3: just lock-check 0.03s, just env-check 1.58s
+run 1: just lock-check 0.03s, just env-check 1.52s
+run 2: just lock-check 0.02s, just env-check 1.51s
+run 3: just lock-check 0.02s, just env-check 1.47s
   env-check: /work/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, and the held versions match
 new store paths: 0; git status --short: 0 lines
-files written outside the clone: ~/.cache/nix/fetcher-cache-v4.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-wal ~/.cache/nix/eval-cache-v6/34c8253100238aac8b1bc0a7baea10853806375dea28e4cb77f5a11a6fb76741.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-shm 
+files written outside the clone: ~/.cache/nix/fetcher-cache-v4.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-wal ~/.cache/nix/eval-cache-v6/98121bb416ef90baf0d13b84a16c3f444aa9540cc29465a3511445c8084e73ac.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-shm 
 
-== KNARR_TOOLS=nix just check
-exit 0 in 114.74s
+== KNARR_TOOLS=nix just check, with a result link left by a nix build without --out-link
+result -> /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools; git status --short: 0 lines
+exit 0 in 113.84s
 ==> just lock-check ==> just env-check ==> just manifest-check ==> just docs-check ==> just agents-check ==> just check-specs ==> just analyse-specs ==> just format-check ==> just lint-gleam ==> just test ==> just snapshots-check ==> just fake-worker-lint ==> just fake-worker-test ==> just test-checkers ==> just packaging-check ==> just chart-check ==> just toml-check ==> just lint ==> just check-clean 
 env-check: /work/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, and the held versions match
 Validated 38 pages and 50 canonical topics.

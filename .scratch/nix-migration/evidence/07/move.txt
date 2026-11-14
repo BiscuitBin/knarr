@@ -1,6 +1,6 @@
-date: 2026-11-14T22:48Z
+date: 2026-11-14T23:02Z
 nix (Nix) 2.35.6 on aarch64
-clone at 4b02ea5, git status --short: 0 lines
+clone at 3ebae67, git status --short: 0 lines
 
 == Before the move
   .nix/default -> /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
@@ -39,11 +39,11 @@ git commit: exit 0
   lychee (offline, local links only).......................................Passed
   editorconfig-checker.....................................................Passed
   ripsecrets (output redacted).............................................Passed
-  6e567b3 probe: the moved lock
+  028a77b probe: the moved lock
 
 == Back to the commit, initialized again
   .nix/default -> /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
   its prek: /nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek (prek 0.5.10)
   the hook: PREK="/work/clone/.nix/default/bin/prek", 0 store paths
 just env-check: exit 0: env-check: /work/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, and the held versions match
-git status --short: 0 lines, at 4b02ea5
+git status --short: 0 lines, at 3ebae67

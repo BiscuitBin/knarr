@@ -1,6 +1,6 @@
-date: 2026-11-14T22:48Z
+date: 2026-11-14T23:02Z
 nix (Nix) 2.35.6 on aarch64
-clone at 4b02ea5, git status --short: 0 lines
+clone at 3ebae67, git status --short: 0 lines
 
 == KNARR_TOOLS=conda just --list: exit 0
   Available recipes:
@@ -32,4 +32,4 @@ clone at 4b02ea5, git status --short: 0 lines
         1 ripsecrets (output redacted).............................................Failed
         1 typos....................................................................Failed
 
-git status --short: 0 lines, at 4b02ea5
+git status --short: 0 lines, at 3ebae67

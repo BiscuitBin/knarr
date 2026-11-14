@@ -1,6 +1,6 @@
-date: 2026-11-14T22:52Z
+date: 2026-11-14T23:02Z
 nix (Nix) 2.35.6 on aarch64
-copy of /work/clone at 4b02ea5
+copy of /work/clone at 3ebae67
 
 == pins.toml as committed
   default /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
