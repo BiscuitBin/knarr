@@ -66,3 +66,7 @@ nix build "$proto#default" --no-write-lock-file --override-input nixpkgs "github
   --out-link /work/gate/moved 2> /dev/null
 printf 'locked:  %s\n  prek %s\n' "$(readlink .pixi/envs/default)" "$(readlink -f .pixi/envs/default/bin/prek)"
 printf 'moved:   %s\n  prek %s\n' "$(readlink /work/gate/moved)" "$(readlink -f /work/gate/moved/bin/prek)"
+
+printf '\n== Gleam as the candidate revision carries it, for the version-difference list\n'
+nix build "github:NixOS/nixpkgs/$rev#gleam" --out-link /work/gate/gleam-candidate 2> /dev/null
+/work/gate/gleam-candidate/bin/gleam --version

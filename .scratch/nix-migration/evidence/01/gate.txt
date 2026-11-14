@@ -1,0 +1,104 @@
+date: 2026-11-14T13:53Z
+host: Linux aarch64, Ubuntu 24.04.5 LTS
+nix (Nix) 2.35.6
+PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/nix/var/nix/profiles/default/bin
+network: off
+clone: 01-nix-container-spike at 93c4fb0, git status --short: 0 lines
+.pixi/envs/default -> /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
+.tools/bin -> ../.pixi/envs/default/bin
+on this host without the prefix: python3 absent, node absent, perl /usr/bin/perl, sed /usr/bin/sed
+
+== 1. The checker tests run through the interpreter's own pytest
+sys.executable /work/gate/clone/.pixi/envs/default/bin/python3
+pytest 9.1.1 from /nix/store/ripj02n2fvni4s26p22qgr42h5zn3b06-python3-3.14.10-env/lib/python3.14/site-packages/pytest/__init__.py
+test-checkers          pass                0.25s
+============================= 168 passed in 0.11s ==============================
+test-checkers-all      FAIL (exit 1)     135.49s
+============ 65 failed, 714 passed, 13 skipped in 134.99s (0:02:14) ============
+failures by file:
+     15 scripts/checks/tests/test_run_allium.py
+     50 scripts/checks/tests/test_validate_docs.py
+the reason in each file:
+E       AssertionError: docs validation: Markdown parser unavailable; run just initialize: Command '['/work/gate/clone/.pixi/envs/default/bin/node', '
+E       AssertionError: assert '1 diagnostic' in '\nrun_allium: tools.txt pins no Allium for this platform\n'
+skipped: 13 scripts/checks/tests/test_install_tools.py: tools.txt pins no line for this host
+
+== 2. The docs checker's Node and markdownlint-cli2's bundled markdown-it
+docs-check             FAIL (exit 1)       0.05s
+docs validation: Markdown parser unavailable; run just initialize: Command '['/work/gate/clone/.pixi
+bin/markdownlint-cli2 is /nix/store/kp3wv3jcf874aka9xwskxb99g3nswg84-markdownlint-cli2-0.24.0/bin/markdownlint-cli2:
+  exec "/nix/store/pl77fywj3l09rzgsssy5drc52lpk9n0d-nodejs-24.22.2/bin/node"  /nix/store/kp3wv3jcf874aka9xwskxb99g3nswg84-markdownlint-cli2-0.24.0/lib/node_modules/markdownlint-cli2/./markdownlint-cli2-bin.mjs "$@" 
+the checker's command, node render_markdown.mjs <prefix>/bin/markdownlint-cli2:
+  Error: Cannot find module 'markdown-it'
+    code: 'MODULE_NOT_FOUND',
+the same with <prefix>/lib/node_modules/markdownlint-cli2/markdownlint-cli2-bin.mjs:
+  {"a.md":"<h1>Heading</h1>\n"}
+markdown-it 15.0.3, markdownlint 0.42.0, node v24.22.2
+
+== 3. The path prek writes into the git hook, and a lock move
+  Installed Git hook at `.git/hooks/pre-commit`
+  PREK="/nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek"
+locked environment: git commit exit 0 
+the lock moves: the out-link now names /nix/store/48v2xkqaxpbmhy3dk82qwqy2asdi6hmj-knarr-tools
+  the prefix has  /nix/store/rmbhxvawxxcr6km230vfx74m26kmnsgf-prek-0.5.7/bin/prek (prek 0.5.7)
+  the hook runs   /nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek (prek 0.5.10)
+after the move, old store path still present: git commit exit 0 
+after garbage collection the old path is gone; simulated by renaming it in a copy of the hook:
+  hook naming a collected path: git commit exit 1 .git/hooks/pre-commit: 13: exec: prek: not found
+with the out-link written into the hook instead:
+  PREK="/work/gate/clone/.pixi/envs/default/bin/prek"
+  moved environment: git commit exit 0 
+  locked environment again: git commit exit 0 
+
+== 4. The gate, every recipe of just check on its own, tracked files untouched
+lock-check             FAIL (exit 127)     0.00s
+env-check              FAIL (exit 2)       0.02s
+manifest-check         pass                0.02s
+docs-check             FAIL (exit 1)       0.05s
+agents-check           pass                0.05s
+check-specs            FAIL (exit 1)       0.03s
+analyse-specs          FAIL (exit 1)       0.03s
+format-check           pass                0.05s
+lint-gleam             pass                0.96s
+test                   pass               94.86s
+snapshots-check        pass                0.38s
+fake-worker-lint       pass                0.53s
+fake-worker-test       pass                4.75s
+test-checkers          pass                0.24s
+packaging-check        pass                0.07s
+chart-check            pass                0.15s
+toml-check             pass                0.05s
+lint                   pass                1.75s
+why each one failed:
+  lock-check     lock-check: 1: pixi: not found
+  env-check      env-check: .pixi/envs/default/conda-meta/pixi is missing; run just initialize
+  docs-check     docs validation: Markdown parser unavailable; run just initialize: Command '['/work/gate/clone/.pixi/envs/default/bin/no
+  check-specs    run_allium: tools.txt pins no Allium for this platform
+  analyse-specs  run_allium: tools.txt pins no Allium for this platform
+git status --short after them: 0 lines
+just check itself stops at the first:
+  exit 127: 
+
+== 5. The Nix lock and environment checks: time, and what they write
+run 1: lock check 0.04s, environment check 1.62s
+run 2: lock check 0.03s, environment check 1.55s
+run 3: lock check 0.03s, environment check 1.54s
+env-check: .pixi/envs/default is /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools, and the held versions match
+git status --short: 0 lines; new store paths: 0
+files written outside the clone: ~/.cache/nix/fetcher-cache-v4.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-wal ~/.cache/nix/eval-cache-v6/0e25cbb0250239d28a56b21326574525cdbabeb171bbf0339592797b2453b0d3.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-shm 
+a drifted environment is refused:
+  exit 2: env-check: .pixi/envs/default is /nix/store/48v2xkqaxpbmhy3dk82qwqy2asdi6hmj-knarr-tools, but this commit describes /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
+
+== 6. The whole gate, with the scratch patch for the pixi-shaped parts
+ M Justfile
+ M scripts/checks/run_allium.py
+ M scripts/checks/validate_docs.py
+just check: exit 0 in 106.38s
+==> just lock-check ==> just env-check ==> just manifest-check ==> just docs-check ==> just agents-check ==> just check-specs ==> just analyse-specs ==> just format-check ==> just lint-gleam ==> just test ==> just snapshots-check ==> just fake-worker-lint ==> just fake-worker-test ==> just test-checkers ==> just packaging-check ==> just chart-check ==> just toml-check ==> just lint ==> just check-clean 
+All checks passed and the worktree is unchanged.
+ M Justfile
+ M scripts/checks/run_allium.py
+ M scripts/checks/validate_docs.py
+test-checkers-all      pass              136.95s
+SKIPPED [1] scripts/checks/tests/test_install_tools.py:221: tools.txt pins no line for this host
+git status --short after removing the patch: 0 lines
