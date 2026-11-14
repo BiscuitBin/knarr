@@ -2,20 +2,19 @@
 # the primary checkout, and what `just lint` runs over every file inside
 # `just check`. It may report, never repair; .pre-commit-fix.yaml repairs.
 #
-# Every tool comes from pixi or .tools/bin, so every hook is `repo: local` with
-# `language: system` and no hook installs its own copy (Decision 0003, "One
-# owner per pin"). A remote hook is allowed only for a tool with no pixi or
-# .tools source, and must then pin `rev` to a full commit SHA with a version
-# comment (`rev: <40 hex> # vX.Y.Z`); scripts/checks/tests/test_hook_configs.py
-# enforces that. Git runs hooks without the Justfile's PATH, so each entry goes
-# through scripts/with-env.sh.
+# Every tool comes from the Nix tool environment, so every hook is `repo:
+# local` with `language: system` and no hook installs its own copy (Decision
+# 0017, "One owner per pin"). A remote hook is allowed only for a tool the
+# flake cannot carry, and must then pin `rev` to a full commit SHA with a
+# version comment (`rev: <40 hex> # vX.Y.Z`);
+# scripts/checks/tests/test_hook_configs.py enforces that. Git runs hooks
+# without the Justfile's PATH, so each entry goes through scripts/with-env.sh.
 exclude: >-
   (?x)^(
-    \.pixi/|
-    \.tools/|
+    \.nix/|
     build/|
     ai_tmp/|
-    pixi\.lock$
+    flake\.lock$
   )
 repos:
   - repo: builtin
@@ -111,8 +110,14 @@ repos:
         language: system
         files: ^\.github/workflows/.*\.ya?ml$
 
-      # The wrapper runs the pinned .tools/bin/ripsecrets itself and keeps any
-      # matched value out of the log (Decision 0004).
+      - id: nixfmt
+        name: nixfmt check
+        entry: sh scripts/with-env.sh nixfmt --check
+        language: system
+        files: \.nix$
+
+      # The wrapper runs the pinned .nix/tools/bin/ripsecrets itself and keeps
+      # any matched value out of the log (Decision 0004).
       - id: ripsecrets
         name: ripsecrets (output redacted)
         entry: sh scripts/checks/ripsecrets-redacted.sh

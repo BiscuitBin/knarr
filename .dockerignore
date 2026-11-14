@@ -1,7 +1,9 @@
 *
 !Dockerfile
-!pixi.toml
-!pixi.lock
+!flake.nix
+!flake.lock
+!nix/
+!nix/**
 !gleam.toml
 !manifest.toml
 !src/
@@ -9,4 +11,3 @@
 !scripts/
 scripts/*
 !scripts/container-entrypoint.sh
-!scripts/prune_runtime.py

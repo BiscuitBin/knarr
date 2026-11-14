@@ -10,10 +10,10 @@ requires: []
 
 ## Setup and deployment
 
-Install the repository tools with `just initialize`, then the optional cluster
-environment with `pixi install --locked -e cluster`. These operations download
-packages; agents need explicit network authorization. Docker must be running.
-The image build also downloads its locked build dependencies and base images.
+Install the repository tools with `just initialize`; kind, kwokctl, kubectl
+and helm come with them. It downloads packages; agents need explicit network
+authorization. Docker must be running. The image build also downloads its
+pinned build image and the Nix packages `flake.lock` names.
 
 Run `just cluster-up`, `just image-build`, `just deploy`, then `just smoke`.
 The image builds for the host architecture, so on an Apple-silicon host it is
@@ -69,11 +69,13 @@ as recorded in [Decision 0007](../decisions/0007-local-cluster.md).
 
 ## Image and checks
 
-The image is a Gleam erlang-shipment with the locked pixi runtime environment,
-copied at its original absolute prefix. `just image-build` and
+The image is a root filesystem the flake defines (`nix/image.nix`): a Gleam
+erlang-shipment and the Nix closure of the Erlang runtime the gate tests with,
+copied into an empty image
+([Decision 0017](../decisions/0017-nix-tool-manager.md)). `just image-build` and
 `just fake-worker-image-build` build for the host architecture: linux/amd64 on
-an x86_64 host, as in CI, and linux/arm64 on an Apple-silicon host, from the
-lock's `linux-aarch64` entries. Pass a platform as the second argument to
+an x86_64 host, as in CI, and linux/arm64 on an Apple-silicon host, where
+Docker runs the Nix build in a Linux container. Pass a platform as the second argument to
 override it, as in `just image-build knarr:local linux/amd64`, but an amd64
 image does not build or run under Rosetta: OTP 29's amd64 BEAM fails there in
 `prim_tty`. `just image-check` runs the image at its own architecture. The
@@ -114,8 +116,8 @@ against local Kubernetes schemas. `just chart-check` lints the chart,
 validates its render against the same schemas, and holds its version to
 `gleam.toml`'s (Decision 0015); the chart tests pin its static security
 settings. The chart is knarr's only packaging: helm-chart ticket 06 retired
-the kustomize tree under `deploy/`. Container checks separately prove both image stages use
-the pixi manifest's OTP major (with lock agreement checked by the gate) and that the runtime starts with a read-only root.
+the kustomize tree under `deploy/`. Container checks separately prove the image's build and runtime
+use the OTP major the tool environment has (with lock agreement checked by the gate) and that the runtime starts with a read-only root.
 The kind smoke job proves actual endpoint access; the kwok job proves cluster
 readiness only. Both jobs remain outside aggregate `check`.
 

@@ -6,7 +6,13 @@ Notable changes to Knarr are recorded here, by release. This file follows [Keep 
 
 ### Changed
 
+- The image is now built by Nix and starts from an empty base: it holds the Gleam shipment and the Nix closure of its Erlang runtime, and no Ubuntu userland. It runs as before, as UID 10001 with a read-only root and the same entrypoint, on Erlang/OTP 29.1.2. The OpenSSL the BEAM links is 3.5.9, nixpkgs' long-term-support line, where the conda-forge build was 3.6.5. The runtime is at `/nix/store`, linked from `/bin` and `/opt/knarr/runtime`, where it was `/opt/knarr/.pixi/envs/runtime`; the image has no package manager and no shell beyond bash and coreutils ([Decision 0017](docs/decisions/0017-nix-tool-manager.md)).
+- Development tools come from a Nix flake: `flake.lock` pins one nixpkgs revision for the compiler, OTP and every other tool, on Linux and on macOS on Apple silicon, and `just initialize` needs only Nix. The contributing guide has the new setup and how to move the pin.
 - The README now covers what knarr does, how to install its Helm chart and where the user guides are. Local setup, the gate, audits, moving pins and specifications moved to the contributing guide, `CONTRIBUTING.md`.
+
+### Removed
+
+- pixi, `pixi.toml`, `pixi.lock`, `tools.txt` and the download installer. `just cluster-install` and `just audit-install` are gone with them: kind, kubectl and grype are in the one tool environment.
 
 ## [0.3.1] - 2026-10-30
 

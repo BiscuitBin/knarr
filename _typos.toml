@@ -6,9 +6,8 @@
 # The vendored Allium skills are upstream bytes pinned by skills-lock.json, and
 # the Kubernetes schemas are upstream bytes pinned by their sources.json.
 extend-exclude = [
-  ".pixi/",
-  ".tools/",
-  "pixi.lock",
+  ".nix/",
+  "flake.lock",
   "build/",
   "ai_tmp/",
   ".agents/skills/allium/",

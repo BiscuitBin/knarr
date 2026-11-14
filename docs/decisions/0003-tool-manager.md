@@ -8,6 +8,8 @@ requires: []
 
 # Decision 0003: Tool manager
 
+**Superseded by [Decision 0017: Nix owns the tools and the images](0017-nix-tool-manager.md) on 2026-11-14.** A Nix flake now owns the compiler, OTP and every tool, and builds both images; `pixi.toml`, `pixi.lock`, `tools.txt` and `scripts/install-tools.sh` are gone. This record stays as it was written, as the evidence for what Decision 0017 keeps: the `manifest.toml` pre-check and backstop, one owner per pin, recipes that reach tools through `PATH`, and the TLS check the image reruns. Where the two disagree, 0017 holds.
+
 Adapted on 2026-10-07 from libpawdoku's [Decision 0011: Tool manager](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0011-tool-manager.md) at commit `51d8b55`. There pixi owned the tools and rustup kept the compiler. Here pixi owns the compiler too.
 
 ## Context

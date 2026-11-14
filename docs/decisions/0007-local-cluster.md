@@ -8,6 +8,8 @@ requires: []
 
 # Decision 0007: Local cluster and test tiers
 
+Amended by [Decision 0017](0017-nix-tool-manager.md): kind, helm, kustomize and kwokctl come from the Nix tool environment, and kubectl from `nix/kubectl.nix`, which pins the upstream 1.36.0 binary. They are installed by `just initialize` with everything else: the separate `cluster` environment, `pixi install --locked -e cluster` and `just cluster-install` are gone, because the Nix store is shared between worktrees and the per-worktree cost this record measures no longer exists. kwokctl is the release nixpkgs carries, held to the controller image by a test. The choice of kind and kwok, the image pins and the worktree isolation are unchanged.
+
 ## Context
 
 OVERVIEW §9.16 asks for unit tests, end-to-end tests on kind with a fake worker, and "an envtest equivalent or substitute". The walking skeleton (13), the in-cluster client spike (14), the Cluster Autoscaler spike (15) and the e2e tier all need a local cluster. That cluster must hold up under an agent-heavy workflow, where many git worktrees each run their own cluster at the same time.

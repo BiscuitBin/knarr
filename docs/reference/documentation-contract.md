@@ -37,7 +37,7 @@ HTML pages use manifest metadata alone. They do not need Markdown frontmatter, M
 
 ## Parser runtime
 
-The Python checker uses only standard-library imports. For Markdown structure it invokes `render_markdown.mjs` with the Node runtime and `markdown-it` parser already shipped in the pinned markdownlint-cli2 environment. Both are loaded from this checkout's `.pixi/envs/default`, never an unrelated global npm installation. Initialization installs them through the existing lockfile; validation neither installs packages nor executes document content. This keeps navigation checks aligned with Markdown structure without maintaining a second regex-based parser.
+The Python checker uses only standard-library imports. For Markdown structure it invokes `render_markdown.mjs` with the Node runtime and `markdown-it` parser already shipped in the pinned markdownlint-cli2 environment. Both are loaded from this checkout's `.nix/tools`, never an unrelated global npm installation. Initialization installs them through the existing lockfile; validation neither installs packages nor executes document content. This keeps navigation checks aligned with Markdown structure without maintaining a second regex-based parser.
 
 ## Gate and audit
 

@@ -3,8 +3,7 @@
 # hand, in the root and in the fake worker fixture, whose build/ holds its
 # downloaded packages; the evidence probe under .scratch/ is a recorded fixture.
 exclude = [
-  ".pixi/**",
-  ".tools/**",
+  ".nix/**",
   "build/**",
   "ai_tmp/**",
   "manifest.toml",

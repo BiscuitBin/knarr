@@ -6,7 +6,8 @@ with one querybatch request:
 
 - every hex package manifest.toml locks, by its Hex name and version, in OSV's
     `Hex` ecosystem;
-- the `erlang` pin in pixi.toml, as the `OTP-<version>` tag of
+- the OTP release the installed Nix tool environment was built with, which is
+    the one every image ships (Decision 0017), as the `OTP-<version>` tag of
     github.com/erlang/otp, in OSV's `GIT` ecosystem, which is where OSV records
     the OTP advisories.
 
@@ -29,6 +30,8 @@ import tomllib
 import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
+
+import _project
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -70,30 +73,26 @@ def hex_packages(manifest_text: str) -> list[tuple[str, str]]:
         raise CannotDecideError(f"manifest.toml has a hex package without {error}") from error
 
 
-def otp_release(pixi_text: str) -> str:
-    """The OTP release the exact `erlang` pin in pixi.toml names."""
+def otp_release(project: Path) -> str:
+    """The OTP release the installed tool environment was built with."""
     try:
-        pin = tomllib.loads(pixi_text)["feature"]["otp"]["dependencies"]["erlang"]
-    except (tomllib.TOMLDecodeError, KeyError, TypeError) as error:
-        raise CannotDecideError(
-            f"pixi.toml has no erlang pin in [feature.otp]: {error}"
-        ) from error
-    match = re.fullmatch(r"==(\d+(?:\.\d+)*)", pin) if isinstance(pin, str) else None
-    if match is None:
-        raise CannotDecideError(f"the erlang pin {pin!r} is not one exact version")
-    return match[1]
+        version = _project.pin(project, "otp")
+    except _project.PinsError as error:
+        raise CannotDecideError(str(error)) from error
+    if re.fullmatch(r"\d+(?:\.\d+)*", version) is None:
+        raise CannotDecideError(f"the OTP version {version!r} is not a release number")
+    return version
 
 
 def subjects(project: Path) -> list[Subject]:
     """Everything one audit of `project` asks about, the OTP release last."""
     try:
         manifest = (project / "manifest.toml").read_text(encoding="utf-8")
-        pixi = (project / "pixi.toml").read_text(encoding="utf-8")
     except OSError as error:
         raise CannotDecideError(str(error)) from error
     return [
         *(Subject("Hex", name, version) for name, version in hex_packages(manifest)),
-        Subject("GIT", OTP_REPOSITORY, f"OTP-{otp_release(pixi)}"),
+        Subject("GIT", OTP_REPOSITORY, f"OTP-{otp_release(project)}"),
     ]
 
 

@@ -17,7 +17,7 @@ from conftest import run_checker
 
 def install_fake(repository: Path, output: str, status: int = 0, version: str = "3.6.1") -> None:
     """Stand in for the external binary, using its version and report protocol."""
-    binary = repository / ".tools/bin/allium"
+    binary = repository / ".nix/tools/bin/allium"
     binary.parent.mkdir(parents=True, exist_ok=True)
     binary.write_text(
         f"#!{sys.executable}\n"
@@ -27,12 +27,9 @@ def install_fake(repository: Path, output: str, status: int = 0, version: str = 
     )
     binary.chmod(0o755)
     (repository / "allium-response.json").write_text(json.dumps([output, status, version]))
-    (repository / "tools.txt").write_text(
-        "".join(
-            f"allium 3.6.1 {platform} https://example.invalid/allium {'a' * 64} allium\n"
-            for platform in ("linux-64", "osx-arm64")
-        )
-    )
+    pins = repository / ".nix/tools/share/knarr/pins.json"
+    pins.parent.mkdir(parents=True, exist_ok=True)
+    pins.write_text(json.dumps({"allium": "3.6.1"}))
     (repository / "checks.toml").write_text('[allium]\nspecs = "specifications"\n')
     specs = repository / "specifications"
     specs.mkdir(exist_ok=True)
@@ -47,7 +44,7 @@ def run(
     output, status, version = json.loads((repository / "allium-response.json").read_text())
 
     def execute(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess:
-        binary = repository / ".tools/bin/allium"
+        binary = repository / ".nix/tools/bin/allium"
         assert argv[0] == str(binary)
         if not binary.exists():
             raise FileNotFoundError(binary)
@@ -170,7 +167,7 @@ def test_recursive_modules_and_back_to_back_reports_pass(repository: Path) -> No
 def test_missing_or_wrong_binary_requires_initialize(repository: Path, version: str) -> None:
     install_fake(repository, "", version=version)
     if version == "missing":
-        (repository / ".tools/bin/allium").unlink()
+        (repository / ".nix/tools/bin/allium").unlink()
     result = run(repository, cli=True)
     assert result.returncode == 1
     assert "run just initialize" in result.stderr

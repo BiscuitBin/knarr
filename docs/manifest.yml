@@ -360,6 +360,19 @@
       "requires": []
     },
     {
+      "path": "decisions/0017-nix-tool-manager.md",
+      "title": "Decision 0017: Nix owns the tools and the images",
+      "kind": "decision",
+      "audience": [
+        "maintainer",
+        "agent"
+      ],
+      "canonical_for": [
+        "decision_nix_tool_manager"
+      ],
+      "requires": []
+    },
+    {
       "path": "how-to/local-cluster.md",
       "title": "Run Knarr on a local cluster",
       "kind": "how-to",

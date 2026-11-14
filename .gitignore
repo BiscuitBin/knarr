@@ -20,13 +20,12 @@ erl_crash.dump
 # reads it next.
 test/birdie_snapshots/*.new
 
-# The pixi environments `just initialize` installs from pixi.lock (Decision
-# 0003): the compiler, OTP, Python and every gate tool.
-.pixi/
+# The out-link to the Nix tool environment `just initialize` builds from
+# flake.lock (Decision 0017): the compiler, OTP, Python and every other tool.
+.nix/
 
-# The checksum-pinned downloads tools.txt names (rebar3, ripsecrets,
-# editorconfig-checker), installed into .tools/bin by `just initialize`.
-.tools/
+# What direnv writes if a contributor's own .envrc uses the flake's dev shell.
+.direnv/
 
 # What Python writes when the gate checkers and their tests run. The Justfile
 # also exports PYTHONDONTWRITEBYTECODE=1 and pytest runs without its cache

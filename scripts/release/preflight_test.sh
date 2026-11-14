@@ -9,7 +9,7 @@
 # does not carry, a missing or stale changelog heading (one a line of prose
 # naming a heading neither hides nor stands in for), a chart that disagrees
 # with the version, a local tag that already exists, and a missing commit.
-# Needs helm (the default pixi environment).
+# Needs helm (the Nix tool environment).
 # Usage: sh scripts/release/preflight_test.sh
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)

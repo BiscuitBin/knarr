@@ -58,8 +58,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          cluster: "true"
+      # Docker's build stage runs Nix without its sandbox, so both image roots
+      # are built here first, sandboxed: a build that reached for the network
+      # or the host fails here rather than passing unnoticed in the image.
+      - run: nix build --no-update-lock-file --no-link .#knarr-rootfs .#fake-worker-rootfs
       - run: just cluster-up
       - run: just image-build
       - run: just image-check
@@ -89,8 +91,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          cluster: "true"
       - run: just cluster-up
       - run: just fake-worker-image-build
       - run: just fake-worker-image-check
@@ -116,8 +116,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          cluster: "true"
       - run: just cluster-up
       - run: just cluster-ready
       - if: failure()

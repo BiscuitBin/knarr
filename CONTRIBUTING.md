@@ -39,7 +39,7 @@ Tracked bootstrap tickets and evidence belong in `.scratch/bootstrap/`. Temporar
 
 ## Getting started
 
-You need [pixi](https://pixi.sh) 0.81.0 or later, git, curl and a POSIX shell. pixi installs everything else from `pixi.lock`: Gleam, Erlang/OTP, `just`, Python and every gate tool ([Decision 0003](docs/decisions/0003-tool-manager.md)).
+You need [Nix](https://nixos.org/download/), git and a POSIX shell, on Linux (x86_64 or arm64) or macOS on Apple silicon. Nix installs everything else at the versions `flake.lock` pins: Gleam, Erlang/OTP, `just`, Python and every other tool ([Decision 0017](docs/decisions/0017-nix-tool-manager.md)). Flakes need not be enabled in your `nix.conf`; every command here enables them for itself. Building an image or running a local cluster also needs Docker.
 
 From a fresh clone, run one command:
 
@@ -47,14 +47,15 @@ From a fresh clone, run one command:
 just initialize
 ```
 
-Any recent `just` works; 1.51 and the pinned 1.58 are known to. Without one, run `sh scripts/initialize.sh`, which is exactly what the recipe runs. Afterwards the pinned `just` is at `.pixi/envs/default/bin/just`. `just initialize` is the one first-run command:
+Without a `just` of your own, run `sh scripts/initialize.sh`, which is exactly what the recipe runs. Afterwards the pinned `just` is at `.nix/tools/bin/just`. `just initialize` is the one first-run command:
 
-- It installs the pixi environment, exactly as `pixi.lock` pins it.
-- It downloads the tools conda-forge lacks into `.tools/bin`, refusing any whose sha256 differs from `tools.txt`.
+- It builds the tool environment, exactly as `flake.lock` pins it, behind the `.nix/tools` link. Everything in it comes from the Nix binary cache; nothing is compiled.
 - It downloads Gleam's hex packages.
 - In the primary checkout, it installs the pre-commit hook.
 
-It never formats, stages, commits or pushes, and it is safe to rerun. Rerun it after a pull that moves a pin in `pixi.lock` or `tools.txt`. Until you do, `just check` fails at `env-check` rather than running the old tools.
+It never formats, stages, commits or pushes, and it is safe to rerun. Rerun it after a pull that moves `flake.lock` or a file under `nix/`. Until you do, `just check` fails at `env-check` rather than running the old tools.
+
+Every recipe and hook finds the tools through `.nix/tools/bin` on its own. For your own shell, either put that directory on `PATH` or let [direnv](https://direnv.net) do it: the committed `.envrc` adds it and evaluates nothing. `nix develop` gives the same tools, but on a `flake.lock` that disagrees with `flake.nix` it rewrites the lock, which is why no recipe uses it.
 
 **Repository initialization needs network; `just check` runs offline.** An agent needs an explicit network grant before the first run of `just initialize`. Each later network action needs its own authorization; see [Authorization](#authorization).
 
@@ -80,7 +81,7 @@ Recipes may write ignored paths, such as `build/` and the `<title>.new` a failin
 The pre-commit hook runs the read-only config, `.pre-commit-config.yaml`. `just fix` runs `.pre-commit-fix.yaml`. The [testing reference](docs/reference/testing.md) covers the snapshot recipes and how `just check` stays read-only around them.
 
 [CI](.github/workflows/ci.yml) runs `just check` on every pull request and
-every push to `main`, using the same locked environment and `just initialize`
+every push to `main`, using the same locked environment and initialization
 as contributors. Its aggregate `check` fails if any gate job fails, is cancelled,
 or is skipped. `check` is the only required status check on `main`.
 Administrators are exempt, so it binds pull requests but not an owner's
@@ -97,12 +98,10 @@ and on manual dispatch, outside the required gate:
 - `just links-audit` checks that remote links still resolve.
 - `just hex-audit` checks the hex packages and the OTP pin against OSV.dev
   advisories.
-- `just image-scan` runs grype over the OS packages of the image
-  `just image-build` builds. It does not read the image's conda runtime
-  environment.
-- `just runtime-scan` copies that runtime environment out of the image and
-  runs grype over its conda packages as a directory. It fails when grype
-  catalogues no conda package.
+- `just image-scan` runs grype over the image `just image-build` builds.
+- `just runtime-scan` copies the Nix store out of that image and runs grype
+  over its packages as a directory. It fails when grype catalogues no store
+  package.
 
 Remote availability and published advisories change without a commit
 ([Decision 0014](docs/decisions/0014-dependency-updates-and-audit.md)).
@@ -112,16 +111,17 @@ propose most of these edits as pull requests, held until ticket 44 activates
 it ([Decision 0014](docs/decisions/0014-dependency-updates-and-audit.md)). A
 proposal lands like any other change, and a reviewer checks the same steps:
 
-- **A conda package:** edit its `==` line in `pixi.toml`, run `pixi update <package>`, read the `pixi.lock` diff, commit both files, and rerun `just initialize`.
-- **A tools.txt download:** replace both platforms' lines with the new URL and sha256, and rerun `just initialize`.
+- **The tools, all at once:** one nixpkgs revision in `flake.lock` pins every tool and both images' contents. Run `just tool-versions` and keep its output, then `nix flake update` (it needs network), `just initialize` and `just tool-versions` again: the difference is what moved, which the `flake.lock` diff does not say. Run `just check`; a newer linter may have new findings, and `just fix` repairs what it can. Commit `flake.lock` with whatever the findings changed.
+- **Allium or kubectl:** nixpkgs does not own these two. Edit the version in `nix/allium.nix` or `nix/kubectl.nix` and each platform's sha256 beside it, from the release's published checksums or `nix store prefetch-file --hash-type sha256 <url>`, and rerun `just initialize`.
+- **The build stage's Nix:** the `FROM nixos/nix` line is the same in `Dockerfile` and `fixtures/fake_worker/Dockerfile`; move the tag and index digest in both.
 - **A Gleam dependency:** edit `gleam.toml`, run `gleam deps download` (or `gleam deps update`), read the `manifest.toml` diff, and commit both. The gate fails while the two disagree. The fake worker fixture is a second Gleam project, so a package it shares with knarr moves in `fixtures/fake_worker/gleam.toml` and its `manifest.toml` too, through `gleam deps download` there; `test_fake_worker_manifest.py` fails while the two projects lock different versions.
 
 ## Specifications
 
 Allium modules live in [docs/specs/](docs/specs/knarr.allium), configured by
 `[allium] specs` in `checks.toml`. The root module is a skeleton; later tickets
-add behaviour clauses. `just initialize` installs Allium 3.6.1 from the
-checksum pins in `tools.txt`.
+add behaviour clauses. `just initialize` installs Allium 3.6.1, which
+`nix/allium.nix` pins by checksum.
 
 - `just check-specs` fails on every diagnostic, including informational ones.
 - `just analyse-specs` fails on every finding or diagnostic.
@@ -135,7 +135,7 @@ is a development command and is not part of the gate.
 
 [AGENTS.md](AGENTS.md#invariants) requires explicit authorization for each action that leaves the worktree. Approval for one action does not authorize the next. In particular, obtain authorization before:
 
-- Network access, including `git fetch`, `git pull`, `just initialize`, `gleam deps download`, `just links-audit`, `just hex-audit`, `just image-scan`, `just runtime-scan`, `just audit-install`, `just observability-up` and image or tool downloads.
+- Network access, including `git fetch`, `git pull`, `just initialize`, `gleam deps download`, `just links-audit`, `just hex-audit`, `just image-build`, `just image-scan`, `just runtime-scan`, `just observability-up`, any `nix` command that builds or updates, and image or tool downloads.
 - Pushing a branch or tag, or running any `gh` command, including reads.
 - Registry operations or operations against a non-local cluster.
 - Opening, updating or merging a pull request, or changing repository settings.

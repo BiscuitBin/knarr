@@ -12,7 +12,7 @@
     "dockerfile",
     "github-actions",
     "gleam",
-    "pixi"
+    "nix"
   ],
   "ignorePaths": [
     ".scratch/**"
@@ -37,7 +37,7 @@
       "rangeStrategy": "update-lockfile"
     },
     {
-      "description": "Every action pinned by SHA, and the runner labels, in one group, which Renovate still splits: a major update gets a pull request of its own (separateMajorMinor). An action's SHA and its version comment move together. The runner label is named ubuntu, like the runtime base, so without this it would share the runtime base's pull request.",
+      "description": "Every action pinned by SHA, and the runner labels, in one group, which Renovate still splits: a major update gets a pull request of its own (separateMajorMinor). An action's SHA and its version comment move together.",
       "matchManagers": [
         "github-actions"
       ],
@@ -48,64 +48,20 @@
       "groupName": "GitHub Actions"
     },
     {
-      "description": "Every conda pin, and pixi.lock's maintenance, waits for approval: relocking pixi.lock is an unsafe execution the hosted app may not be allowed to run, so each update is approved and its lock diff read (ticket 44).",
+      "description": "The nixpkgs pin, and flake.lock's maintenance, waits for approval: one revision moves the compiler, OTP and every other tool at once, and both images with them, so each update is approved, read with `just tool-versions` before and after, and run through the gate (Decision 0017). Rewriting flake.lock means running nix, an execution the hosted app has not been shown to allow.",
       "matchManagers": [
-        "pixi"
+        "nix"
       ],
+      "groupName": "nix",
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Renovate reads setup-pixi's pixi-version input natively, as prefix-dev/pixi on GitHub releases, but proposed no update from 0.80.0 when 0.81.0 was out (Decision 0014); the pixi regex manager reads the input instead.",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchDepTypes": [
-        "uses-with"
-      ],
-      "matchPackageNames": [
-        "prefix-dev/pixi"
-      ],
-      "enabled": false
-    },
-    {
-      "description": "The pixi version, written in five places (the floor, setup-pixi's input, the cache key, the build stage's FROM and the contributing guide), moves in one pull request; scripts/checks/tests/test_dependency_pins.py fails until all five agree.",
-      "matchPackageNames": [
-        "ghcr.io/prefix-dev/pixi"
-      ],
-      "groupName": "pixi",
-      "dependencyDashboardApproval": true
-    },
-    {
-      "description": "The floor, setup-pixi's input, the cache key and the contributing guide name a pixi version, not an image, so docker:pinDigests has no digest to add there.",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchPackageNames": [
-        "ghcr.io/prefix-dev/pixi"
-      ],
-      "pinDigests": false
-    },
-    {
-      "description": "The local-cluster images move together and wait for approval.",
+      "description": "The local-cluster images move together and wait for approval. kind, kustomize and helm move with the nixpkgs pin, and kubectl by hand in nix/kubectl.nix; scripts/checks/tests/test_dependency_pins.py holds kubectl within one minor of the node image.",
       "matchManagers": [
         "custom.regex"
       ],
       "matchFileNames": [
         "scripts/checks/cluster.py"
-      ],
-      "groupName": "local cluster",
-      "dependencyDashboardApproval": true
-    },
-    {
-      "description": "kind, kubectl, kustomize and helm join the cluster images: a kind release names the node images it supports, kubectl talks to the cluster across at most one minor version, and helm renders the local observability stack (ticket 51).",
-      "matchManagers": [
-        "pixi"
-      ],
-      "matchPackageNames": [
-        "kubernetes-kind",
-        "kubernetes-client",
-        "kustomize",
-        "kubernetes-helm"
       ],
       "groupName": "local cluster",
       "dependencyDashboardApproval": true
@@ -128,7 +84,7 @@
       "allowedVersions": "/^3\\.6\\./"
     },
     {
-      "description": "The kwok controller image moves only by hand, with kwokctl's line in tools.txt: both name one kwok release, and no bot can rehash that line (Decision 0014).",
+      "description": "The kwok controller image moves only by hand, with the kwokctl the nixpkgs pin carries: both name one kwok release, and scripts/checks/tests/test_dependency_pins.py fails until they agree (Decision 0017).",
       "matchPackageNames": [
         "registry.k8s.io/kwok/kwok"
       ],
@@ -162,23 +118,6 @@
       "matchStrings": [
         "\"(?<depName>[a-z0-9.-]+(?:/[a-z0-9._-]+)+):(?<currentValue>[A-Za-z0-9._-]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
       ],
-      "datasourceTemplate": "docker"
-    },
-    {
-      "customType": "regex",
-      "description": "The pixi version outside the Dockerfile: the floor in pixi.toml, setup-pixi's input and the cache key in the setup action, and the contributing guide's prerequisite. Read against the pixi image's tags, so all four move with the build stage's FROM; the pixi group keeps the five in one pull request.",
-      "managerFilePatterns": [
-        "/^pixi\\.toml$/",
-        "/^\\.github/actions/setup/action\\.yml$/",
-        "/^CONTRIBUTING\\.md$/"
-      ],
-      "matchStrings": [
-        "requires-pixi = \">=(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",
-        "pixi-version: v(?<currentValue>\\d+\\.\\d+\\.\\d+)",
-        "cache-key: knarr-pixi-v(?<currentValue>\\d+\\.\\d+\\.\\d+)-",
-        "\\[pixi\\]\\(https://pixi\\.sh\\) (?<currentValue>\\d+\\.\\d+\\.\\d+) or later"
-      ],
-      "depNameTemplate": "ghcr.io/prefix-dev/pixi",
       "datasourceTemplate": "docker"
     }
   ]

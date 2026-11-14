@@ -1,8 +1,10 @@
 # The fake worker image's build context, an allowlist like the root
 # .dockerignore, which BuildKit reads instead of that file for this Dockerfile.
 *
-!pixi.toml
-!pixi.lock
+!flake.nix
+!flake.lock
+!nix/
+!nix/**
 !scripts/
 scripts/*
 !scripts/container-entrypoint.sh

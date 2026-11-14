@@ -4,13 +4,15 @@ Copied from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
 (6c5c07f6bec86e86b3930dfa41392e4b440e8c85), src/biscuit_games_tooling/_project.py,
 and reduced as Decision 0004 records: `root()` is kept, the pyproject.toml
 reader and the default recipe list are gone, and every setting now comes from
-checks.toml through `table()`, which fails closed.
+checks.toml through `table()`, which fails closed. `pins()` is knarr's own: it
+reads the tool versions the installed Nix environment records (Decision 0017).
 
 SPDX-License-Identifier: Apache-2.0
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tomllib
@@ -18,6 +20,34 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 CHECKS_FILE = "checks.toml"
+# The out-link `just initialize` builds, and the record nix/tools.nix writes
+# into it: the version of each tool a checker depends on.
+TOOLS = ".nix/tools"
+PINS_FILE = f"{TOOLS}/share/knarr/pins.json"
+
+
+class PinsError(RuntimeError):
+    """The installed tool environment's version record is missing or unreadable."""
+
+
+def pins(project_root: Path) -> dict[str, str]:
+    """The tool versions the installed Nix environment was built with."""
+    path = project_root / PINS_FILE
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise PinsError(f"{PINS_FILE} is missing or unreadable; run just initialize") from error
+    if not isinstance(record, dict) or not all(isinstance(v, str) for v in record.values()):
+        raise PinsError(f"{PINS_FILE} is not a table of versions; run just initialize")
+    return record
+
+
+def pin(project_root: Path, tool: str) -> str:
+    """One tool's version from `pins()`; a tool the record does not name is an error."""
+    version = pins(project_root).get(tool)
+    if not version:
+        raise PinsError(f"{PINS_FILE} names no {tool} version; run just initialize")
+    return version
 
 
 def root() -> Path:

@@ -24,6 +24,9 @@ on:
     paths:
       - .github/workflows/reconcile-proof.yml
       - .github/actions/setup/**
+      - flake.nix
+      - flake.lock
+      - nix/**
       - .scratch/bootstrap/evidence/14/tls/**
       - .scratch/bootstrap/evidence/14/wrong-ca.sh
       - .scratch/bootstrap/evidence/31/**
@@ -62,8 +65,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          cluster: "true"
       - run: sh .scratch/bootstrap/evidence/14/tls/run.sh "$PWD" "$RUNNER_TEMP/tls"
       - run: sh .scratch/bootstrap/evidence/31/reconcile-kind.sh "$PWD" "$RUNNER_TEMP/reconcile-kind"
       - run: sh .scratch/bootstrap/evidence/47/cleanup-kind.sh "$PWD" "$RUNNER_TEMP/cleanup-kind"

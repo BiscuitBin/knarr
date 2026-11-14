@@ -1,12 +1,12 @@
 # The fix config: the mutating counterpart to .pre-commit-config.yaml. Never
-# installed as a hook; only `just fix` runs it. Every hook is local, from pixi.
+# installed as a hook; only `just fix` runs it. Every hook is local, from the
+# Nix tool environment.
 exclude: >-
   (?x)^(
-    \.pixi/|
-    \.tools/|
+    \.nix/|
     build/|
     ai_tmp/|
-    pixi\.lock$|
+    flake\.lock$|
     manifest\.toml$|
     fixtures/fake_worker/manifest\.toml$|
     \.scratch/bootstrap/evidence/|
@@ -59,3 +59,9 @@ repos:
         entry: sh scripts/with-env.sh typos --force-exclude --write-changes
         language: system
         types: [text]
+
+      - id: nixfmt
+        name: nixfmt
+        entry: sh scripts/with-env.sh nixfmt
+        language: system
+        files: \.nix$

@@ -48,7 +48,7 @@ def test_selection(paths, regressions, runtime, clusters):
 
 @pytest.mark.parametrize(
     "paths",
-    [None, ["pixi.lock"], ["justfile"], ["new-script.sh"], ["scripts/checks/tests/conftest.py"]],
+    [None, ["flake.lock"], ["justfile"], ["new-script.sh"], ["scripts/checks/tests/conftest.py"]],
 )
 def test_unknown_and_shared_inputs_run_everything(paths):
     result = suite.select(paths)

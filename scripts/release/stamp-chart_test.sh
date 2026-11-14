@@ -5,7 +5,7 @@
 # with helm, then seeds the failures the release must refuse: a version that
 # disagrees with Chart.yaml, an appVersion that disagrees, a malformed digest,
 # and a values.yaml the stamp cannot find its keys in.
-# Needs helm (the default pixi environment).
+# Needs helm (the Nix tool environment).
 # Usage: sh scripts/release/stamp-chart_test.sh
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)

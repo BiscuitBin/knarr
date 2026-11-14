@@ -14,16 +14,19 @@ import secrets
 import subprocess
 import sys
 import time
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import _project
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME_ENV = "/opt/knarr/.pixi/envs/runtime"
+# nix/image.nix links the image's runtime environment here: the OTP and the
+# openssl CLI the container runs, under one bin/.
+RUNTIME_ENV = "/opt/knarr/runtime"
 # Decision 0003's Verify 1: Erlang ssl against the openssl CLI's certificates.
 TLS_CHECK = ROOT / ".scratch/bootstrap/evidence/01/tls"
 
@@ -111,25 +114,13 @@ def checked(failure, *arguments):
 
 
 def verify_runtime_environment(image, common):
-    """The Dockerfile prunes perl from the runtime environment (ticket 45). Pruning
-    breaks the lock's guarantee that what was tested is what ships, so the TLS
-    check Decision 0003 names runs again here, with the pruned environment's own
-    erlang and openssl, writing only to the /tmp tmpfs."""
-    checked(
-        "perl is still in the runtime environment",
-        *common,
-        "--rm",
-        "--entrypoint=sh",
-        image,
-        "-c",
-        f"""set -eu
-test -d {RUNTIME_ENV}/conda-meta || {{ echo 'no conda-meta in {RUNTIME_ENV}'; exit 1; }}
-test ! -e {RUNTIME_ENV}/bin/perl || {{ echo '{RUNTIME_ENV}/bin/perl'; exit 1; }}
-for record in {RUNTIME_ENV}/conda-meta/perl-*.json; do test ! -e "$record" || {{ echo "$record"; exit 1; }}; done""",
-    )
+    """The image runs the same Erlang derivation the gate tested with, but inside
+    its own root filesystem, where a missing library or openssl file would only
+    show at run time. So the TLS check Decision 0003 names runs again here, with
+    the image's own erlang and openssl, writing only to the /tmp tmpfs."""
     print(
         checked(
-            "TLS check failed in the pruned runtime environment",
+            "TLS check failed in the image's runtime environment",
             *common,
             "--rm",
             f"--volume={TLS_CHECK}:/opt/tls-check:ro",
@@ -325,10 +316,9 @@ def main():
     if len(arguments) != 1:
         raise ValueError("usage: image.py [--fake-worker] <image>")
     image = arguments[0]
-    pin = tomllib.loads((ROOT / "pixi.toml").read_text())["feature"]["otp"]["dependencies"][
-        "erlang"
-    ]
-    expected = pin.removeprefix("==").split(".")[0]
+    # The OTP the installed tool environment was built with: the flake hands
+    # that one Erlang to the tools and to both images (Decision 0017).
+    expected = _project.pin(ROOT, "otp").split(".")[0]
     inspected = json.loads(output("docker", "image", "inspect", image))[0]
     config = inspected["Config"]
     if config["User"] != "10001:10001":

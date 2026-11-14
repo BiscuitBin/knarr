@@ -3,7 +3,8 @@
 Copied from github.com/steven-cutting/biscuit_games_tooling at v0.3.0
 (6c5c07f6bec86e86b3930dfa41392e4b440e8c85),
 src/biscuit_games_tooling/run_allium.py. Adapted per Decision 0004:
-checks.toml owns the specs path, tools.txt owns the version pin.
+checks.toml owns the specs path; nix/allium.nix owns the version pin (Decision
+0017).
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -12,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -148,24 +148,9 @@ def _read(
 
 
 def _binary(project_root: Path) -> Path:
-    """Only run the project-managed binary, at the host platform's pinned version."""
-    host = {("Darwin", "arm64"): "osx-arm64", ("Linux", "x86_64"): "linux-64"}.get(
-        (platform.system(), platform.machine())
-    )
-    if host is None:
-        raise RuntimeError("tools.txt pins no Allium for this platform")
-    pins = []
-    for line in (project_root / "tools.txt").read_text().splitlines():
-        fields = line.split()
-        if not fields or fields[0].startswith("#"):
-            continue
-        if len(fields) != 6:
-            raise RuntimeError("tools.txt contains a malformed pin")
-        if fields[0] == "allium" and fields[2] == host:
-            pins.append(fields[1])
-    if len(pins) != 1:
-        raise RuntimeError(f"tools.txt must contain exactly one allium pin for {host}")
-    binary = project_root / ".tools/bin/allium"
+    """Only run the project-managed binary, at the version the flake pins."""
+    pinned = _project.pin(project_root, "allium")
+    binary = project_root / _project.TOOLS / "bin/allium"
     try:
         result = subprocess.run(
             [str(binary), "--version"], check=False, capture_output=True, text=True
@@ -173,8 +158,8 @@ def _binary(project_root: Path) -> Path:
     except OSError as error:
         raise RuntimeError("Allium is missing or cannot run; run just initialize") from error
     fields = result.stdout.split()
-    if result.returncode or len(fields) < 2 or fields[:2] != ["allium", pins[0]]:
-        raise RuntimeError(f"Allium does not match tools.txt ({pins[0]}); run just initialize")
+    if result.returncode or len(fields) < 2 or fields[:2] != ["allium", pinned]:
+        raise RuntimeError(f"Allium does not match nix/allium.nix ({pinned}); run just initialize")
     return binary
 
 

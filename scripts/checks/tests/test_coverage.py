@@ -24,13 +24,12 @@ def prepare(project: Path) -> None:
     for name in ("gleam.toml", "manifest.toml", "Justfile", ".gitignore"):
         shutil.copyfile(ROOT / name, project / name)
     shutil.copyfile(ROOT / "scripts/cluster-name.sh", project / "scripts/cluster-name.sh")
-    for name in (".pixi", ".tools"):
-        (project / name).symlink_to(ROOT / name, target_is_directory=True)
+    (project / ".nix").symlink_to(ROOT / ".nix", target_is_directory=True)
 
 
 def track(project: Path) -> None:
     git(project, "init", "-q")
-    (project / ".git/info/exclude").write_text(".pixi\n.tools\n")
+    (project / ".git/info/exclude").write_text(".nix\n")
     git(project, "add", ".")
 
 
@@ -47,7 +46,7 @@ def coverage_template() -> Iterator[Path]:
         # Reuse compiled dependencies, but compile only the tiny probe application.
         shutil.rmtree(project / "build/dev/erlang/knarr")
         result = subprocess.run(
-            [str(ROOT / ".pixi/envs/default/bin/just"), "build"],
+            [str(ROOT / ".nix/tools/bin/just"), "build"],
             cwd=project,
             capture_output=True,
             text=True,
@@ -170,7 +169,7 @@ def run_coverage(project: Path, **environment: str) -> subprocess.CompletedProce
     baseline = git(project, "status", "--porcelain", "--untracked-files=all")
     diff = git(project, "diff")
     result = subprocess.run(
-        [str(ROOT / ".pixi/envs/default/bin/just"), "coverage"],
+        [str(ROOT / ".nix/tools/bin/just"), "coverage"],
         cwd=project,
         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **environment},
         capture_output=True,

@@ -83,20 +83,48 @@ def test_image_cannot_bypass_the_descriptor_wrapper(monkeypatch):
         image.main()
 
 
-@pytest.mark.parametrize("dockerfile", ["Dockerfile", "fixtures/fake_worker/Dockerfile"])
-def test_build_fetches_rebar_without_curl_and_matches_tool_pin(dockerfile):
-    pins = [line.split() for line in (image.ROOT / "tools.txt").read_text().splitlines()]
-    pin = next(row for row in pins if row and row[0] == "rebar3" and row[2] == "linux-64")
-    assert f"ADD --checksum=sha256:{pin[4]} {pin[3]} " in (image.ROOT / dockerfile).read_text()
+DOCKERFILES = {
+    "Dockerfile": (image.KNARR, "knarr-rootfs"),
+    "fixtures/fake_worker/Dockerfile": (image.FAKE_WORKER, "fake-worker-rootfs"),
+}
+
+
+@pytest.mark.parametrize("dockerfile", DOCKERFILES)
+def test_an_image_is_only_the_root_filesystem_the_flake_builds(dockerfile):
+    # The flake decides what an image holds (nix/image.nix); a Dockerfile that
+    # installed or copied anything else would ship what no pin names.
+    _, rootfs = DOCKERFILES[dockerfile]
+    lines = (image.ROOT / dockerfile).read_text().splitlines()
+    runtime = lines[lines.index("FROM scratch AS runtime") + 1 :]
+    assert [line for line in runtime if line.startswith(("COPY", "ADD", "RUN"))] == [
+        "COPY --from=build /rootfs/ /"
+    ]
+    builds = [line for line in lines if " build " in line and line.lstrip().startswith("RUN nix ")]
+    assert [line.rsplit(" .#", 1)[1].split()[0] for line in builds] == ["image-toolchain", rootfs]
+    # A nix that may update flake.lock would build from a lock nobody reviewed.
+    assert all("--no-update-lock-file" in line for line in builds)
+
+
+@pytest.mark.parametrize("dockerfile", DOCKERFILES)
+def test_an_image_declares_the_entrypoint_its_check_expects(dockerfile):
+    profile, _ = DOCKERFILES[dockerfile]
+    lines = (image.ROOT / dockerfile).read_text().splitlines()
+    assert f"ENTRYPOINT {json.dumps(profile.entrypoint)}" in lines
+    assert "USER 10001:10001" in lines
 
 
 def test_fake_worker_images_build_as_knarrs_does():
-    # The same base images and locked environments, so one OTP owner for both.
+    # The same pinned Nix and the same toolchain layer, so one OTP owner for both.
     knarr = (image.ROOT / "Dockerfile").read_text().splitlines()
     fixture = (image.ROOT / "fixtures/fake_worker/Dockerfile").read_text().splitlines()
-    for line in knarr:
-        if line.startswith(("FROM ", "RUN pixi install", "USER ")):
-            assert line in fixture
+    shared = [
+        line
+        for line in knarr
+        if line.startswith(("FROM ", "USER ", "ENV ")) or ".#image-toolchain" in line
+    ]
+    assert len(shared) == 5
+    for line in shared:
+        assert line in fixture
 
 
 FAKE_WORKER_ENTRYPOINT = [
@@ -198,10 +226,10 @@ def test_the_knarr_entrypoint_does_not_pass_as_the_fake_workers(monkeypatch):
 
 
 COMMON = ["docker", "run", "--read-only", "--tmpfs=/tmp:rw,noexec,nosuid,size=16m"]
-RUNTIME_ENV = "/opt/knarr/.pixi/envs/runtime"
+RUNTIME_ENV = "/opt/knarr/runtime"
 
 
-def test_knarr_profile_proves_perl_pruned_and_reruns_the_tls_check(monkeypatch):
+def test_knarr_profile_reruns_the_tls_check_in_the_image(monkeypatch):
     commands = []
 
     def output(*arguments):
@@ -210,11 +238,7 @@ def test_knarr_profile_proves_perl_pruned_and_reruns_the_tls_check(monkeypatch):
 
     monkeypatch.setattr(image, "output", output)
     image.prepare_knarr("knarr:test", COMMON)
-    pruned, tls = commands
-    assert pruned[: len(COMMON)] == COMMON
-    assert pruned[len(COMMON) :][:3] == ["--rm", "--entrypoint=sh", "knarr:test"]
-    assert f"{RUNTIME_ENV}/bin/perl" in pruned[-1]
-    assert f"{RUNTIME_ENV}/conda-meta/perl-*.json" in pruned[-1]
+    (tls,) = commands
     assert tls[: len(COMMON)] == COMMON
     evidence = image.ROOT / ".scratch/bootstrap/evidence/01/tls"
     assert (evidence / "tls_check.escript").is_file()
@@ -223,20 +247,13 @@ def test_knarr_profile_proves_perl_pruned_and_reruns_the_tls_check(monkeypatch):
     assert tls[-4:] == ["knarr:test", "/opt/tls-check/run.sh", RUNTIME_ENV, "/tmp/tls"]
 
 
-@pytest.mark.parametrize(
-    ("failing", "message"),
-    [
-        pytest.param("bin/perl", "perl is still in the runtime environment", id="perl left"),
-        pytest.param("/opt/tls-check/run.sh", "TLS check failed", id="TLS mismatch"),
-    ],
-)
-def test_knarr_profile_fails_on_a_runtime_environment_check(monkeypatch, capsys, failing, message):
+def test_knarr_profile_fails_on_a_tls_mismatch(monkeypatch, capsys):
     def output(*arguments):
-        if any(failing in argument for argument in arguments):
+        if "/opt/tls-check/run.sh" in arguments:
             raise subprocess.CalledProcessError(1, arguments, output="what the check printed")
         return ""
 
     monkeypatch.setattr(image, "output", output)
-    with pytest.raises(RuntimeError, match=message):
+    with pytest.raises(RuntimeError, match="TLS check failed"):
         image.prepare_knarr("knarr:test", COMMON)
     assert "what the check printed" in capsys.readouterr().out
