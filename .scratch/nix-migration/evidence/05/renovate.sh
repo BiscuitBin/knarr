@@ -14,7 +14,8 @@
 #      also switched on ("nix": {"enabled": true}).
 #   3. The same on a stale copy: flake.lock's two channel inputs rolled back to
 #      real older revisions, and the build stage pinned as tag plus digest at
-#      the previous Nix release.
+#      the previous Nix release. Then a copy whose kubectl input follows the
+#      previous release channel, nixos-25.11, to see whether the ref moves.
 #   4. Whether the Renovate images carry nix, and whether the default image
 #      installs it at run time without a token.
 #   5. The lock file update itself, on the stale copy, in the pinned Nix image.
@@ -115,8 +116,25 @@ for path, live, older in ROLLBACKS:
 EOF
 echo '-- 3. the stale copy'
 lookup "$work/stale" "$work/stale.log"
+cp -R "$work/head" "$work/release"
+"$py" -I - "$work/release" << 'EOF'
+import sys
+from pathlib import Path
 
-"$py" -I - "$work/head.log" "$work/stale.log" "$proto/flake.nix" << 'EOF'
+release = Path(sys.argv[1])
+for path, live, older in (
+    ("flake.lock", '"ref": "nixos-26.05"', '"ref": "nixos-25.11"'),
+    ("flake.nix", '"github:NixOS/nixpkgs/nixos-26.05"', '"github:NixOS/nixpkgs/nixos-25.11"'),
+):
+    file = release / path
+    text = file.read_text(encoding="utf-8")
+    if text.count(live) != 1:
+        sys.exit(f"FAIL: {path} holds {live!r} {text.count(live)} times, want 1")
+    file.write_text(text.replace(live, older), encoding="utf-8")
+EOF
+lookup "$work/release" "$work/release.log"
+
+"$py" -I - "$work/head.log" "$work/stale.log" "$proto/flake.nix" "$work/release.log" << 'EOF'
 import json
 import re
 import sys
@@ -204,6 +222,10 @@ def report(label, path):
 
 report("scratch tree", sys.argv[1])
 deps = report("stale copy", sys.argv[2])
+print("[release-channel copy] nixpkgs-kubectl follows nixos-25.11 in flake.nix and flake.lock")
+for manager, package_file, dep in read(sys.argv[4])[2]:
+    if manager == "nix":
+        show(dep, package_file, manager)
 
 flake = open(sys.argv[3], encoding="utf-8").read()
 held = re.search(r"held = \{(.*?)\};", flake, re.S).group(1)

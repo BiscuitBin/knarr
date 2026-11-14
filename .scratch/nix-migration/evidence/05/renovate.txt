@@ -1,5 +1,5 @@
-date: 2026-11-14T21:48Z
-revision: 8875d21 (05-nix-ci-renovate-spike)
+date: 2026-11-14T21:57Z
+revision: 005ef45 (05-nix-ci-renovate-spike)
 image: ghcr.io/renovatebot/renovate:44.239.1@sha256:7dba1a3b916a2cf302ba0df458ddcc8fcbac3c92d0fe9882ac13ba0363de656b
 -- 1. the scratch tree, with "nix" in enabledManagers and nothing else
   nix is disabled
@@ -28,7 +28,7 @@ image: ghcr.io/renovatebot/renovate:44.239.1@sha256:7dba1a3b916a2cf302ba0df458dd
   nix:flake.nix nixpkgs packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixpkgs-unstable lockedVersion=2074cc672349f14240fb7ea90d509e0b643e9dd4
     proposes nothing
   nix:flake.nix nixpkgs-gleam packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentDigest=8edc0c72e3a38faf5434e40d1f19431125fe4b30
-    proposes digest -> @b19a27bf1d15d5f0883681f86663d015fb1b12d4 in renovate/nixpkgs-gleam-digest
+    proposes digest -> @19cb7128c50d099ae56dbc3e8b6a821b1c382249 in renovate/nixpkgs-gleam-digest
   nix:flake.nix nixpkgs-kubectl packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixos-26.05 lockedVersion=f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0
     proposes nothing
   dependencies skipped or warned about, by manager and datasource:
@@ -58,7 +58,7 @@ image: ghcr.io/renovatebot/renovate:44.239.1@sha256:7dba1a3b916a2cf302ba0df458dd
   nix:flake.nix nixpkgs packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixpkgs-unstable lockedVersion=9ac0edc06bfb33e6c0000be79d98ef8d89e26503
     proposes nothing
   nix:flake.nix nixpkgs-gleam packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentDigest=8edc0c72e3a38faf5434e40d1f19431125fe4b30
-    proposes digest -> @b19a27bf1d15d5f0883681f86663d015fb1b12d4 in renovate/nixpkgs-gleam-digest
+    proposes digest -> @19cb7128c50d099ae56dbc3e8b6a821b1c382249 in renovate/nixpkgs-gleam-digest
   nix:flake.nix nixpkgs-kubectl packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixos-26.05 lockedVersion=f7e804372523bedd74d273b173de45c8e02c6d9a
     proposes nothing
   dependencies skipped or warned about, by manager and datasource:
@@ -68,6 +68,13 @@ image: ghcr.io/renovatebot/renovate:44.239.1@sha256:7dba1a3b916a2cf302ba0df458dd
   warnings in the log:
       1 GitHub token is required for some dependencies
   lock-file branches in the branch summary: none
+[release-channel copy] nixpkgs-kubectl follows nixos-25.11 in flake.nix and flake.lock
+  nix:flake.nix nixpkgs packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixpkgs-unstable lockedVersion=2074cc672349f14240fb7ea90d509e0b643e9dd4
+    proposes nothing
+  nix:flake.nix nixpkgs-gleam packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentDigest=8edc0c72e3a38faf5434e40d1f19431125fe4b30
+    proposes digest -> @19cb7128c50d099ae56dbc3e8b6a821b1c382249 in renovate/nixpkgs-gleam-digest
+  nix:flake.nix nixpkgs-kubectl packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixos-25.11 lockedVersion=f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0
+    proposes major -> nixos-26.05 in renovate/nixpkgs-kubectl-26.x
 -- 6. every pin in flake.nix, and whether an extracted nix dependency carries it
   NOT extracted  held.erlang                  29.1.2
   NOT extracted  held.openssl                 3.5.9
@@ -85,16 +92,16 @@ image: ghcr.io/renovatebot/renovate:44.239.1@sha256:7dba1a3b916a2cf302ba0df458dd
   extracted      input nixpkgs-gleam          github:NixOS/nixpkgs/8edc0c72e3a38faf5434e40d1f19431125fe4b30
   extracted      input nixpkgs-kubectl        github:NixOS/nixpkgs/nixos-26.05
 -- what git-refs reads for nixpkgs now: the default branch and the two channels
-  b19a27bf1d15d5f0883681f86663d015fb1b12d4	HEAD
+  19cb7128c50d099ae56dbc3e8b6a821b1c382249	HEAD
   f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0	refs/heads/nixos-26.05
   2074cc672349f14240fb7ea90d509e0b643e9dd4	refs/heads/nixpkgs-unstable
 -- 4. nix in the Renovate images
 ghcr.io/renovatebot/renovate:44.239.1: no nix on PATH
 ghcr.io/renovatebot/renovate:44.239.1-full: /usr/local/bin/nix
 install-tool nix 2.35.6 in ghcr.io/renovatebot/renovate:44.239.1, no token:
-  [21:49:05.977] INFO (7): Installing tool nix@2.35.6...
+  [21:59:19.909] INFO (7): Installing tool nix@2.35.6...
   nix (Nix) 2.35.6
-  [21:49:06.988] INFO (7): Install tool nix succeeded in 1s.
+  [21:59:21.324] INFO (7): Install tool nix succeeded in 1.4s.
   exit 0
   nix (Nix) 2.35.6
 -- 5. the lock file update Renovate runs, on the stale copy, in the pinned Nix image

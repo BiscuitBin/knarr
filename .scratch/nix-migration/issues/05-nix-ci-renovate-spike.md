@@ -48,13 +48,14 @@ Everything on the runner ran on **x86_64-linux**, on GitHub's `ubuntu-24.04`, un
 - **Cache:** none. Cold setup took 33 to 40 seconds for the gate shape and 40 to 52 for the cluster shape. With `nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2`, warm setup took 30 to 38 and 43 to 44, for a 609 MB and a 766 MB cache entry. Each is under 9% of the shortest timeout. The main-only rule maps to `save: ${{ github.ref == 'refs/heads/main' }}`, and a `save: false` job showed restore without write. The cache was written from the spike branch as a measurement shortcut.
 - **Gate:** `just check` passed in all six gate jobs, in 117 to 138 seconds, and ended "All checks passed and the worktree is unchanged.". `gate-scratch.patch` was applied without its `run_allium.py` hunk, which confirms that hunk is not needed on x86_64. allium's patched derivation was built and runs on x86_64.
 - **Checker tests:** `just test-checkers-all` had 792 passed, 2 failed and none skipped, in all six checker jobs. The two are the ripsecrets wrapper tests. Their fixture copies `.tools/bin/ripsecrets` with `shutil.copy2`, which keeps the store file's read-only mode, and then writes to the copy as uid 1001. Ticket 01 ran as root and did not see it.
-- **Image:** the prototype built for linux/amd64, with the pull and a `--no-cache` build taking at most 94 seconds. The six TLS cases passed under `image-check`'s restrictions on OTP 29 and OpenSSL 3.5.9. `/readyz` answered and memory was about 50 MiB.
+- **Image:** the prototype built for linux/amd64, with both pulls and a `--no-cache` build taking at most 95 seconds. The six TLS cases passed under `image-check`'s restrictions on OTP 29 and OpenSSL 3.5.9. `/readyz` answered and memory was about 50 MiB.
 - **kind**, beyond the ticket: `just cluster-up` and `just cluster-ready` with the `cluster` group's kind 0.33.0 and kubectl 1.36.3 brought up `kindest/node:v1.35.8` in 36 to 39 seconds.
 - **Renovate 44.239.1:**
   - The nix manager needs `"nix": {"enabled": true}` as well as `enabledManagers`.
   - It extracts the three flake inputs from `flake.lock` through git-refs, and needs no token for that.
   - It proposes nothing for the two channel inputs, even on a stale lock.
-  - It proposes moving the revision-pinned `nixpkgs-gleam` to nixpkgs `master` `HEAD`.
+  - It does propose moving a release channel's name: an input following `nixos-25.11` drew `major → nixos-26.05`.
+  - It extracts the revision-pinned `nixpkgs-gleam` too, and proposes moving it to nixpkgs `master` `HEAD`.
   - It tracks the build-stage image only when the `FROM` line has a tag as well as a digest.
   - The lock commands from its source, run in `nixos/nix` 2.35.6, moved both channel inputs, and the holds still evaluated. The slim image installs `nix` anonymously; the `-full` image ships it.
   - It did not extract the eight held versions, the allium URL or allium's three sha256.
@@ -85,7 +86,8 @@ Not verified:
 - **12 (Renovate):**
   - Add `"nix"` to `enabledManagers` and `"nix": {"enabled": true}`.
   - Add a rule switching off `nixpkgs-gleam`, or any input pinned by revision (`matchManagers: ["nix"]`, `matchDepNames`).
-  - Expect channel inputs to move only through `lockFileMaintenance`.
+  - Hold `nixpkgs-kubectl` to its release channel (for example `allowedVersions`), or Renovate will propose nixos-26.11 when it is released, which carries kubectl 1.37.
+  - Expect a channel input's locked revision to move only through `lockFileMaintenance`.
   - Consider `"constraints": {"nix": "2.35.6"}`.
   - The held attribute set and the allium asset are not extracted. A held version moves by moving an input, and the flake's assertions refuse a lock that loses one.
 - **44:** whether the hosted app runs the nix lock update, and with which binary.
