@@ -1,0 +1,35 @@
+date: 2026-11-14T22:48Z
+nix (Nix) 2.35.6 on aarch64
+clone at 4b02ea5, git status --short: 0 lines
+
+== KNARR_TOOLS=conda just --list: exit 0
+  Available recipes:
+      [audit]
+      hex-audit                                       # Check the hex packages and the OTP pin against OSV.dev advisories (needs network)
+
+== KNARR_TOOLS=conda just check: exit 2
+  backend=$(sh scripts/tool-dirs.sh backend); sh scripts/tool-dirs.sh tool python3 > /dev/null || { printf '%s\n' "the $backend environment is missing; run just initialize" >&2; exit 2; }
+  KNARR_TOOLS is 'conda'; set it to pixi or nix, or leave it unset for pixi
+  error: recipe `check` failed on line 314 with exit code 2
+
+== KNARR_TOOLS=conda just initialize: exit 2
+  sh scripts/initialize.sh
+  KNARR_TOOLS is 'conda'; set it to pixi or nix, or leave it unset for pixi
+  error: recipe `initialize` failed on line 43 with exit code 2
+
+== KNARR_TOOLS=conda sh scripts/initialize.sh: exit 2
+  KNARR_TOOLS is 'conda'; set it to pixi or nix, or leave it unset for pixi
+
+== KNARR_TOOLS=conda sh scripts/with-env.sh typos (what every hook entry runs): exit 2
+  KNARR_TOOLS is 'conda'; set it to pixi or nix, or leave it unset for pixi
+
+== KNARR_TOOLS=conda git commit (the installed hook): exit 1
+        5   KNARR_TOOLS is 'conda'; set it to pixi or nix, or leave it unset for pixi
+        5 - exit code: 2
+        1 editorconfig-checker.....................................................Failed
+        1 lychee (offline, local links only).......................................Failed
+        1 markdownlint.............................................................Failed
+        1 ripsecrets (output redacted).............................................Failed
+        1 typos....................................................................Failed
+
+git status --short: 0 lines, at 4b02ea5

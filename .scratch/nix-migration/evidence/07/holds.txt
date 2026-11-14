@@ -1,0 +1,30 @@
+date: 2026-11-14T22:52Z
+nix (Nix) 2.35.6 on aarch64
+copy of /work/clone at 4b02ea5
+
+== pins.toml as committed
+  default /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
+  cluster /nix/store/jriwl9f6q7j7dlglyplzmjfh63r8qrlm-knarr-cluster-tools
+
+== Erlang, exact: +erlang = "29.1.1"
+  default        error: held erlang: the locked input has 29.1.2, pins.toml holds 29.1.1
+
+== Gleam, exact: +gleam = "1.19.2"
+  default        error: held gleam: the locked input has 1.19.0, pins.toml holds 1.19.2
+
+== kind, exact: +kind = "0.34.0"
+  cluster        error: held kind: the locked input has 0.33.0, pins.toml holds 0.34.0
+
+== kwokctl, exact: +kwokctl = "0.7.0"
+  cluster        error: held kwokctl: the locked input has 0.8.0, pins.toml holds 0.7.0
+
+== kubectl, a minor: +kubectl = "1.37"
+  cluster        error: held kubectl: the locked input has 1.36.3, pins.toml holds minor 1.37
+
+== rebar3, a floor raised above the input: +rebar3 = "3.29.0"
+  default        error: held rebar3: the locked input has 3.28.0, below the floor 3.29.0 pins.toml holds
+
+== rebar3, a floor lowered: still met, so the same environment: +rebar3 = "3.27.0"
+  default /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
+
+git status --short: 0 lines

@@ -1,0 +1,31 @@
+date: 2026-11-14T22:48Z
+nix (Nix) 2.35.6 on aarch64
+network: off
+copy of /work/clone at 4b02ea5
+
+== The copy as committed
+just lock-check: exit 0
+
+== flake.nix drops an input flake.lock still records
+  -    nixpkgs-kubectl.url = "github:NixOS/nixpkgs/nixos-26.05";
+  -      nixpkgs-kubectl,
+  -          kubectl = minor "kubectl" nixpkgs-kubectl.legacyPackages.${system}.kubectl;
+  +          kubectl = minor "kubectl" nixpkgs.legacyPackages.${system}.kubectl;
+just lock-check: exit 1
+  error: flake 'git+file:///work/drift' requires lock file changes but they're not allowed due to '--no-update-lock-file'
+  error: recipe `lock-check` failed on line 176 with exit code 1
+flake.lock before: 2fb8733b442340b1a47c81b346d714af439712e002918b356d3b4c7e16be61f1  flake.lock
+flake.lock after:  2fb8733b442340b1a47c81b346d714af439712e002918b356d3b4c7e16be61f1  flake.lock
+flake.lock is byte-identical
+git status --short:  M flake.nix 
+
+== An input moves to a channel nothing has fetched: offline, the check cannot even resolve it
+  -    nixpkgs-kubectl.url = "github:NixOS/nixpkgs/nixos-26.05";
+  +    nixpkgs-kubectl.url = "github:NixOS/nixpkgs/nixos-25.11";
+just lock-check: exit 1
+  error: unable to download 'https://api.github.com/repos/NixOS/nixpkgs/commits/nixos-25.11': Could not resolve hostname (6) Could not resolve host: api.github.com
+  error: recipe `lock-check` failed on line 176 with exit code 1
+flake.lock before: 2fb8733b442340b1a47c81b346d714af439712e002918b356d3b4c7e16be61f1  flake.lock
+flake.lock after:  2fb8733b442340b1a47c81b346d714af439712e002918b356d3b4c7e16be61f1  flake.lock
+flake.lock is byte-identical
+git status --short:  M flake.nix 

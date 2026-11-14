@@ -1,0 +1,43 @@
+date: 2026-11-14T22:51Z
+nix (Nix) 2.35.6 on aarch64
+clone at 4b02ea5
+
+== aarch64-linux
+default  /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
+cluster  /nix/store/jriwl9f6q7j7dlglyplzmjfh63r8qrlm-knarr-cluster-tools
+audit    /nix/store/cvlabcnb6bhwdc6q8i3sq7aviiwhwsgc-knarr-audit-tools
+runtime  /nix/store/fz2pjsccxf6674xvfd95m5qv21x4414v-knarr-runtime
+allium   /nix/store/irn3lrxkvashibrrxqhd1g5nizi5qwbp-allium-3.6.1
+opensslVersion 3.5.9
+default, nix build --dry-run:
+  (nothing to build or fetch: this store already has it)
+
+== x86_64-linux
+default  /nix/store/z2kg4djpjymyvj20bifhrx2yvgw6d26v-knarr-tools
+cluster  /nix/store/nlvzmv1n154adhkzi8ya3nxg7k95rs19-knarr-cluster-tools
+audit    /nix/store/zc0287dzbazkm4a3zy3lhgdd08az3jy5-knarr-audit-tools
+runtime  /nix/store/frxjm4fbna0j2bmkza0v4152js9phwc0-knarr-runtime
+allium   /nix/store/ncd00aq4hx184hdjrh3gabk3g5lk89dz-allium-3.6.1
+opensslVersion 3.5.9
+default, nix build --dry-run:
+  these 4 derivations will be built:
+    /nix/store/62vkxyjc6hz6zlcny2mpp6ipbxvqcq9s-allium-3.6.1.drv
+    /nix/store/wmcdy2ch1f2571zs7mf99hbpi1wimbwb-builder.pl.drv
+    /nix/store/h0yyxmnpzmihqwk9lssq2qxd8il0mwi4-python3-3.14.10-env.drv
+    /nix/store/2d11mzsx4w08ngijc74cp90hr6pic50w-knarr-tools.drv
+  these 138 paths will be fetched (424.8 MiB download, 1.2 GiB unpacked):
+
+== aarch64-darwin
+default  /nix/store/ss4xzcy14gxlbnyryq64jk7q2mm0rl35-knarr-tools
+cluster  /nix/store/9069jx8bk1lqsf0pqwabm10snwj7zrkj-knarr-cluster-tools
+audit    /nix/store/pzmxrzdhxhflaf5gzwgvsggkcw6i6wd5-knarr-audit-tools
+runtime  /nix/store/rrszzjhzh8wwspp4q5v4gh1b1qw0mfly-knarr-runtime
+allium   /nix/store/95xf68kxd9cdq3753yp7w5z1n6r7k7m4-allium-3.6.1
+opensslVersion 3.5.9
+default, nix build --dry-run:
+  these 4 derivations will be built:
+    /nix/store/2mrs0bn5ydm69jgy9xyldja03kbgbr93-builder.pl.drv
+    /nix/store/946h8cibj74xjmddgr8yhkd4mh9cznb7-python3-3.14.10-env.drv
+    /nix/store/d30bncqa6xp6d3bg4y61zvnrakvghf9y-allium-3.6.1.drv
+    /nix/store/ys93bi9izgzajlffl9jnvrz3gm6xihbh-knarr-tools.drv
+  these 127 paths will be fetched (518.2 MiB download, 2.2 GiB unpacked):

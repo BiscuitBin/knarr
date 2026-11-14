@@ -16,6 +16,7 @@ for system in aarch64-linux x86_64-linux aarch64-darwin; do
   done
   printf 'opensslVersion %s\n' "$(nix eval --raw --offline --no-update-lock-file ".#packages.$system.default.opensslVersion")"
   printf 'default, nix build --dry-run:\n'
-  nix build --dry-run --no-update-lock-file ".#packages.$system.default" 2>&1 |
-    grep -E 'will be (built|fetched)|\.drv$' | sed 's/^/  /' || echo '  (nothing to build or fetch)'
+  plan=$(nix build --dry-run --no-update-lock-file ".#packages.$system.default" 2>&1 |
+    grep -E 'will be (built|fetched)|\.drv$' || true)
+  printf '%s\n' "${plan:-(nothing to build or fetch: this store already has it)}" | sed 's/^/  /'
 done

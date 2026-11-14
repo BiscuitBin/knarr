@@ -1,0 +1,49 @@
+date: 2026-11-14T22:48Z
+nix (Nix) 2.35.6 on aarch64
+clone at 4b02ea5, git status --short: 0 lines
+
+== Before the move
+  .nix/default -> /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
+  its prek: /nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek (prek 0.5.10)
+  the hook: PREK="/work/clone/.nix/default/bin/prek", 0 store paths
+
+== The lock moves, as a pull that moved it would: nixpkgs to 9ac0edc06bfb33e6c0000be79d98ef8d89e26503
+   flake.lock | 6 +++---
+   1 file changed, 3 insertions(+), 3 deletions(-)
+  nixpkgs locked at 9ac0edc06bfb33e6c0000be79d98ef8d89e26503
+
+== KNARR_TOOLS=nix just env-check
+exit 1
+    /work/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, but this commit describes /nix/store/7pmk34bc6mcc6ph9fcvqmaxbd20s7xya-knarr-tools
+  the installed tools differ from this commit's flake.lock or pins.toml; run just initialize (it needs network for anything not already cached)
+  error: recipe `env-check` failed on line 186 with exit code 1
+
+== KNARR_TOOLS=nix just initialize
+  Ready. Next: just check (no network needed).
+  Nothing has been staged, committed or pushed.
+  .nix/default -> /nix/store/7pmk34bc6mcc6ph9fcvqmaxbd20s7xya-knarr-tools
+  its prek: /nix/store/rmbhxvawxxcr6km230vfx74m26kmnsgf-prek-0.5.7/bin/prek (prek 0.5.7)
+  the hook: PREK="/work/clone/.nix/default/bin/prek", 0 store paths
+just env-check: exit 0: env-check: /work/clone/.nix/default is /nix/store/7pmk34bc6mcc6ph9fcvqmaxbd20s7xya-knarr-tools, and the held versions match
+
+== A commit through the hook, with the lock move and one new page staged
+prek on the host PATH: none
+the hook runs /work/clone/.nix/default/bin/prek, which is /nix/store/rmbhxvawxxcr6km230vfx74m26kmnsgf-prek-0.5.7/bin/prek (prek 0.5.7)
+git commit: exit 0
+  check for added large files..............................................Passed
+  check for case conflicts.................................................Passed
+  check for merge conflicts................................................Passed
+  detect private key.......................................................Passed
+  typos....................................................................Passed
+  markdownlint.............................................................Passed
+  lychee (offline, local links only).......................................Passed
+  editorconfig-checker.....................................................Passed
+  ripsecrets (output redacted).............................................Passed
+  6e567b3 probe: the moved lock
+
+== Back to the commit, initialized again
+  .nix/default -> /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
+  its prek: /nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek (prek 0.5.10)
+  the hook: PREK="/work/clone/.nix/default/bin/prek", 0 store paths
+just env-check: exit 0: env-check: /work/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, and the held versions match
+git status --short: 0 lines, at 4b02ea5

@@ -1,0 +1,24 @@
+date: 2026-11-14T22:46Z
+host: Linux aarch64, Ubuntu 24.04.5 LTS
+nix (Nix) 2.35.6
+network: off
+clone at 4b02ea5, git status --short: 0 lines
+KNARR_TOOLS=nix; pixi on PATH: absent; .pixi: absent; .tools: absent
+
+== The lock and environment checks: time, and what they write
+run 1: just lock-check 0.03s, just env-check 1.64s
+run 2: just lock-check 0.03s, just env-check 1.60s
+run 3: just lock-check 0.03s, just env-check 1.58s
+  env-check: /work/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, and the held versions match
+new store paths: 0; git status --short: 0 lines
+files written outside the clone: ~/.cache/nix/fetcher-cache-v4.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-wal ~/.cache/nix/eval-cache-v6/34c8253100238aac8b1bc0a7baea10853806375dea28e4cb77f5a11a6fb76741.sqlite ~/.cache/nix/fetcher-cache-v4.sqlite-shm 
+
+== KNARR_TOOLS=nix just check
+exit 0 in 114.74s
+==> just lock-check ==> just env-check ==> just manifest-check ==> just docs-check ==> just agents-check ==> just check-specs ==> just analyse-specs ==> just format-check ==> just lint-gleam ==> just test ==> just snapshots-check ==> just fake-worker-lint ==> just fake-worker-test ==> just test-checkers ==> just packaging-check ==> just chart-check ==> just toml-check ==> just lint ==> just check-clean 
+env-check: /work/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, and the held versions match
+Validated 38 pages and 50 canonical topics.
+allium check: 11 specifications, no diagnostics and no findings.
+allium analyse: 11 specifications, no diagnostics and no findings.
+All checks passed and the worktree is unchanged.
+git status --short: 0 lines

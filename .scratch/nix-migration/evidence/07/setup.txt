@@ -1,0 +1,38 @@
+date: 2026-11-14T22:46Z
+nix (Nix) 2.35.6 on aarch64
+clone of 07-flake-beside-pixi at 4b02ea5
+tracked: flake.lock flake.nix pins.toml 
+
+== KNARR_TOOLS=nix sh scripts/initialize.sh (there is no just before it)
+exit 0 in 2 seconds
+Ready. Next: just check (no network needed).
+Nothing has been staged, committed or pushed.
+.nix/default -> /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools
+git status --short: 0 lines
+git check-ignore: .nix/default
+
+== The hook names the out-link, never a store path
+PREK="/work/clone/.nix/default/bin/prek"
+store paths in the hook: 0
+the hook resolves to /nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek
+
+== What recipes see under KNARR_TOOLS=nix
+/work/clone/.nix/default/bin
+/work/clone/.nix/cluster/bin
+/work/clone/.nix/audit/bin
+/usr/local/sbin
+perl               /work/clone/.nix/default/bin/perl
+python3            /work/clone/.nix/default/bin/python3
+node               /work/clone/.nix/default/bin/node
+gleam              /work/clone/.nix/default/bin/gleam
+erl                /work/clone/.nix/default/bin/erl
+rebar3             /work/clone/.nix/default/bin/rebar3
+openssl            /work/clone/.nix/default/bin/openssl
+allium             /work/clone/.nix/default/bin/allium
+prek               /work/clone/.nix/default/bin/prek
+just               /work/clone/.nix/default/bin/just
+markdownlint-cli2  /work/clone/.nix/default/bin/markdownlint-cli2
+ripsecrets         /work/clone/.nix/default/bin/ripsecrets
+markdownlint-cli2 module: /work/clone/.nix/default/lib/node_modules/markdownlint-cli2
+perl: v5.42.3
+ripsecrets in the store: mode 555
