@@ -46,3 +46,13 @@ fresh_proto() {
   mkdir -p "$1"
   cp "$flake/flake.nix" "$flake/flake.lock" "$1"/
 }
+
+# The Nix image is not a POSIX host: it has no sed, awk, find or diff, which
+# the repository's scripts expect from the machine (Decision 0003 keeps "a
+# POSIX shell" a prerequisite). This environment stands in for the host's own
+# utilities. It goes after the image's PATH, and is not part of the prototype.
+host_posix() {
+  nix build --no-link --print-out-paths --impure --expr "
+    with (builtins.getFlake \"github:NixOS/nixpkgs/$rev\").legacyPackages.\${builtins.currentSystem};
+    buildEnv { name = \"host-posix\"; paths = [ gnused gawk findutils diffutils ]; }" 2> /dev/null
+}

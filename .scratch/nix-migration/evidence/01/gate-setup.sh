@@ -44,13 +44,25 @@ gleam deps download 2>&1 | tail -n 1
 printf 'git status --short: %s\n' "$(git status --short | wc -l) lines"
 
 printf '\n== Tool versions from the prefix\n'
-for tool in gleam just prek typos lychee taplo markdownlint-cli2 actionlint shellcheck ruff kustomize \
+for tool in gleam just prek typos lychee taplo markdownlint-cli2 actionlint ruff \
   ripsecrets editorconfig-checker hadolint allium node python3; do
   printf '%-22s %s\n' "$tool" "$("$tool" --version 2>&1 | head -n 1)"
 done
+printf '%-22s %s\n' shellcheck "$(shellcheck --version | sed -n 2p)"
+printf '%-22s %s\n' kustomize "$(kustomize version 2>&1)"
 printf '%-22s %s\n' pytest "$(python3 -m pytest --version 2>&1)"
 printf '%-22s %s\n' helm "$(helm version --short 2>&1)"
 printf '%-22s %s\n' kubeconform "$(kubeconform -v 2>&1)"
 printf '%-22s %s\n' rebar3 "$(rebar3 --version 2>&1)"
 printf '%-22s %s\n' erl "$(erl -noshell -eval 'io:format("OTP ~s, erts ~s", [erlang:system_info(otp_release), erlang:system_info(version)]), halt().')"
 printf '%-22s %s\n' openssl "$(openssl version)"
+
+printf '\n== A second environment for the hook case: the same flake after a lock move\n'
+# nixpkgs-26.11pre1115905, a nixpkgs-unstable head a few days older than the
+# candidate: the held versions are the same, so the assertions pass, and prek
+# is 0.5.7 there, so its store path moves.
+moved=9ac0edc06bfb33e6c0000be79d98ef8d89e26503
+nix build "$proto#default" --no-write-lock-file --override-input nixpkgs "github:NixOS/nixpkgs/$moved" \
+  --out-link /work/gate/moved 2> /dev/null
+printf 'locked:  %s\n  prek %s\n' "$(readlink .pixi/envs/default)" "$(readlink -f .pixi/envs/default/bin/prek)"
+printf 'moved:   %s\n  prek %s\n' "$(readlink /work/gate/moved)" "$(readlink -f /work/gate/moved/bin/prek)"

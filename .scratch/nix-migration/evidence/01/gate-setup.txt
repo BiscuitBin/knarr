@@ -1,0 +1,48 @@
+date: 2026-11-14T13:47Z
+nix (Nix) 2.35.6 on aarch64-linux
+clone of 01-nix-container-spike at 628c102
+
+== The environment, built from the flake this branch tracks in its evidence directory
+nix build ./.scratch/nix-migration/evidence/01#default --out-link .pixi/envs/default: 1 seconds (store already populated)
+.pixi/envs/default -> /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
+.tools/bin -> ../.pixi/envs/default/bin
+closure:  870.5 MiB
+git status --short: 0 lines
+
+== Hex packages, with only the environment directories prefixed
+manifest.toml [requirements] matches gleam.toml
+ Downloaded 38 packages in 0.02s
+ Downloaded 22 packages in 0.01s
+manifest.toml unchanged
+git status --short: 0 lines
+
+== Tool versions from the prefix
+gleam                  gleam 1.19.0
+just                   just 1.59.0
+prek                   prek 0.5.10
+typos                  typos-cli 1.52.0
+lychee                 lychee 0.24.2
+taplo                  taplo 0.10.0
+markdownlint-cli2      markdownlint-cli2 v0.24.0 (markdownlint v0.42.0)
+actionlint             1.7.12
+ruff                   ruff 0.17.4
+ripsecrets             ripsecrets 0.1.11
+editorconfig-checker   4.0.2
+hadolint               Haskell Dockerfile Linter 2.14.0
+allium                 allium 3.6.1 (language versions: 1, 2, 3)
+node                   v24.22.2
+python3                Python 3.14.10
+shellcheck             version: 0.11.0
+kustomize              v5.8.3
+pytest                 pytest 9.1.1
+helm                   v4.3.1+grefs/ta
+kubeconform            v0.8.0
+rebar3                 rebar 3.28.0 on Erlang/OTP 29 Erts 17.1.1
+erl                    OTP 29, erts 17.1.1
+openssl                OpenSSL 3.5.9 29 Sep 2026 (Library: OpenSSL 3.5.9 29 Sep 2026)
+
+== A second environment for the hook case: the same flake after a lock move
+locked:  /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
+  prek /nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek
+moved:   /nix/store/838rgqd19flvw1cj77xmnkmadf74c0jj-knarr-tools
+  prek /nix/store/y950210rhfi28jkcg4hjx3f6rab755xp-prek-0.5.10/bin/prek

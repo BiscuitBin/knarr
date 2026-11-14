@@ -1,0 +1,63 @@
+diff --git a/Justfile b/Justfile
+index 7267ef2..fe4c4e4 100644
+--- a/Justfile
++++ b/Justfile
+@@ -165,7 +165,7 @@
+ [group('check')]
+ [doc('Fail if pixi.lock disagrees with pixi.toml, without rewriting it')]
+ lock-check:
+-    pixi lock --check --offline --dry-run
++    nix flake lock --no-update-lock-file --offline ./.scratch/nix-migration/evidence/01
+ 
+ # lock-check reads pixi.lock and pixi.toml only. After a pull that moves a pin
+ # the old binaries stay on PATH until `just initialize` reruns, so this fails
+@@ -173,7 +173,7 @@
+ [group('check')]
+ [doc('Fail if the installed tools differ from pixi.lock or tools.txt')]
+ env-check:
+-    python3 scripts/checks/env_check.py
++    sh .scratch/nix-migration/evidence/01/env-check.sh ./.scratch/nix-migration/evidence/01 .pixi/envs/default
+ 
+ # gleam rewrites a manifest.toml that disagrees with gleam.toml and exits 0, so
+ # this compares the two first and fails instead (Decision 0003, Verify 5).
+diff --git a/scripts/checks/run_allium.py b/scripts/checks/run_allium.py
+index 613957b..ae0d658 100644
+--- a/scripts/checks/run_allium.py
++++ b/scripts/checks/run_allium.py
+@@ -149,9 +149,11 @@
+ 
+ def _binary(project_root: Path) -> Path:
+     """Only run the project-managed binary, at the host platform's pinned version."""
+-    host = {("Darwin", "arm64"): "osx-arm64", ("Linux", "x86_64"): "linux-64"}.get(
+-        (platform.system(), platform.machine())
+-    )
++    host = {
++        ("Darwin", "arm64"): "osx-arm64",
++        ("Linux", "x86_64"): "linux-64",
++        ("Linux", "aarch64"): "linux-64",
++    }.get((platform.system(), platform.machine()))
+     if host is None:
+         raise RuntimeError("tools.txt pins no Allium for this platform")
+     pins = []
+diff --git a/scripts/checks/validate_docs.py b/scripts/checks/validate_docs.py
+index 5dd3235..87479ac 100644
+--- a/scripts/checks/validate_docs.py
++++ b/scripts/checks/validate_docs.py
+@@ -101,13 +101,15 @@
+     rendered = {}
+     if markdown:
+         checker = Path(__file__).resolve()
+-        tools = checker.parents[2] / ".pixi/envs/default/bin"
++        environment = checker.parents[2] / ".pixi/envs/default"
++        tools = environment / "bin"
++        module = environment / "lib/node_modules/markdownlint-cli2"
+         try:
+             result = subprocess.run(
+                 [
+                     str(tools / "node"),
+                     str(checker.with_name("render_markdown.mjs")),
+-                    str(tools / "markdownlint-cli2"),
++                    str(module / "markdownlint-cli2-bin.mjs"),
+                 ],
+                 input=json.dumps(markdown),
+                 capture_output=True,
