@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import _project
+import _tools
 
 COMMANDS = ("check", "analyse", "plan")
 
@@ -165,8 +166,8 @@ def _binary(project_root: Path) -> Path:
             pins.append(fields[1])
     if len(pins) != 1:
         raise RuntimeError(f"tools.txt must contain exactly one allium pin for {host}")
-    binary = project_root / ".tools/bin/allium"
     try:
+        binary = _tools.tool(project_root, "allium")
         result = subprocess.run(
             [str(binary), "--version"], check=False, capture_output=True, text=True
         )

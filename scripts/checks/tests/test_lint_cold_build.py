@@ -13,7 +13,8 @@ def project(tmp_path: Path) -> Path:
         shutil.copytree(REPOSITORY / name, tmp_path / name)
     for name in ["Justfile", "gleam.toml", "manifest.toml"]:
         shutil.copy2(REPOSITORY / name, tmp_path / name)
-    shutil.copy2(REPOSITORY / "scripts/cluster-name.sh", tmp_path / "scripts/cluster-name.sh")
+    for name in ["cluster-name.sh", "tool-dirs.sh"]:
+        shutil.copy2(REPOSITORY / "scripts" / name, tmp_path / "scripts" / name)
     # Reuse downloaded source packages, never compiled application artifacts.
     shutil.copytree(REPOSITORY / "build/packages", tmp_path / "build/packages")
     return tmp_path

@@ -2,11 +2,13 @@ set positional-arguments := true
 set shell := ["sh", "-eu", "-c"]
 
 # Recipes reach every tool through PATH, never `pixi run` (Decision 0003): on a
-# stale lock `pixi run` re-solves and rewrites pixi.lock. The default
-# environment comes first, so gleam and the shared tools always resolve from
-# it; the cluster and audit environments' tools resolve only once each is
-# installed; then the checksum-pinned downloads from tools.txt.
-export PATH := justfile_directory() / ".pixi" / "envs" / "default" / "bin" + ":" + justfile_directory() / ".pixi" / "envs" / "cluster" / "bin" + ":" + justfile_directory() / ".pixi" / "envs" / "audit" / "bin" + ":" + justfile_directory() / ".tools" / "bin" + ":" + env("PATH")
+# stale lock `pixi run` re-solves and rewrites pixi.lock. scripts/tool-dirs.sh
+# owns the directories and their order: the default environment first, so gleam
+# and the shared tools always resolve from it; the cluster and audit
+# environments' tools, which resolve only once each is installed; then the
+# checksum-pinned downloads from tools.txt. The script only builds a string, so
+# this line evaluates before `just initialize` has run.
+export PATH := `sh scripts/tool-dirs.sh dirs` + ":" + env("PATH")
 
 # Python would otherwise write __pycache__/ beside the checkers it runs.
 export PYTHONDONTWRITEBYTECODE := "1"
@@ -169,7 +171,8 @@ lock-check:
 
 # lock-check reads pixi.lock and pixi.toml only. After a pull that moves a pin
 # the old binaries stay on PATH until `just initialize` reruns, so this fails
-# while the installed default environment or .tools/bin differs from the pins.
+# while the installed default environment or a tools.txt download differs from
+# the pins.
 [group('check')]
 [doc('Fail if the installed tools differ from pixi.lock or tools.txt')]
 env-check:
@@ -229,7 +232,7 @@ runtime-scan image=cluster_image: audit-tools
 
 [private]
 audit-tools:
-    test -x .pixi/envs/audit/bin/grype || { echo 'run just audit-install' >&2; exit 2; }
+    sh scripts/tool-dirs.sh tool grype > /dev/null || { echo 'run just audit-install' >&2; exit 2; }
 
 [group('check')]
 [doc('Fail on unformatted Gleam')]
@@ -301,7 +304,7 @@ check-clean baseline="":
 [group('check')]
 [doc('The complete read-only gate')]
 check:
-    test -x .pixi/envs/default/bin/python3 || { printf '%s\n' 'the pixi environment is missing; run just initialize' >&2; exit 2; }
+    sh scripts/tool-dirs.sh tool python3 > /dev/null || { printf '%s\n' 'the pixi environment is missing; run just initialize' >&2; exit 2; }
     python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam test snapshots-check fake-worker-lint fake-worker-test test-checkers packaging-check chart-check toml-check lint
 
 # --------------------------------------------------------------- cluster ---
@@ -315,7 +318,7 @@ image_platform := if arch() == "aarch64" { "linux/arm64" } else { "linux/amd64" 
 
 [private]
 cluster-tools:
-    test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
+    sh scripts/tool-dirs.sh tool kind > /dev/null || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
 
 [group('cluster')]
 [doc('Create or reuse this worktree cluster (may download images)')]
