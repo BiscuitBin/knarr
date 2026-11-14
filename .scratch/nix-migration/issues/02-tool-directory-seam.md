@@ -49,7 +49,7 @@ The script prints the same four directories as today, in the same order, so beha
 Three things differ from before, all inside the same four directories:
 
 - `initialize.sh` used to put three directories on `PATH`, without the audit one. It now gets all four.
-- Each guard used to test one path. `with-env.sh` and `just check` looked for `python3` in the default environment, `cluster-tools` for `kind` in the cluster one, `audit-tools` for `grype` in the audit one, and the ripsecrets wrapper and the Allium runner in the `tools.txt` directory. Each now accepts the tool from any of the four, first match in order.
+- Each guard used to test one path. `with-env.sh` and `just check` looked for `python3` in the default environment, `cluster-tools` for `kind` in the cluster one, `audit-tools` for `grype` in the audit one, the docs checker for `node` and `markdownlint-cli2` in the default one, and the ripsecrets wrapper and the Allium runner in the `tools.txt` directory. Each now accepts the tool from any of the four, first match in order.
 - The Justfile's prefix is the script's `pwd -P` of the checkout, where it was `justfile_directory()`. The two were byte-identical here, also when `just` ran from `docs/specs/`.
 
 ### What was verified, and what was not
@@ -87,7 +87,7 @@ Eight files: the new script, `env_check.py` and its test, and the image-prefix f
 - **Box 5.** In that clone, `sh scripts/tool-dirs.sh tool git` printed nothing and exited 2, with `/usr/bin/git` on `PATH`. `test_tool_refuses_a_tool_only_the_host_has` holds it.
 - **Shells.** The script gives the same output under `/bin/dash`, `/bin/bash` and `/bin/zsh`, and shellcheck 0.11.0 has no finding.
 - **`initialize.sh`.** `test_initialize.py` runs it on a scratch repository with `pixi`, `python3`, `gleam` and `prek` stubbed. It checks that the checkout's copies run, not the host's, and that the installer is given the last directory. Pointing the installer at the first directory, or dropping the `PATH` line, each fails it.
-- **Box 7.** `just test-checkers-selected environment allium docs gate coverage audit`: 276 passed. `just test-checkers-selected policy`: 169 passed. `just lint`: every hook passed.
+- **Box 7.** `just test-checkers-selected environment allium docs gate coverage audit`: 276 passed, and again on the committed tree with the same result. `just test-checkers-selected policy`: 169 passed. `just lint`: every hook passed.
 - **Box 8.** `just check` ends with "All checks passed and the worktree is unchanged.", with every change staged, after these notes.
 
 Not verified:
@@ -95,6 +95,7 @@ Not verified:
 - `just initialize` itself was not run: it needs the network, and nothing authorized that. Only the stubbed test above covers the edited script.
 - The cluster and audit guards were only read against the script's tests. Neither environment is installed in this worktree, so `just cluster-up` and `just image-scan` were not run with the tool present.
 - Nothing ran on Linux. CI will be the first run there.
+- No evidence script under `.scratch/` copies the `Justfile` or `with-env.sh` into another tree without `scripts/`: `fresh-clone.sh` clones the whole repository. This was read with `git grep`, and no evidence script was run.
 
 ### What later tickets need
 
