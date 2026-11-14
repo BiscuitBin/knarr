@@ -14,7 +14,7 @@
 
 CI has no Nix until [10](10-nix-becomes-the-gate.md). Every checker test this ticket adds must pass on a runner with no Nix present, and the boxes that need the Nix backend are proved by local transcripts in the hand-back notes.
 
-**Non-goals:** CI. The images. The cluster and audit tool groups, which are [08](08-cluster-audit-tools-from-flake.md). Changing the default backend, which is [10](10-nix-becomes-the-gate.md). Fixing formatter differences that 04 marked "accept and fix in 10".
+**Non-goals:** CI. The images. The cluster and audit tool groups, which are [08](08-cluster-audit-tools-from-flake.md). Changing the default backend, which is [10](10-nix-becomes-the-gate.md). Fixing formatter differences that 01 marked "accept and fix in 10". Running the Nix backend on the Mac, which waits for [04](04-nix-host-spike.md).
 
 **Blocked by:** 02, 03, 06
 
@@ -24,7 +24,7 @@ CI has no Nix until [10](10-nix-becomes-the-gate.md). Every checker test this ti
 
 - [ ] **Authorization required:** the network, for `KNARR_TOOLS=nix just initialize`.
 - [ ] With no `KNARR_TOOLS` set, the gate passes on pixi and no pixi behaviour has changed.
-- [ ] `KNARR_TOOLS=nix just check` passes, or every remaining failure is a formatter or linter difference already on 04's list.
+- [ ] `KNARR_TOOLS=nix just check` passes, or every remaining failure is a formatter or linter difference already on 01's list.
 - [ ] After `KNARR_TOOLS=nix just initialize`, the same gate passes with the network off.
 - [ ] The Nix lock check exits non-zero on a drifted copy and leaves `flake.lock` byte-identical.
 - [ ] The Nix environment check fails after a simulated lock move, with a message that says to run `just initialize`.

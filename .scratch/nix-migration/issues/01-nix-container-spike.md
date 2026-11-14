@@ -11,9 +11,16 @@
 - **Flakes and git.** Whether untracked files are invisible to a flake, what is copied to the store on each evaluation, and what happens in a linked worktree and in a Docker build context with no `.git`.
 - **Image.** A prototype image built by `docker build` with Nix in a pinned build stage. Nix supplies gleam, erlang and rebar3, the build stage runs `gleam deps download` and `gleam export erlang-shipment` as today, and the final Ubuntu stage receives the runtime closure at a fixed prefix. The record states whether perl is in Erlang's closure, the image size against today's, and cold and warm build times.
 - **TLS.** Bootstrap ticket 01's TLS proof passes all six cases in that prototype image, run with the restrictions `image-check` applies (read-only, all capabilities dropped).
+- **The gate from a `PATH` prefix.** In a clone inside the container, never a bind-mounted worktree, with only the prototype environment's directories prefixed:
+  - the checker tests run through the interpreter's own pytest;
+  - the docs checker's Node finds markdownlint-cli2's bundled markdown-it;
+  - the path prek writes into the git hook still resolves after a lock move;
+  - a fresh clone with only Nix installed can reach `just`;
+  - the whole of `just check` runs with the network off, with timings for the lock and environment checks and a record of anything they write.
+- **Version differences.** The list of formatter and linter findings that differ between the pixi versions and the candidate revision's versions, on today's tree.
 - **Scanning.** A grype transcript on the prototype's runtime closure: which cataloger it logs, whether erlang and openssl are catalogued, and directory source against image source.
 
-**Non-goals:** Any tracked flake file outside the evidence directory. Facts about macOS or the amd64 runner, which are [04](04-nix-host-spike.md) and [05](05-nix-ci-renovate-spike.md). Building hex packages with Nix: they stay with gleam.
+**Non-goals:** Any tracked flake file outside the evidence directory. Anything that needs Nix on the Mac, which is [04](04-nix-host-spike.md): the evidence lists each darwin fact it could only evaluate, not run. Builds on the amd64 runner, which are [05](05-nix-ci-renovate-spike.md). Building hex packages with Nix: they stay with gleam.
 
 **Blocked by:** None (can start immediately)
 
@@ -28,6 +35,10 @@
 - [ ] The drift table names the read-only offline lock check, and a transcript shows `flake.lock` byte-identical after running it on a drifted copy.
 - [ ] The flakes-and-git findings are recorded, including the linked-worktree case.
 - [ ] The prototype image builds on linux/arm64, and the six TLS cases pass in it under `image-check`'s restrictions.
+- [ ] Each PATH-prefix case has a transcript from the container.
+- [ ] A transcript shows the whole gate passing from the scratch prefix with the network off, or lists each failure with its cause.
+- [ ] The version-difference list is recorded, each entry marked "hold the pixi version" or "accept and fix in 10".
+- [ ] The evidence lists the darwin facts it evaluated but could not run, for 04 and Decision 0017.
 - [ ] The grype transcript is recorded.
 - [ ] This round's `evidence/` directory is added to the evidence excludes the other rounds have in the hook and linter configs.
 - [ ] `just check` ends with "All checks passed and the worktree is unchanged."
