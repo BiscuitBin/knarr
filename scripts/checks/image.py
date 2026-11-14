@@ -111,25 +111,13 @@ def checked(failure, *arguments):
 
 
 def verify_runtime_environment(image, common):
-    """The Dockerfile prunes perl from the runtime environment (ticket 45). Pruning
-    breaks the lock's guarantee that what was tested is what ships, so the TLS
-    check Decision 0003 names runs again here, with the pruned environment's own
-    erlang and openssl, writing only to the /tmp tmpfs."""
-    checked(
-        "perl is still in the runtime environment",
-        *common,
-        "--rm",
-        "--entrypoint=sh",
-        image,
-        "-c",
-        f"""set -eu
-test -d {_runtime.PREFIX}/conda-meta || {{ echo 'no conda-meta in {_runtime.PREFIX}'; exit 1; }}
-test ! -e {_runtime.PREFIX}/bin/perl || {{ echo '{_runtime.PREFIX}/bin/perl'; exit 1; }}
-for record in {_runtime.PREFIX}/conda-meta/perl-*.json; do test ! -e "$record" || {{ echo "$record"; exit 1; }}; done""",
-    )
+    """Decision 0003's TLS check, run again in the image with the shipped runtime's
+    own erlang and openssl, writing only to the /tmp tmpfs. pins.toml holds the
+    OTP version but not the OpenSSL it is built against, which can move with the
+    flake's main input, so every image proves the six cases (Decision 0017)."""
     print(
         checked(
-            "TLS check failed in the pruned runtime environment",
+            "TLS check failed in the shipped runtime environment",
             *common,
             "--rm",
             f"--volume={TLS_CHECK}:/opt/tls-check:ro",

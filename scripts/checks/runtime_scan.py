@@ -2,14 +2,18 @@
 
 `just image-scan` reads an image's OS packages only: syft runs
 conda-meta-cataloger on a directory source and never on an image (Decision 0014,
-ticket 45). So this copies /opt/knarr/.pixi/envs/runtime out of the image into
-build/runtime-scan/ and scans the copy with image-scan's `--only-fixed
+ticket 45). So this copies the runtime prefix, `_runtime.PREFIX`, out of the
+image into build/runtime-scan/ and scans the copy with image-scan's `--only-fixed
 --fail-on high`. grype's table goes to stdout and its `-vv` log to
 build/runtime-scan/grype.log.
 
 It fails closed: a scan whose log shows conda-meta-cataloger catalogued no
 package read the wrong directory, or one without conda-meta, and is "cannot
 decide" whatever grype returned.
+
+Since nix-migration ticket 09 the image's runtime is a Nix closure, which has no
+conda-meta, so this answers "cannot decide" for every image until ticket 11
+rebuilds it on the closure; no release is tagged between the two.
 
 Usage: python3 scripts/checks/runtime_scan.py <image>
 Exit status: 0 nothing qualifies, 2 a finding (grype's own), 1 cannot decide:

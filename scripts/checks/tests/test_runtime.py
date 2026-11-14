@@ -87,5 +87,13 @@ def test_the_committed_pin_is_one_exact_otp_29_version() -> None:
 
 @pytest.mark.parametrize("dockerfile", ["Dockerfile", "fixtures/fake_worker/Dockerfile"])
 def test_both_images_ship_the_runtime_at_the_prefix(dockerfile: str) -> None:
-    lines = (REPOSITORY / dockerfile).read_text().splitlines()
-    assert f"COPY --from=build {_runtime.PREFIX} {_runtime.PREFIX}" in lines
+    # The build stage links the prefix to the runtime environment inside the
+    # tree it lays out under /out, beside the closure's store paths, and the
+    # final stage takes that tree whole (Decision 0017).
+    text = (REPOSITORY / dockerfile).read_text()
+    lines = text.splitlines()
+    assert _runtime.PREFIX == "/opt/knarr/runtime"
+    assert "COPY --from=build /out/ /" in lines
+    assert re.search(rf'ln -s "\$\(readlink [^)]+\)" /out{_runtime.PREFIX}$', text, re.MULTILINE)
+    assert "xargs cp --archive --target-directory=/out/nix/store" in text
+    assert f'ENV PATH="{_runtime.PREFIX}/bin:${{PATH}}" \\' in lines

@@ -32,7 +32,8 @@ kustomize = "==5.8.2"
 
 # pins.toml owns the OTP version (Decision 0017); this pin must equal its
 # [exact] erlang until ticket 13 deletes this file, and test_pins.py fails while
-# the two differ. pixi, CI and both Dockerfile stages read it through pixi.lock.
+# the two differ. pixi and CI read it through pixi.lock; both images' build and
+# runtime stages take Erlang from the flake, which asserts it against pins.toml.
 [feature.otp.dependencies]
 erlang = "==29.1.2"
 

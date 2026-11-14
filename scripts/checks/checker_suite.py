@@ -54,10 +54,11 @@ GROUPS = {
         ),
     ),
     "packaging": (
-        "image runtime prune_runtime container_entrypoint",
+        "image runtime container_entrypoint",
         (
             "Dockerfile",
             "fixtures/fake_worker/Dockerfile",
+            "fixtures/fake_worker/Dockerfile.dockerignore",
             # image.py reads knarr's memory limit from the chart's values.
             "charts/knarr/values.yaml",
             "fixtures/fake_worker/deploy/**",
@@ -66,7 +67,6 @@ GROUPS = {
             "scripts/checks/image.py",
             # image.py reads the OTP pin and the runtime prefix from it.
             "scripts/checks/_runtime.py",
-            "scripts/prune_runtime.py",
             "scripts/container-entrypoint.sh",
         ),
     ),
@@ -193,7 +193,6 @@ CLUSTERS = {
         "scripts/checks/chart.py",
         "scripts/checks/image.py",
         "scripts/checks/_runtime.py",
-        "scripts/prune_runtime.py",
         "scripts/container-entrypoint.sh",
         "scripts/checks/deployment.py",
         "scripts/schemas/**",
@@ -202,7 +201,6 @@ CLUSTERS = {
         "fixtures/fake_worker/**",
         "scripts/checks/image.py",
         "scripts/checks/_runtime.py",
-        "scripts/prune_runtime.py",
         "scripts/container-entrypoint.sh",
         "scripts/checks/deployment.py",
         "scripts/schemas/**",

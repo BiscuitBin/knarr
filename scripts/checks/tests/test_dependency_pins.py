@@ -17,7 +17,7 @@ import pytest
 from conftest import REPOSITORY
 
 RENOVATE = REPOSITORY / ".github" / "renovate.json"
-DOCKERFILE = REPOSITORY / "Dockerfile"
+DOCKERFILES = ("Dockerfile", "fixtures/fake_worker/Dockerfile")
 FROM = re.compile(r"^FROM (?P<image>\S+?):(?P<tag>[^\s@]+)@sha256:[0-9a-f]{64}(?: AS \w+)?$")
 WORKFLOWS = sorted(
     [
@@ -30,10 +30,30 @@ WORKFLOWS = sorted(
 PINNED_ACTION = re.compile(r"[\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d+(?:\.\d+)*")
 
 
-def test_every_base_image_is_pinned_by_digest() -> None:
-    lines = [line for line in DOCKERFILE.read_text().splitlines() if line.startswith("FROM ")]
+def from_lines(dockerfile: str) -> list[str]:
+    return [
+        line
+        for line in (REPOSITORY / dockerfile).read_text().splitlines()
+        if line.startswith("FROM ")
+    ]
+
+
+@pytest.mark.parametrize("dockerfile", DOCKERFILES)
+def test_every_base_image_is_pinned_by_digest(dockerfile: str) -> None:
+    lines = from_lines(dockerfile)
     assert len(lines) == 2
     assert [line for line in lines if not FROM.match(line)] == []
+
+
+def test_the_build_stage_is_the_nix_image_by_tag_and_digest_in_both() -> None:
+    # Decision 0017: with the digest alone Renovate never proposes a move, so
+    # the build stage names the tag too, and both images move together.
+    knarr, fixture = (from_lines(dockerfile) for dockerfile in DOCKERFILES)
+    assert knarr == fixture
+    build = FROM.match(knarr[0])
+    assert build
+    assert build["image"] == "nixos/nix"
+    assert knarr[0].endswith(" AS build")
 
 
 def unpinned_actions(text: str) -> list[str]:
@@ -158,7 +178,6 @@ PIXI_SITES = {
     "pixi.toml": r'^requires-pixi = ">=(\S+)"$',
     ".github/actions/setup/action.yml": r"^\s+pixi-version: v(\S+)$",
     ".github/actions/setup/action.yml cache": r"^\s+cache-key: knarr-pixi-v(\S+?)-$",
-    "Dockerfile": r"^FROM ghcr\.io/prefix-dev/pixi:([^\s@]+)@",
     "CONTRIBUTING.md": r"\[pixi\]\(https://pixi\.sh\) (\S+) or later",
 }
 
@@ -183,11 +202,10 @@ def test_the_pixi_version_agrees_everywhere_it_is_written() -> None:
     ("path", "sites"),
     [("pixi.toml", 1), (".github/actions/setup/action.yml", 2), ("CONTRIBUTING.md", 1)],
 )
-def test_every_pixi_version_but_the_build_stage_is_read_against_the_image_tags(
-    path: str, sites: int
-) -> None:
-    # The Dockerfile's FROM has the dockerfile manager. The floor, the cache key
-    # and the contributing guide have no manager of their own, and setup-pixi's input is
+def test_every_pixi_version_is_read_against_the_image_tags(path: str, sites: int) -> None:
+    # No Dockerfile names pixi since nix-migration ticket 09, but its image's
+    # tags are still the versions pixi publishes. The floor, the cache key and
+    # the contributing guide have no manager of their own, and setup-pixi's input is
     # read here too, because its native reading proposes nothing (renovate.txt).
     version = next(iter(set(pixi_versions().values())))
     assert (
@@ -267,14 +285,6 @@ LOCAL_CLUSTER = [
     for d in dependencies("scripts/checks/cluster.py")
 ]
 PIXI = [
-    {
-        "manager": "dockerfile",
-        "packageName": "ghcr.io/prefix-dev/pixi",
-        "packageFile": "Dockerfile",
-        "depType": "stage",
-        "datasource": "docker",
-    },
-] + [
     {
         "manager": "custom.regex",
         "packageName": "ghcr.io/prefix-dev/pixi",
@@ -415,8 +425,36 @@ def test_a_pixi_version_without_a_digest_is_never_given_one() -> None:
             },
             None,
         ),
+        (
+            {
+                "manager": "dockerfile",
+                "packageName": "nixos/nix",
+                "packageFile": "Dockerfile",
+                "depType": "stage",
+                "datasource": "docker",
+            },
+            None,
+        ),
+        (
+            {
+                "manager": "dockerfile",
+                "packageName": "nixos/nix",
+                "packageFile": "fixtures/fake_worker/Dockerfile",
+                "depType": "stage",
+                "datasource": "docker",
+            },
+            None,
+        ),
     ],
-    ids=["hex", "hex dev", "actions", "runner label", "runtime base"],
+    ids=[
+        "hex",
+        "hex dev",
+        "actions",
+        "runner label",
+        "runtime base",
+        "build stage",
+        "fixture build stage",
+    ],
 )
 def test_the_routine_updates_are_grouped_and_wait_only_for_the_landing_hold(
     dependency: dict[str, str], group: str | None

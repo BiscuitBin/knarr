@@ -68,7 +68,7 @@
       "enabled": false
     },
     {
-      "description": "The pixi version, written in five places (the floor, setup-pixi's input, the cache key, the build stage's FROM and the contributing guide), moves in one pull request; scripts/checks/tests/test_dependency_pins.py fails until all five agree.",
+      "description": "The pixi version, written in four places (the floor, setup-pixi's input, the cache key and the contributing guide), moves in one pull request; scripts/checks/tests/test_dependency_pins.py fails until all four agree. No Dockerfile names pixi since nix-migration ticket 09: both build stages are the Nix image, which the dockerfile manager reads by tag and digest (Decision 0017).",
       "matchPackageNames": [
         "ghcr.io/prefix-dev/pixi"
       ],
@@ -166,7 +166,7 @@
     },
     {
       "customType": "regex",
-      "description": "The pixi version outside the Dockerfile: the floor in pixi.toml, setup-pixi's input and the cache key in the setup action, and the contributing guide's prerequisite. Read against the pixi image's tags, so all four move with the build stage's FROM; the pixi group keeps the five in one pull request.",
+      "description": "The pixi version: the floor in pixi.toml, setup-pixi's input and the cache key in the setup action, and the contributing guide's prerequisite. Read against the pixi image's tags, the versions pixi publishes; the pixi group keeps the four in one pull request.",
       "managerFilePatterns": [
         "/^pixi\\.toml$/",
         "/^\\.github/actions/setup/action\\.yml$/",

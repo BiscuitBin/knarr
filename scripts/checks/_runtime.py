@@ -8,8 +8,9 @@ itself:
     `image-check` compares the image's OTP release with it and `hex-audit` asks
     OSV.dev about it. Until ticket 13 a policy test holds pixi.toml's `erlang`
     pin equal to it.
-- `PREFIX` is where both Dockerfiles copy pixi's `runtime` environment.
-    `image-check` inspects it there and `runtime-scan` copies it out from there.
+- `PREFIX` is where both images ship the flake's `runtime` environment: a link
+    into the closure's store paths under /nix/store (Decision 0017).
+    `image-check` runs the TLS proof from it and `runtime-scan` reads it there.
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -23,7 +24,7 @@ import _pins
 if TYPE_CHECKING:
     from pathlib import Path
 
-PREFIX = "/opt/knarr/.pixi/envs/runtime"
+PREFIX = "/opt/knarr/runtime"
 
 
 class OtpPinError(Exception):
