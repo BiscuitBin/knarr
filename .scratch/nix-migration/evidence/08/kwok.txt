@@ -1,0 +1,39 @@
+date: 2026-11-14T23:32Z
+clone at 2a5b4baf16c1 on aarch64
+
+== KNARR_CLUSTER=kwok just cluster-up
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py up "$WORK/clone"
+{"time":"2026-11-14T23:32:01.29372117Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":385},"msg":"Cluster is creating","cluster":"clone-7f423a53"}
+{"time":"2026-11-14T23:32:03.229599046Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":394},"msg":"Cluster is created","cluster":"clone-7f423a53","elapsed":{"nanosecond":1936138543,"human":"1.936138543s"}}
+{"time":"2026-11-14T23:32:03.230976212Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":428},"msg":"Cluster is starting","cluster":"clone-7f423a53"}
+{"time":"2026-11-14T23:32:03.582182338Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":433},"msg":"Cluster is started","cluster":"clone-7f423a53","elapsed":{"nanosecond":351202000,"human":"351.202ms"}}
+{"time":"2026-11-14T23:32:03.582239838Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":449},"msg":"Waiting for cluster to be ready","cluster":"clone-7f423a53"}
+{"time":"2026-11-14T23:32:05.188622463Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":457},"msg":"Cluster is ready","cluster":"clone-7f423a53","elapsed":{"nanosecond":1606377376,"human":"1.606377376s"}}
+{"time":"2026-11-14T23:32:05.201590713Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/scale.runE","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/scale/scale.go","line":139},"msg":"No resource found, use default resource","cluster":"clone-7f423a53","resource":"node"}
+{"time":"2026-11-14T23:32:05.211512838Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/snapshot.(*Loader).finishLoad","file":"sigs.k8s.io/kwok/pkg/kwokctl/snapshot/load.go","line":189},"msg":"Load resources","cluster":"clone-7f423a53","name":"node","replicas":1,"resource":"nodes","counter":1,"elapsed":{"nanosecond":2348709,"human":"2.348709ms"}}
+node/node-000000 condition met
+-> exit 0 in 7 seconds
+kwokctl get clusters: clone-7f423a53 
+nodes: node/node-000000 
+Client Version: v1.36.3
+Server Version: v1.35.5
+
+== KNARR_CLUSTER=kwok just cluster-ready
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py ready "$WORK/clone"
+node/node-000000 condition met
+-> exit 0 in 0 seconds
+
+== KNARR_CLUSTER=kwok just cluster-down
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py down "$WORK/clone"
+{"time":"2026-11-14T23:32:08.427119507Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster.deleteCluster","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster/cluster.go","line":133},"msg":"Cluster is stopping","cluster":"clone-7f423a53"}
+{"time":"2026-11-14T23:32:08.874162507Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster.deleteCluster","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster/cluster.go","line":138},"msg":"Cluster is stopped","cluster":"clone-7f423a53","elapsed":{"nanosecond":447043834,"human":"447.043834ms"}}
+{"time":"2026-11-14T23:32:08.874267632Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster.deleteCluster","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster/cluster.go","line":144},"msg":"Cluster is deleting","cluster":"clone-7f423a53"}
+{"time":"2026-11-14T23:32:09.278733965Z","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster.deleteCluster","file":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster/cluster.go","line":161},"msg":"Cluster is deleted","cluster":"clone-7f423a53","elapsed":{"nanosecond":404461041,"human":"404.461041ms"}}
+-> exit 0 in 1 seconds
+
+== After cluster-down
+kwok containers: 
+.cluster exists: no

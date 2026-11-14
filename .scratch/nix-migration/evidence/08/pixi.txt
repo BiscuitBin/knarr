@@ -1,0 +1,84 @@
+# 2026-11-14T23:34Z, 08-cluster-audit-tools-from-flake at 2a5b4baf16c1 on Darwin arm64, cluster 08-cluster-audit-tools-76cc9e7c
+backend: pixi
+
+== just cluster-install
+sh scripts/tool-group.sh install cluster
+✔ The cluster environment has been installed.
+-> exit 0 in 1 seconds
+kind: kind v0.33.0 go1.26.6 darwin/arm64; kubectl: Client Version: v1.36.0; kwokctl: ./.tools/bin/kwokctl
+
+== just cluster-up
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-08-cluster-audit-tools-76cc9e7c --kubeconfig ./.cluster/kubeconfig
+
+Thanks for using kind! 😊
+node/08-cluster-audit-tools-76cc9e7c-control-plane condition met
+-> exit 0 in 26 seconds
+
+== just image-build
+#25 exporting attestation manifest sha256:b8db3676618a4faa16e347d9a1d6ef220a9df308c02bcf90e154bc7ffbc0dc6b done
+#25 exporting manifest list sha256:482f33cf4f0815241c1474125c31cbce5740a28591b5ad139387a5334b795673
+#25 exporting manifest list sha256:482f33cf4f0815241c1474125c31cbce5740a28591b5ad139387a5334b795673 done
+#25 naming to docker.io/library/knarr:08-cluster-audit-tools-76cc9e7c done
+#25 unpacking to docker.io/library/knarr:08-cluster-audit-tools-76cc9e7c done
+#25 DONE 0.0s
+-> exit 0 in 1 seconds
+
+== just image-load
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py image-load "." "$1"
+Image: "knarr:08-cluster-audit-tools-76cc9e7c" with ID "sha256:482f33cf4f0815241c1474125c31cbce5740a28591b5ad139387a5334b795673" not yet present on node "08-cluster-audit-tools-76cc9e7c-control-plane", loading...
+-> exit 0 in 3 seconds
+
+== just deploy
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/biscuitbin/knarr/blob/v0.3.1/docs/how-to/install.md
+-> exit 0 in 4 seconds
+
+== just smoke
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py smoke "."
+ok /healthz
+ok /readyz
+ok /metrics
+-> exit 0 in 0 seconds
+
+== just cluster-down
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py down "."
+Deleting cluster "08-cluster-audit-tools-76cc9e7c" ...
+Deleted nodes: ["08-cluster-audit-tools-76cc9e7c-control-plane"]
+-> exit 0 in 1 seconds
+
+== KNARR_CLUSTER=kwok just cluster-up
+{"time":"2026-11-14T15:35:18.420062-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":433},"msg":"Cluster is started","cluster":"08-cluster-audit-tools-76cc9e7c","elapsed":{"nanosecond":421162459,"human":"421.162459ms"}}
+{"time":"2026-11-14T15:35:18.420127-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":449},"msg":"Waiting for cluster to be ready","cluster":"08-cluster-audit-tools-76cc9e7c"}
+{"time":"2026-11-14T15:35:20.551705-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/create/cluster.runE","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/cmd/create/cluster/cluster.go","line":457},"msg":"Cluster is ready","cluster":"08-cluster-audit-tools-76cc9e7c","elapsed":{"nanosecond":2131562417,"human":"2.131562417s"}}
+{"time":"2026-11-14T15:35:20.567072-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/scale.runE","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/cmd/scale/scale.go","line":139},"msg":"No resource found, use default resource","cluster":"08-cluster-audit-tools-76cc9e7c","resource":"node"}
+{"time":"2026-11-14T15:35:20.580091-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/snapshot.(*Loader).finishLoad","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/snapshot/load.go","line":189},"msg":"Load resources","cluster":"08-cluster-audit-tools-76cc9e7c","name":"node","replicas":1,"resource":"nodes","counter":1,"elapsed":{"nanosecond":2662792,"human":"2.662792ms"}}
+node/node-000000 condition met
+-> exit 0 in 8 seconds
+
+== KNARR_CLUSTER=kwok just cluster-ready
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py ready "."
+node/node-000000 condition met
+-> exit 0 in 0 seconds
+
+== KNARR_CLUSTER=kwok just cluster-down
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py down "."
+{"time":"2026-11-14T15:35:23.927462-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster.deleteCluster","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/cmd/delete/cluster/cluster.go","line":133},"msg":"Cluster is stopping","cluster":"08-cluster-audit-tools-76cc9e7c"}
+{"time":"2026-11-14T15:35:24.340638-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster.deleteCluster","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/cmd/delete/cluster/cluster.go","line":138},"msg":"Cluster is stopped","cluster":"08-cluster-audit-tools-76cc9e7c","elapsed":{"nanosecond":413180792,"human":"413.180792ms"}}
+{"time":"2026-11-14T15:35:24.340777-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster.deleteCluster","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/cmd/delete/cluster/cluster.go","line":144},"msg":"Cluster is deleting","cluster":"08-cluster-audit-tools-76cc9e7c"}
+{"time":"2026-11-14T15:35:24.766203-08:00","level":"INFO","source":{"function":"sigs.k8s.io/kwok/pkg/kwokctl/cmd/delete/cluster.deleteCluster","file":"/home/runner/work/kwok/kwok/pkg/kwokctl/cmd/delete/cluster/cluster.go","line":161},"msg":"Cluster is deleted","cluster":"08-cluster-audit-tools-76cc9e7c","elapsed":{"nanosecond":425419875,"human":"425.419875ms"}}
+-> exit 0 in 1 seconds
+
+== After
+kind clusters: No kind clusters found. 
+.cluster exists: no

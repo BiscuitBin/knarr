@@ -1,0 +1,14 @@
+# 2026-11-14T23:32Z, clone at 2a5b4baf16c1 on aarch64
+.nix: audit cluster default 
+
+== KNARR_TOOLS=nix just test-checkers-selected cluster environment
+======================= 318 passed, 14 skipped in 9.24s ========================
+
+== KNARR_TOOLS=nix just env-check
+env-check: $WORK/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, and the held versions match
+env-check: $WORK/clone/.nix/cluster is /nix/store/jriwl9f6q7j7dlglyplzmjfh63r8qrlm-knarr-cluster-tools, and the held versions match
+
+== KNARR_TOOLS=nix just check
+
+All checks passed and the worktree is unchanged.
+-> exit 0 in 119 seconds

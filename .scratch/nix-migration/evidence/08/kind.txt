@@ -1,0 +1,76 @@
+date: 2026-11-14T23:31Z
+clone at 2a5b4baf16c1 on aarch64
+cluster name: clone-7f423a53
+
+== just cluster-up
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Waiting ≤ 3m0s for control-plane = Ready ⏳  ...
+ ✓ Waiting ≤ 3m0s for control-plane = Ready ⏳
+ • Ready after 15s 💚
+Set kubectl context to "kind-clone-7f423a53"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-clone-7f423a53 --kubeconfig $WORK/clone/.cluster/kubeconfig
+
+Not sure what to do next? 😅  Check out https://kind.sigs.k8s.io/docs/user/quick-start/
+node/clone-7f423a53-control-plane condition met
+-> exit 0 in 24 seconds
+Client Version: v1.36.3
+Server Version: v1.35.8
+
+== just image-build
+#24 [runtime 6/6] COPY --chmod=0755 scripts/container-entrypoint.sh /opt/knarr/container-entrypoint.sh
+#24 CACHED
+
+#25 exporting to image
+#25 exporting layers done
+#25 exporting manifest sha256:389942bba61e40d835a85cd093a17748eb2a151a0f83c8e9a152dc7e9356b77a done
+#25 exporting config sha256:e5efb9afbdfdcdb734d9b1ea4387650d8be8c66f8e34aa229994fcf3934c12e6 done
+#25 exporting attestation manifest sha256:44d991b484541bf9a429beca8fe8edec77989be03591bd5dbf7127d32c5462df done
+#25 exporting manifest list sha256:143bc502d25a4c09a63b8bd7db8326d4701041972f6decdb688464e82af256e0 done
+#25 naming to docker.io/library/knarr:clone-7f423a53 done
+#25 unpacking to docker.io/library/knarr:clone-7f423a53 done
+#25 DONE 0.0s
+-> exit 0 in 1 seconds
+
+== just image-load
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py image-load "$WORK/clone" "$1"
+Image: "knarr:clone-7f423a53" with ID "sha256:143bc502d25a4c09a63b8bd7db8326d4701041972f6decdb688464e82af256e0" not yet present on node "clone-7f423a53-control-plane", loading...
+-> exit 0 in 3 seconds
+
+== just deploy
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+knarr 0.3.1 is installed as release knarr in namespace default.
+
+It acts only on Deployments in namespace default that opt in with the exact label value knarr.io/enabled: "true":
+
+  kubectl label deployment <name> --namespace default knarr.io/enabled=true
+
+Prepare each worker's status endpoint and allow status traffic first, as the install guide says:
+
+  https://github.com/biscuitbin/knarr/blob/v0.3.1/docs/how-to/install.md
+-> exit 0 in 3 seconds
+
+== just smoke
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py smoke "$WORK/clone"
+ok /healthz
+ok /readyz
+ok /metrics
+-> exit 0 in 1 seconds
+
+== just cluster-down
+sh scripts/tool-group.sh check cluster
+python3 scripts/checks/cluster.py down "$WORK/clone"
+Deleting cluster "clone-7f423a53" ...
+Deleted nodes: ["clone-7f423a53-control-plane"]
+-> exit 0 in 0 seconds
+
+== After cluster-down
+kind get clusters: No kind clusters found. 
+.cluster exists: no
+git status --short: 0 lines

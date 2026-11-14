@@ -1,0 +1,53 @@
+date: 2026-11-14T23:31Z
+nix (Nix) 2.35.6 on aarch64
+clone of 08-cluster-audit-tools-from-flake at 2a5b4baf16c1
+
+== KNARR_TOOLS=nix sh scripts/initialize.sh
+Ready. Next: just check (no network needed).
+Nothing has been staged, committed or pushed.
+.nix: default 
+
+== The stand-in host Docker client (not part of the checkout)
+client 29.9.3, daemon 29.6.1 linux/arm64
+github.com/docker/buildx v0.38.1 
+
+== Before either group is installed, with a host kind, kubectl and grype on PATH
+just cluster-up    exit 2: the nix cluster group is not installed; run just cluster-install error: recipe `cluster-tools` failed on line 328 with exit code 2 
+just cluster-ready exit 2: the nix cluster group is not installed; run just cluster-install error: recipe `cluster-tools` failed on line 328 with exit code 2 
+just deploy        exit 2: the nix cluster group is not installed; run just cluster-install error: recipe `cluster-tools` failed on line 328 with exit code 2 
+just smoke         exit 2: the nix cluster group is not installed; run just cluster-install error: recipe `cluster-tools` failed on line 328 with exit code 2 
+just image-scan    exit 2: the nix audit group is not installed; run just audit-install error: recipe `audit-tools` failed on line 242 with exit code 2 
+just runtime-scan  exit 2: the nix audit group is not installed; run just audit-install error: recipe `audit-tools` failed on line 242 with exit code 2 
+
+== KNARR_TOOLS=nix just cluster-install
+sh scripts/tool-group.sh install cluster
+== KNARR_TOOLS=nix just audit-install
+sh scripts/tool-group.sh install audit
+.nix/cluster -> /nix/store/jriwl9f6q7j7dlglyplzmjfh63r8qrlm-knarr-cluster-tools
+  bin: gen_cmd_docs kind kubectl kwok kwokctl verify_boilerplate 
+.nix/audit -> /nix/store/cvlabcnb6bhwdc6q8i3sq7aviiwhwsgc-knarr-audit-tools
+  bin: grype 
+git status --short: 0 lines
+
+== What recipes find under KNARR_TOOLS=nix
+kind       /var/lib/docker/volumes/knarr-nix-08-work/_data/clone/.nix/cluster/bin/kind
+kubectl    /var/lib/docker/volumes/knarr-nix-08-work/_data/clone/.nix/cluster/bin/kubectl
+kwokctl    /var/lib/docker/volumes/knarr-nix-08-work/_data/clone/.nix/cluster/bin/kwokctl
+grype      /var/lib/docker/volumes/knarr-nix-08-work/_data/clone/.nix/audit/bin/grype
+helm       /var/lib/docker/volumes/knarr-nix-08-work/_data/clone/.nix/default/bin/helm
+kustomize  /var/lib/docker/volumes/knarr-nix-08-work/_data/clone/.nix/default/bin/kustomize
+kind version: kind v0.33.0 go1.27.3 linux/arm64
+kubectl version --client: Client Version: v1.36.3 Kustomize Version: v5.8.1 
+kwokctl --version: kwokctl version v0.8.0 go1.27.3 (linux/arm64)
+grype version: Version: 0.120.0 Syft Version: v1.54.0 
+pins.toml: kind = "0.33.0" kwokctl = "0.8.0" kubectl = "1.36" 
+
+== The guards pass once the groups are installed
+check cluster: exit 0
+check audit: exit 0
+
+== KNARR_TOOLS=nix just env-check, with the cluster group installed
+python3 scripts/checks/env_check.py
+env-check: $WORK/clone/.nix/default is /nix/store/90lm0hhrsjy6klvyj078z3w77amhyy1g-knarr-tools, and the held versions match
+env-check: $WORK/clone/.nix/cluster is /nix/store/jriwl9f6q7j7dlglyplzmjfh63r8qrlm-knarr-cluster-tools, and the held versions match
+seconds: 2

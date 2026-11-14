@@ -1,0 +1,19 @@
+# 2026-11-14T23:32Z, clone at 2a5b4baf16c1 on aarch64, image knarr:clone-7f423a53
+grype: /var/lib/docker/volumes/knarr-nix-08-work/_data/clone/.nix/audit/bin/grype, Version: 0.120.0
+Schema:    v6.1.10
+Built:     2026-10-30T06:23:28Z
+Status:    valid
+
+== KNARR_TOOLS=nix just runtime-scan knarr:clone-7f423a53
+runtime-scan: grype catalogued 12 conda packages in /opt/knarr/.pixi/envs/runtime of knarr:clone-7f423a53 and found no fixable high or critical vulnerability in the copy
+-> exit 0
+cataloger lines in build/runtime-scan/grype.log:
+  discovered 33 packages cataloger=erlang-otp-application-cataloger
+  discovered 12 packages cataloger=conda-meta-cataloger
+  discovered 2 packages cataloger=binary-classifier-cataloger
+
+== KNARR_TOOLS=nix just image-scan knarr:clone-7f423a53
+sh scripts/tool-group.sh check audit
+grype "$1" --only-fixed --fail-on high
+No vulnerabilities found
+-> exit 0
