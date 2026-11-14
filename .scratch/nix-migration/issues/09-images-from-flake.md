@@ -19,7 +19,7 @@
 
 **MVP critical path:** no.
 
-**Status:** ready-for-agent
+**Status:** done on its branch, awaiting a pull request. See [the hand-back notes](#hand-back-notes).
 
 - [x] **Authorization required:** the network, for image pulls and Nix fetches during builds.
 - [x] `just image-build` and `just image-check` pass locally on linux/arm64, and so do the fake worker's pair.
@@ -43,8 +43,9 @@
 - **Tests.** `test_runtime.py`: the prefix test asserts the new shape (`COPY --from=build /out/ /`, the link at `/out` plus `PREFIX`, the closure copy, `PREFIX/bin` first on `PATH`). `test_image.py`: the rebar3 `ADD` test retires; the same-stages test compares the whole toolchain stage of both Dockerfiles; new cases hold the closure's layout before the source copy, and both allowlists to the three flake files with no pixi, prune or tools entry; the knarr profile runs exactly one command, the TLS rerun. `test_dependency_pins.py`: the two-digest-pinned-`FROM` test runs on both Dockerfiles; a new test holds both build stages to `nixos/nix` by tag and digest, identical in both; the pixi version has four sites, not five, and the pixi group loses its dockerfile entry; the `nixos/nix` stage in each Dockerfile is a routine update with no group and no approval rule. Red first: the prefix and TLS-profile cases failed before `_runtime.py` and `image.py` changed.
 - **`.github/renovate.json`:** only two descriptions changed, for the pixi version's four places. The `nixos/nix` build stage needs no rule: the dockerfile manager reads its tag and digest, and `docker:pinDigests` keeps the digest.
 - **Text:** `runtime_scan.py`'s docstring names `_runtime.PREFIX` and says it cannot decide on a closure until 11; `pixi.toml`'s OTP comment no longer says the Dockerfiles read `pixi.lock`.
-- **Docs:** amendment notes on Decision 0012 (CI build time, the arm64 probe, the cost of arm64) and Decision 0014 (the base-image bullet, the pixi version's places, the runtime scan, the perl prune, the re-lock route, ticket 38's lane); none on 0003. The fake worker reference page, the local cluster how-to's "Image and checks" section (not its cluster-tools line, which is 08's), `DEFERRED.md`'s arm64 entry, bootstrap ticket 38's text and box, and a `CHANGELOG.md` entry. The two links to the deleted prune script, in 0014's body and bootstrap 45's hand-back, now point to it at `d7cf7b4` on GitHub, so the offline link check passes and the text is unchanged.
-- **Evidence** in [`../evidence/09/`](../evidence/09/README.md): four scripts, their transcripts and a README.
+- **Docs:** amendment notes on Decision 0012 (CI build time, the arm64 probe, the cost of arm64) and Decision 0014 (the base-image bullet, the pixi version's places, the runtime scan, the perl prune, the re-lock route, ticket 38's lane); none on 0003. The fake worker reference page, the local cluster how-to's "Image and checks" section (not its cluster-tools line, which is 08's), `DEFERRED.md`'s arm64 entry, bootstrap ticket 38's text and box, and a `CHANGELOG.md` entry. The two links to the deleted prune script, in 0014's body and bootstrap 45's hand-back, now point to it at `d7cf7b4` on GitHub, so the offline link check passes and the text is unchanged. That URL was not checked: `just links-audit` needs the network, which this ticket had only for builds.
+- **Evidence** in [`../evidence/09/`](../evidence/09/README.md): four scripts, their transcripts and a README. The images were built from `2b6dd72`, the commit that changed the Dockerfiles; no later commit changes a file either allowlist admits.
+- **One departure from the prototype:** the closure's path list, `runtime-closure.txt`, stays in the build stage at `/opt/knarr/runtime-closure.txt`; the prototype wrote it under `/out` and so shipped it in the image.
 
 ### What was verified, and where
 
@@ -52,11 +53,11 @@ All on the Mac, linux/arm64, Docker 29.6.1, with Nix only inside `docker build`;
 
 - Box 2: `just image-build`, `just fake-worker-image-build`, `just image-check` and `just fake-worker-image-check` all exit 0 from the worktree ([recipes.txt](../evidence/09/recipes.txt)).
 - Box 3: `tls_check: all 6 cases matched` with `/opt/knarr/runtime/bin/openssl`, OpenSSL 3.5.9, and OTP 29.1.2 ([check.txt](../evidence/09/check.txt)).
-- Box 4: `pins.toml` holds 29.1.2; the build stage and the image of both images report `OTP_VERSION` 29.1.2 from the same store path, and `/opt/build-otp` is 29, which `image-check` compares ([check.txt](../evidence/09/check.txt)).
+- Box 4: `pins.toml` holds 29.1.2; the build stage and the image of both images report `OTP_VERSION` 29.1.2 from the same store path, and `/opt/build-otp` is 29. `image-check` itself still compares the major only, as before; the whole version is in the evidence ([check.txt](../evidence/09/check.txt)).
 - Box 5: both Dockerfiles have exactly two `FROM` lines pinned by digest (`test_dependency_pins.py`); `just packaging-check` passes, hadolint (pixi's) included.
 - Box 6: `USER 10001:10001`, read-only root, every capability dropped, under `image-check`. Sizes and times ([build.txt](../evidence/09/build.txt), [README](../evidence/09/README.md#findings)): knarr 114.3 MB against 103.6 MB, cold 50 s against 17, after a `src/` edit 11 s against 4; the fake worker 113.7 MB against 121.8 MB, cold 45 s against 18, after an edit 11 s against 3. A source edit reruns only the export ([layers.txt](../evidence/09/layers.txt)).
 - The closure is 19 store paths, the same in both images, with no perl ([check.txt](../evidence/09/check.txt)).
-- Box 8 and 9: `just docs-check` passes; `just test-checkers-selected packaging audit policy` had 296 passed before the docs went in, and passes again at the end.
+- Box 8 and 9: `just docs-check` passes; `just test-checkers-selected packaging audit policy` had 296 passed. `just test-checkers-all` had 922 passed, no failure.
 - Box 10: `just check` ends with "All checks passed and the worktree is unchanged.", with every change staged, after these notes; `git status --short` is empty after the commit.
 
 Not verified:
@@ -66,11 +67,13 @@ Not verified:
 - The gate under `KNARR_TOOLS=nix`, so hadolint 2.14.0 from the flake has not linted these Dockerfiles; pixi's has.
 - `just runtime-scan`: it cannot decide on a closure, as the round README says.
 
+The network was used only inside `docker build`, read-only: the Nix builds fetched from cache.nixos.org, the three nixpkgs sources and allium's release asset from github.com, and the hex packages; the pixi baseline builds fetched conda-forge packages, the rebar3 release asset and the hex packages. Both base images were already pulled, so nothing new came from a registry, and nothing was pushed.
+
 Left on the Mac's Docker: the images `knarr-09:pixi`, `knarr-09:nix`, `knarr-09:nix-build`, `fake-worker-09:pixi`, `fake-worker-09:nix`, `fake-worker-09:nix-build` and `knarr:09-nix`, and their build cache. No volume was created and nothing was pruned. Under the gitignored `ai_tmp/09/` are the staged contexts and the logs.
 
 ### What later tickets need
 
 - **10.** The images do not depend on the backend: nothing in either build reads `KNARR_TOOLS`, `.pixi/` or `.nix/`. Run the Nix gate once on these Dockerfiles, since the flake's hadolint (2.14.0) is older than pixi's. `reconcile-proof.yml`'s push paths list `Dockerfile` and `.dockerignore` but never listed `pixi.lock`, and do not list `flake.nix`, `flake.lock` or `pins.toml` now; a `main` push that moves only the flake does not rerun the proof. Whether it should is a choice this ticket left alone.
 - **11.** `/opt/knarr/runtime` is a symbolic link to `/nix/store/…-knarr-runtime`, not a directory: `docker cp` of `_runtime.PREFIX`, which `runtime_scan.py` does today, copies the link alone. The closure is the 19 paths in [check.txt](../evidence/09/check.txt), and the build stage leaves their list at `/opt/knarr/runtime-closure.txt`, which the final image does not carry. `runtime_scan.py`'s docstring already says it cannot decide on a closure.
-- **12.** The build stage is `nixos/nix:2.35.6@sha256:b49cb33f…` in both Dockerfiles, identical, and the pin tests hold that. The dockerfile manager handles it with no rule; whether its Nix version should move with the CI installer's is 12's or 10's to decide. The pixi regex manager and its four sites are untouched for 12 or 13 to remove.
+- **12.** The build stage is `nixos/nix:2.35.6@sha256:b49cb33f…` in both Dockerfiles, identical, and the pin tests hold that. The dockerfile manager handles it with no rule, so it is a routine update that waits only for the landing hold, where the pixi build stage it replaced waited for approval in the pixi group. Whether it should wait for approval, or move with the CI installer's Nix version, is 12's or 10's to decide. The pixi regex manager and its four sites are untouched for 12 or 13 to remove.
 - **13.** `tools.txt` keeps its rebar3 lines for the pixi gate. `pixi.toml`'s OTP comment names the images as reading the flake. Nothing in the images or their checks names pixi or conda any more, except `runtime_scan.py`, which is 11's.
