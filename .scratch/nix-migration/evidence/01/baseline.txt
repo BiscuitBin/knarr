@@ -1,0 +1,31 @@
+date: 2026-11-14T20:57Z
+docker: 29.6.1, linux/arm64
+HEAD: 3a8ff2d
+base: ghcr.io/prefix-dev/pixi:0.81.0@sha256:788ae451641666e2d1f79d3dbe35392dfc7e9b394b16a3acb75c347f3badb2ab
+base: ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c
+
+== Build times (both base images already pulled)
+cold (--no-cache)                              21 seconds
+warm (nothing changed)                          1 seconds
+after an edit under src/                        4 seconds
+
+== The image
+architecture arm64, user 10001:10001
+size (docker image inspect .Size): 103.6 MB
+size (docker images):              401MB
+runtime environment: 176M
+  lib/erlang: 120M
+shipment: 2.7M
+otp_release 29, erts 17.1.1, [{<<"OpenSSL">>,810549392,
+                               <<"OpenSSL 3.6.5 29 Sep 2026">>}]
+layers of the final stage:
+  0B	CMD ["run"]
+  0B	ENTRYPOINT ["/opt/knarr/container-entrypoint.sh" "/opt/knarr/shipment/entrypoint.sh"]
+  0B	EXPOSE [8080/tcp]
+  0B	USER 10001:10001
+  0B	ENV PATH=/opt/knarr/.pixi/envs/runtime/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ERL
+  16.4kB	COPY --chmod=0755 scripts/container-entrypoint.sh /opt/knarr/container-entrypoint.sh # buildkit
+  12.3kB	COPY /opt/build-otp /opt/build-otp # buildkit
+  2.76MB	COPY /opt/knarr/build/erlang-shipment /opt/knarr/shipment # buildkit
+  184MB	COPY /opt/knarr/.pixi/envs/runtime /opt/knarr/.pixi/envs/runtime # buildkit
+  12.3kB	WORKDIR /opt/knarr

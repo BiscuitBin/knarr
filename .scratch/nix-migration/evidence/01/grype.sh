@@ -9,17 +9,29 @@
 #   cp -R ~/Library/Caches/grype/db/6 ai_tmp/grype-db/
 # What grype catalogues does not depend on the database's age; what it matches
 # does, and the transcript prints the database's build date.
-# Usage (host): sh nix.sh --offline sh /evidence/grype.sh > grype.txt
+# Usage (host): sh nix.sh sh /evidence/grype.sh prepare   (network: fetches the Nix paths)
+#               sh nix.sh --offline sh /evidence/grype.sh > grype.txt
 # lib.sh sets rev, systems and flake, and the gate runs shellcheck without -x.
 # shellcheck disable=SC2154
 # shellcheck source=lib.sh disable=SC1091
 . /evidence/lib.sh
+links=/work/grype-links
+if [ "${1:-}" = prepare ]; then
+  mkdir -p "$links"
+  fresh_proto "$links/proto"
+  nix build "$links/proto#audit" --out-link "$links/audit" 2> /dev/null
+  nix build "$links/proto#runtime" --out-link "$links/runtime" 2> /dev/null
+  # The control: the same two packages one revision back, at the nixpkgs-gleam
+  # input, where Erlang is 29.1.1. Four advisories fixed in 29.1.2 apply to it
+  # (Decision 0003), so a scan that can match must match here.
+  nix build --out-link "$links/control" --impure --expr "
+    with (builtins.getFlake \"github:NixOS/nixpkgs/$(locked nixpkgs-gleam)\").legacyPackages.\${builtins.currentSystem};
+    buildEnv { name = \"knarr-runtime-control\"; paths = [ beam_minimal.interpreters.erlang_29 openssl.bin ]; pathsToLink = [ \"/bin\" ]; }" 2> /dev/null
+  exit 0
+fi
 rm -rf /work/grype
-mkdir -p /work/grype/closure/nix/store /work/grype/proto
-fresh_proto /work/grype/proto
-nix build /work/grype/proto#audit --out-link /work/grype/audit 2> /dev/null
-nix build /work/grype/proto#runtime --out-link /work/grype/runtime 2> /dev/null
-PATH=/work/grype/audit/bin:$PATH
+mkdir -p /work/grype
+PATH=$links/audit/bin:$PATH
 cp -R /bundle/grype-db /work/grype/db
 GRYPE_CHECK_FOR_APP_UPDATE=false
 GRYPE_DB_CACHE_DIR=/work/grype/db
@@ -29,11 +41,16 @@ export GRYPE_CHECK_FOR_APP_UPDATE GRYPE_DB_CACHE_DIR GRYPE_DB_AUTO_UPDATE GRYPE_
 printf 'date: %s\n%s (pixi.toml pins 0.120.1)\n' "$(date -u +%Y-%m-%dT%H:%MZ)" "$(grype --version)"
 printf 'database: %s\n' "$(jq -r .source /work/grype/db/6/import.json | sed 's/.*vulnerability-db_\(v[0-9.]*\)_\([0-9-]*\)T.*/\1, built \2/')"
 
-# The directory source: the closure's store paths under nix/store, as the image
+# A directory source: a closure's store paths under nix/store, as the image
 # carries them and as `docker cp <container>:/nix` would copy them out.
-nix path-info --recursive /work/grype/runtime > /work/grype/closure.txt
-xargs cp --archive --target-directory=/work/grype/closure/nix/store < /work/grype/closure.txt
-printf 'runtime closure: %s store paths, %s\n' "$(wc -l < /work/grype/closure.txt)" "$(du -sh /work/grype/closure | cut -f1)"
+closure() { # name, out-link
+  mkdir -p "/work/grype/$1/nix/store"
+  nix path-info --recursive "$2" 2> /dev/null > "/work/grype/$1.txt"
+  xargs cp --archive --target-directory="/work/grype/$1/nix/store" < "/work/grype/$1.txt"
+  printf '%s: %s store paths, %s\n' "$1" "$(wc -l < "/work/grype/$1.txt")" "$(du -sh "/work/grype/$1" | cut -f1)"
+}
+closure closure "$links/runtime"
+closure control "$links/control"
 
 scan() { # label, source
   printf '\n== %s: grype -vv %s --only-fixed --fail-on high\n' "$1" "$2"
@@ -46,18 +63,20 @@ scan() { # label, source
   grep -o 'conda-meta-cataloger' /work/grype/log | sort -u | sed 's/^/  named in the log: /'
   printf 'matches: %s; by severity: %s\n' "$(jq '.matches | length' /work/grype/out.json)" \
     "$(jq -r '[.matches[].vulnerability.severity] | group_by(.) | map("\(.[0]) \(length)") | join(", ")' /work/grype/out.json)"
-  printf 'matched packages: %s\n' "$(jq -r '[.matches[].artifact | "\(.name) \(.version) (\(.type))"] | unique | join("; ")' /work/grype/out.json | cut -c1-400)"
+  printf 'matches by package: %s\n' "$(jq -r '[.matches[].artifact | "\(.name) \(.version) (\(.type))"] | group_by(.) | map("\(.[0]): \(length)") | join("; ")' /work/grype/out.json)"
+  printf 'advisories matched on erlang: %s\n' "$(jq -r '[.matches[] | select(.artifact.name == "erlang") | "\(.vulnerability.id) \(.vulnerability.severity), fixed in \(.vulnerability.fix.versions | join(" "))"] | unique | join("; ")' /work/grype/out.json | cut -c1-700)"
   # The same source through grype's SBOM output, which lists every catalogued
   # package, matched or not.
   grype "$2" -o cyclonedx-json > /work/grype/sbom.json 2> /dev/null || true
-  printf 'catalogued packages: %s\n' "$(jq '.components | length' /work/grype/sbom.json)"
-  printf 'erlang and openssl among them:\n'
-  jq -r '.components[] | select(.name | test("erlang|^erts$|openssl|^otp|^crypto$|^ssl$|^public_key$"; "i")) |
-    "  \(.name) \(.version) [\(.type)] \((.properties // []) | map(select(.name | test("foundBy|cataloger|package:type"))) | map(.value) | join(","))  \(.purl // "")"' \
+  printf 'catalogued packages: %s\n' "$(jq '[.components[] | select(.type != "file")] | length' /work/grype/sbom.json)"
+  printf 'erlang and openssl among them (name, version, cataloger, package URL):\n'
+  jq -r '.components[] | select(.type != "file") | select(.name | test("erlang|^erts$|openssl|^crypto$|^ssl$|^public_key$"; "i")) |
+    "  \(.name) \(.version)  \([(.properties // [])[] | select(.name == "syft:package:foundBy") | .value] | join(","))  \(.purl // "")"' \
     /work/grype/sbom.json | sort -u | cut -c1-170
-  printf 'by package type: %s\n' "$(jq -r '[.components[] | ((.properties // []) | map(select(.name == "syft:package:type")) | .[0].value // .type)] | group_by(.) | map("\(.[0]) \(length)") | join(", ")' /work/grype/sbom.json)"
+  printf 'by package type: %s\n' "$(jq -r '[.components[] | select(.type != "file") | ([(.properties // [])[] | select(.name == "syft:package:type") | .value] | .[0] // "unknown")] | group_by(.) | map("\(.[0]) \(length)") | join(", ")' /work/grype/sbom.json)"
 }
 scan 'Directory source' dir:/work/grype/closure
+scan 'Directory source, the control with OTP 29.1.1' dir:/work/grype/control
 if [ -f /bundle/knarr-nix-proto.tar ]; then
   scan 'Image source' docker-archive:/bundle/knarr-nix-proto.tar
 else

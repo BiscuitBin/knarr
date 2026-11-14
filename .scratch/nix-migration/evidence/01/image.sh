@@ -6,8 +6,8 @@
 # TLS script on the image's own Erlang and OpenSSL, and the same readiness and
 # metrics probe. image.py itself is run last, to record where it stops.
 # Usage: sh image.sh [baseline-image] > image.txt   (needs Docker and the network)
-#   The baseline is today's image, already pulled or built, whose size is
-#   printed beside the prototype's: ghcr.io/biscuitbin/knarr:0.3.1 here.
+#   The baseline is today's image, already built, whose size is printed
+#   beside the prototype's: knarr-nix-proto:pixi-baseline, from baseline.sh.
 set -eu
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 root=$(CDPATH='' cd -- "$here/../../../.." && pwd -P)

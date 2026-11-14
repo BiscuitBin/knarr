@@ -13,7 +13,7 @@ mkdir -p "$root/ai_tmp"
 # of the worktree.
 git -C "$root" bundle create "$root/ai_tmp/knarr.bundle" HEAD "$(git -C "$root" branch --show-current)" 2> /dev/null
 [ "$#" -gt 0 ] || set -- systems packages holds gleam-override missing lock git tls-pairs \
-  gate-setup host-needs gate differences fresh image grype
+  gate-setup host-needs gate differences fresh baseline image grype
 transcript() { # name, command...: rewrite <name>.txt only if the command succeeds
   name=$1
   shift
@@ -44,13 +44,20 @@ for script in "$@"; do
       transcript fresh env KNARR_NIX_STORE=knarr-nix-01-fresh sh "$here/nix.sh" sh /evidence/fresh.sh
       docker volume rm knarr-nix-01-fresh > /dev/null
       ;;
+    baseline)
+      # On the host: today's image, built from a clean export of HEAD.
+      transcript baseline sh "$here/baseline.sh"
+      ;;
     image)
-      # On the host; the baseline is the released image, pulled beforehand.
-      transcript image sh "$here/image.sh" ghcr.io/biscuitbin/knarr:0.3.1
+      # On the host, after baseline, whose image it prints the size of.
+      transcript image sh "$here/image.sh" knarr-nix-proto:pixi-baseline
       ;;
     grype)
+      # Offline, with the vulnerability database the host's grype had cached.
       docker save knarr-nix-proto:01 --output "$root/ai_tmp/knarr-nix-proto.tar"
-      transcript grype sh "$here/nix.sh" sh /evidence/grype.sh
+      [ -d "$root/ai_tmp/grype-db/6" ] || cp -R "$HOME/Library/Caches/grype/db/6" "$root/ai_tmp/grype-db/"
+      sh "$here/nix.sh" sh /evidence/grype.sh prepare
+      transcript grype sh "$here/nix.sh" --offline sh /evidence/grype.sh
       ;;
     *)
       transcript "$script" sh "$here/nix.sh" sh "/evidence/$script.sh"

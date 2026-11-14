@@ -17,7 +17,29 @@ Everything here ran on **aarch64-linux**. x86_64-linux and aarch64-darwin were e
 
 `sh nix.sh --offline …` adds `--network none`. The worktree is never mounted writable, and no gate recipe ran on a mount of it. The repository reached the container as a git bundle (`git bundle create ai_tmp/knarr.bundle HEAD 01-nix-container-spike`), cloned into the work volume.
 
-Each script below runs inside the container as `sh nix.sh sh /evidence/<script>`, and each `.txt` file is the transcript of the script with the same name. [lib.sh](lib.sh) is shared: the image has no `sed`, `awk`, `jq` or `file`, so the scripts take them from the candidate revision. [run-all.sh](run-all.sh) reruns everything.
+Each `.txt` file is the transcript of the script with the same name, and each script exits non-zero on an unexpected result. [lib.sh](lib.sh) is shared by the container scripts: the image has no `sed`, `awk`, `jq` or `file`, so they take them from the candidate revision.
+
+| Script | Where it runs | What it shows |
+| --- | --- | --- |
+| [systems.sh](systems.sh) | container | Cross-system evaluation, cache queries and closure sizes |
+| [packages.sh](packages.sh), with [packages.nix](packages.nix) | container | The package table on three systems, and each group's build plan |
+| [holds.sh](holds.sh), [gleam-override.sh](gleam-override.sh) | container | The held versions, nixpkgs history, and the cost of an override |
+| [missing.sh](missing.sh) | container | allium, kwokctl, hadolint and grype from upstream assets and nixpkgs |
+| [lock.sh](lock.sh) | container, online and offline | The drift table |
+| [git.sh](git.sh) | container | Flakes and git |
+| [tls-pairs.sh](tls-pairs.sh) | container | The six TLS cases on both Erlang and OpenSSL pairs |
+| [gate-setup.sh](gate-setup.sh) | container | The clone and environment the gate runs in |
+| [host-needs.sh](host-needs.sh) | container and stand-in host, offline | What the gate takes from the machine |
+| [gate.sh](gate.sh), [differences.sh](differences.sh) | stand-in host ([host.sh](host.sh)), offline | The PATH-prefix cases, the gate, and the version differences |
+| [fresh.sh](fresh.sh) | container, on a new store volume | A fresh clone reaching `just` |
+| [baseline.sh](baseline.sh), [image.sh](image.sh) | the Mac's Docker | Today's image and the prototype image |
+| [grype.sh](grype.sh) | container, offline | The scans |
+
+```sh
+sh .scratch/nix-migration/evidence/01/run-all.sh
+```
+
+[run-all.sh](run-all.sh) reruns them in that order and rewrites every transcript. It needs Docker and the network. `gate-setup.sh` clones the branch as committed, so a changed script is committed before the scripts after it are rerun. Timings move with the machine's load, and the Mac was shared with other builds on the day.
 
 ## Findings
 
@@ -79,7 +101,7 @@ What a machine with an empty store builds and fetches for each group of the prot
 | `audit` | 2 built, 38 fetched, 59 MiB, 231 MiB | 2 built, 38 fetched, 62 MiB, 223 MiB | 2 built, 40 fetched, 52 MiB, 245 MiB |
 | `runtime` | 2 built, 38 fetched, 92 MiB, 285 MiB | 2 built, 38 fetched, 92 MiB, 273 MiB | 2 built, 41 fetched, 82 MiB, 294 MiB |
 
-Nothing compiles. The derivations built locally are the environments themselves (`buildEnv` and its `builder.pl`), the Python environment that joins the interpreter and pytest, and allium's fetch and patch. On aarch64-linux the `default` group built from an empty store in 11 seconds on this machine's network ([fresh.txt](fresh.txt)).
+Nothing compiles. The derivations built locally are the environments themselves (`buildEnv` and its `builder.pl`), the Python environment that joins the interpreter and pytest, and allium's fetch and patch. On aarch64-linux the `default` group built from an empty store in 16 seconds on this machine's network ([fresh.txt](fresh.txt)).
 
 ### 3. Held versions
 
@@ -87,7 +109,7 @@ Nothing compiles. The derivations built locally are the environments themselves 
 
 **Erlang/OTP 29.1.2 is held by the candidate itself.** `beam_minimal.interpreters.erlang_29` is 29.1.2 at the candidate, cached on all three systems, and its build inputs are ncurses, openssl and zlib only. The prototype takes Erlang and rebar3 from that one attribute set, so each environment's closure holds one Erlang and the gate and the image run the same store path.
 
-**Its OpenSSL cannot be both exact and current.** pixi.lock has OpenSSL 3.6.5. The candidate builds Erlang against OpenSSL 3.5.9, the long-term-support line, and has removed `openssl_3_6` with the message `'openssl_3_6' has been removed, due to upstream end of life on 2026-11-01`. The options:
+**Its OpenSSL cannot be both exact and current.** pixi.lock has OpenSSL 3.6.5, though conda-forge's Erlang was compiled against 3.5 headers: in today's image `crypto:info_lib()` reports the header number 810549392, which is 3.5.9, beside the library text `OpenSSL 3.6.5` ([baseline.txt](baseline.txt)). The candidate builds Erlang against OpenSSL 3.5.9, the long-term-support line, and has removed `openssl_3_6` with the message `'openssl_3_6' has been removed, due to upstream end of life on 2026-11-01`. The options:
 
 | Option | OTP | OpenSSL | Cached (three systems) | Cost |
 | --- | --- | --- | --- | --- |
@@ -100,7 +122,7 @@ Nothing compiles. The derivations built locally are the environments themselves 
 | Option | Gleam | Cached (three systems) | Cost |
 | --- | --- | --- | --- |
 | A second input, `nixpkgs-gleam`, at `8edc0c72e3a38faf5434e40d1f19431125fe4b30` (**the prototype**) | 1.19.0 | yes, yes, yes | One more nixpkgs source to fetch, and a second glibc in the tools closure (not in the runtime closure: the shipment does not contain gleam). That commit is `nixpkgs-26.11pre1088030`, the last nixpkgs-unstable head that carried 1.19.0, so Hydra built it. |
-| The candidate's recipe with 1.19.0's source and crates (`overrideAttrs`) | 1.19.0 | no, no, no | Compiles from source: 103 seconds on 18 cores here, with the Rust toolchain already fetched. Every machine and every CI job without a warm store pays it, and the toolchain download with it. |
+| The candidate's recipe with 1.19.0's source and crates (`overrideAttrs`) | 1.19.0 | no, no, no | Compiles from source: 103 seconds on 18 cores here, with the Rust toolchain already fetched. Every machine and every CI job without a warm store pays it, and the toolchain download with it. One later rerun, on a loaded machine, failed in `cargo-auditable` instead; its transcript was not kept. |
 | The 1.19.0 recipe called on the candidate's toolchain | 1.19.0 | no, no, no | Does not build: the newer toolchain sets `AWS_LC_SYS_USE_SYSTEM=1`, which the older recipe does not satisfy. |
 | Accept the candidate's Gleam | 1.19.2 | yes, yes, yes | Not the held version. |
 
@@ -157,7 +179,7 @@ nix flake lock --no-update-lock-file                       exit 1  flake.lock un
 nix flake lock --no-update-lock-file --offline             exit 1  flake.lock unchanged
 ```
 
-**The read-only, offline lock check is `nix flake lock --no-update-lock-file --offline`.** On drift it exits 1 with `requires lock file changes but they're not allowed due to '--no-update-lock-file'` and leaves `flake.lock` byte-identical (sha256 `2fb8733b442340b1a47c81b346d714af439712e002918b356d3b4c7e16be61f1` before and after). On a fresh lock it exits 0 in 0.03 seconds, with the network off too. It also refuses a lock that still has an input `flake.nix` no longer names, and a lock whose revision was edited by hand.
+**The read-only, offline lock check is `nix flake lock --no-update-lock-file --offline`.** On drift it exits 1 with `requires lock file changes but they're not allowed due to '--no-update-lock-file'` and leaves `flake.lock` byte-identical (sha256 `2fb8733b442340b1a47c81b346d714af439712e002918b356d3b4c7e16be61f1` before and after). On a fresh lock it exits 0 in 0.02 seconds, with the network off too. It also refuses a lock that still has an input `flake.nix` no longer names, and a lock whose revision was edited by hand.
 
 Three traps, the same shape as pixi's:
 
@@ -173,11 +195,11 @@ Outside the flake directory the check writes one file, Nix's own `fetcher-cache-
 
 - **An untracked `flake.nix` is invisible.** `nix eval` exits 1: `Path 'flake.nix' in the repository "/work/git/clone" is not tracked by Git`. Staging it is enough (`git add`, or `git add -N`); it need not be committed. Every file the flake reads follows the same rule: `builtins.pathExists ./probe.txt` is `false` for an untracked file and `true` once it is tracked. A held-versions file must be tracked before the flake can read it.
 - **A dirty tree evaluates, with a warning** on stderr: `warning: Git tree '…' is dirty`. Evaluating the `default` group's output path takes about 1.2 seconds, dirty or clean.
-- **Nothing is copied to the store on evaluation.** Nix 2.35.6 reads a git flake in place. `nix flake metadata` names a store path for the source, but the path does not exist, and the store's path count is the same after metadata, two evaluations and an edit. The source is copied only when the flake uses it in a derivation (`"${self}"`): then all 755 tracked files are copied (8.3 MB), ignored and untracked files are not, `.git` is not, and each edit to a tracked file makes another copy. The prototype never refers to `self`, and ticket 07's flake should not either.
+- **Nothing is copied to the store on evaluation.** Nix 2.35.6 reads a git flake in place. `nix flake metadata` names a store path for the source, but the path does not exist, and the store's path count is the same after metadata, two evaluations and an edit. The source is copied only when the flake uses it in a derivation (`"${self}"`): then all 792 tracked files are copied (8.5 MB), ignored and untracked files are not, `.git` is not, and each edit to a tracked file makes another copy. The prototype never refers to `self`, and ticket 07's flake should not either.
 - **A linked worktree works.** `.git` there is a file naming the main checkout's `worktrees/` directory. `nix eval`, `nix build --out-link`, the lock check and a dirty tree all behave as in the main checkout, and the flake is `git+file:///work/git/linked` on that worktree's branch.
 - **A worktree whose `.git` file points at a missing path does not evaluate.** That is a linked worktree bind-mounted into a container. git fails with `fatal: not a git repository`, and Nix with `opening Git repository …: failed to resolve path '/Users/somebody/repo/.git/worktrees/linked'`. Nix does not fall back to reading the directory as a plain path.
 - **A flake in a subdirectory is still the whole repository's flake.** This prototype resolves as `git+file:///work/git/clone?dir=.scratch/nix-migration/evidence/01`, and the same tracking rule applies.
-- **With no `.git`, the directory is a `path:` flake and all of it is copied.** In an export of the tree, every file went to the store on the first evaluation, a 20 MB untracked file included (756 files, 28 MB), and again after each edit. A Docker build context has no `.git`, so the build stage should `COPY` only `flake.nix`, `flake.lock` and the files the flake reads before it runs Nix: with those two files alone, two files are copied.
+- **With no `.git`, the directory is a `path:` flake and all of it is copied.** In an export of the tree, every file went to the store on the first evaluation, a 20 MB untracked file included (793 files, 28 MB), and again after each edit. A Docker build context has no `.git`, so the build stage should `COPY` only `flake.nix`, `flake.lock` and the files the flake reads before it runs Nix: with those two files alone, two files are copied.
 
 ### 7. The gate from a PATH prefix
 
@@ -198,7 +220,7 @@ Outside the flake directory the check writes one file, Nix's own `fetcher-cache-
 1. **The checker tests run through the interpreter's own pytest: yes.** `sys.executable` is `.pixi/envs/default/bin/python3`, the out-link path, and `pytest 9.1.1` loads from the Python environment in the store. `just test-checkers` passes (168 tests). `just test-checkers-all` has 714 passing, 65 failing and 13 skipped; the 65 are cases 2 and the Allium gap below, and with the scratch patch all 779 pass. The 13 skipped are the installer tests, which skip because `tools.txt` has no line for this host.
 2. **The docs checker's Node does not find markdown-it where the checker looks.** nixpkgs' `bin/markdownlint-cli2` is a wrapper script that runs `node …/lib/node_modules/markdownlint-cli2/markdownlint-cli2-bin.mjs`; conda's is a link to that file. The checker resolves `markdown-it` from the real path of `bin/markdownlint-cli2`, so under Nix it searches beside the wrapper and fails with `Cannot find module 'markdown-it'`, and `just docs-check` reports `Markdown parser unavailable`. Given the module's own entry script, `<prefix>/lib/node_modules/markdownlint-cli2/markdownlint-cli2-bin.mjs`, the same command renders. The prototype's environments link `lib/node_modules` beside `bin` for this. The fix is one path in the checker, which ticket 02 moves behind its Python helper. The bundled markdown-it is 15.0.3 (pixi: 15.0.1) under Node 24.22.2 (pixi: 26.10.0).
 3. **The path prek writes into the git hook does not follow a lock move.** prek 0.5.10 writes its resolved store path, `PREK="/nix/store/…-prek-0.5.10/bin/prek"`, not the out-link it was started through. After the out-link moved to an environment with prek 0.5.7, the hook still ran 0.5.10. Once the old path is garbage-collected the hook falls back to `prek` on `PATH`, which git's hook environment does not have: the commit fails with `exec: prek: not found`. That last step was simulated by renaming the path in a copy of the hook, because other roots held the real one. With the out-link path written into the hook instead (`PREK="<checkout>/.pixi/envs/default/bin/prek"`), commits pass before and after the move. Under pixi the binary is a real file in the worktree, so the question never arose. Ticket 07's hook step has to write the out-link path, or the hook has to be reinstalled after every lock move.
-4. **A fresh clone with only Nix reaches `just`.** On a new store volume and a new `HOME`, `nix build <flake>#default --no-update-lock-file --out-link .pixi/envs/default` took 11 seconds, copied 147 paths from the cache and built five trivial derivations, and `.pixi/envs/default/bin/just --list` then ran. `nix shell <flake>#default --no-update-lock-file --command just --version` works without an out-link. The store grew from 813 MB to 3.2 GB, which counts the three nixpkgs sources as well as the 871 MiB environment closure.
+4. **A fresh clone with only Nix reaches `just`.** On a new store volume and a new `HOME`, `nix build <flake>#default --no-update-lock-file --out-link .pixi/envs/default` took 16 seconds, copied 147 paths from the cache and built five trivial derivations, and `.pixi/envs/default/bin/just --list` then ran. `nix shell <flake>#default --no-update-lock-file --command just --version` works without an out-link. The store grew from 813 MB to 3.2 GB, which counts the three nixpkgs sources as well as the 871 MiB environment closure.
 
 **The whole gate.** With no tracked file changed, each recipe of `just check` was run on its own:
 
@@ -216,9 +238,9 @@ Outside the flake directory the check writes one file, Nix's own `fetcher-cache-
 - `scripts/checks/validate_docs.py`: the module directory instead of `bin/markdownlint-cli2`;
 - `scripts/checks/run_allium.py`: Linux on aarch64 reads the `linux-64` pin's version.
 
-With the patch and the network off, `just check` ran all 18 recipes and `check-clean` and ended with `All checks passed and the worktree is unchanged.` in 107 seconds, of which `just test` is 95. `just test-checkers-all` then passed too.
+With the patch and the network off, `just check` ran all 18 recipes and `check-clean` and ended with `All checks passed and the worktree is unchanged.` in 106 seconds, of which `just test` is 95. `just test-checkers-all` then passed too.
 
-**The lock and environment checks.** The lock check takes 0.03 seconds. [env-check.sh](env-check.sh) is a prototype of the environment check ticket 07 writes: the out-link resolves into the store, it equals the output path this commit's flake evaluates to, and gleam, erlang, openssl, rebar3 and allium report the held versions. It takes 1.6 seconds, 1.2 of them evaluating the output path, and refuses a moved out-link with `… but this commit describes …`. Neither check writes in the clone or adds a store path. Outside the clone they write only Nix's own caches under `~/.cache/nix` (`fetcher-cache-v4.sqlite` and one `eval-cache-v6` file).
+**The lock and environment checks.** The lock check takes 0.02 seconds. [env-check.sh](env-check.sh) is a prototype of the environment check ticket 07 writes: the out-link resolves into the store, it equals the output path this commit's flake evaluates to, and gleam, erlang, openssl, rebar3 and allium report the held versions. It takes 1.5 seconds, 1.2 of them evaluating the output path, and refuses a moved out-link with `… but this commit describes …`. Neither check writes in the clone or adds a store path. Outside the clone they write only Nix's own caches under `~/.cache/nix` (`fetcher-cache-v4.sqlite` and one `eval-cache-v6` file).
 
 ### 8. Version differences
 
@@ -251,22 +273,26 @@ The repairing formatters (`just fix`) rewrite nothing through gleam format, tapl
 
 [image/Dockerfile](image/Dockerfile) is the prototype, [image.sh](image.sh) builds and checks it with the host's `docker build`, and [image.txt](image.txt) is the transcript. [tls-pairs.txt](tls-pairs.txt) repeats the TLS cases outside the image on both Erlang and OpenSSL pairs of [Held versions](#3-held-versions).
 
-**The shape.** The build stage is the pinned Nix image. It copies `flake.nix` and `flake.lock` alone into a directory of their own, builds the `default` group for gleam, erlang and rebar3 and the `runtime` group for what ships, then runs `gleam deps download` and `gleam export erlang-shipment` as today. Its last step lays the runtime closure out for the final stage: `nix path-info --recursive` lists the store paths, they are copied under `/out/nix/store`, and `/out/opt/knarr/runtime` is a link to the environment. The final stage is the Ubuntu base by today's digest and takes that tree with one `COPY --from=build /out/ /`.
+**The shape.** The build stage is the pinned Nix image. It copies `flake.nix` and `flake.lock` alone into a directory of their own and builds the `default` group for gleam, erlang and rebar3 and the `runtime` group for what ships. It then lays the runtime closure out for the final stage: `nix path-info --recursive` lists the store paths, they are copied under `/out/nix/store`, and `/out/opt/knarr/runtime` is a link to the environment. After that it runs `gleam deps download` and `gleam export erlang-shipment` as today. The final stage is the Ubuntu base by today's digest and takes that tree with one `COPY --from=build /out/ /`.
 
 **The fixed prefix is `/opt/knarr/runtime`**, a link to `/nix/store/…-knarr-runtime`. Store paths are not relocatable, so the closure keeps its paths under `/nix/store` and the prefix is the one stable name: it is what `PATH` and the checkers' runtime-prefix constant use.
 
 **The build context is staged**, because the root `.dockerignore` is an allowlist that leaves the evidence directory out. It holds the two flake files, `gleam.toml`, `manifest.toml`, `src/` and the entrypoint script: 32 files. A context has no `.git`, so the flake is read as a `path:` flake; see [Flakes and git](#6-flakes-and-git).
 
-| Measure | Prototype (linux/arm64) |
-| --- | --- |
-| Build, `--no-cache`, base images already pulled | 30 seconds |
-| Build, nothing changed | 1 second |
-| Build after an edit under `src/` | 9 seconds |
-| Image size, `docker image inspect` `.Size` | 114.3 MB |
-| Image size, `docker images` | 461 MB |
-| Runtime closure | 19 store paths, 223 MB under `/nix/store` |
-| Largest paths | erlang 131 MB, glibc 47 MB, gcc-lib 10 MB, ncurses 9 MB, openssl 9 MB |
-| Shipment | 2.7 MB |
+| Measure | Prototype | Today's image |
+| --- | --- | --- |
+| Build, `--no-cache`, base images already pulled | 51 seconds; 30 to 51 over seven runs | 21 seconds; 21 to 78 over three runs |
+| Build, nothing changed | 1 second | 1 second |
+| Build after an edit under `src/` | 9 seconds; 6 to 15 over five runs | 4 seconds |
+| Image size, `docker image inspect` `.Size` | 114.3 MB | 103.6 MB |
+| Image size, `docker images` | 461 MB | 401 MB |
+| Runtime | 19 store paths, 223 MB under `/nix/store` | the conda environment, 176 MB with perl pruned |
+| Largest paths | erlang 131 MB, glibc 47 MB, gcc-lib 10 MB, ncurses 9 MB, openssl 9 MB | `lib/erlang` 120 MB |
+| Shipment | 2.7 MB | 2.7 MB |
+
+Both are linux/arm64. Today's image is [baseline.txt](baseline.txt): the tracked `Dockerfile` built from a clean `git archive` of HEAD, tagged `knarr-nix-proto:pixi-baseline`. The prototype is about 11 MB larger compressed and 60 MB larger on disk. Most of that is the closure's own glibc, which the conda environment takes from Ubuntu instead, with bash, coreutils, gawk and gnused.
+
+The build times are an order of magnitude, no more. The Mac was shared with other builds while they ran, and the same command took between 21 and 78 seconds from one run to the next; the first number in each cell is the one in the transcript. Two runs that stalled outright, a prototype cold build of 382 seconds and a baseline rebuild of 953 seconds, are left out. The prototype's flake layers and its copy of the closure sit before the sources in the Dockerfile, so an edit under `src/` reruns only `gleam export`.
 
 **perl is not in Erlang's closure.** No store path in the closure is perl and no file under `/nix/store` is named `perl*`. `scripts/prune_runtime.py`, its test and `image-check`'s perl assertions have nothing left to do. The closure does carry bash, coreutils, gawk and gnused, which Erlang's own scripts refer to.
 
@@ -274,7 +300,7 @@ The repairing formatters (`just fix`) rewrite nothing through gleam format, tapl
 
 - `tls/run.sh /opt/knarr/runtime /tmp/tls` from bootstrap ticket 01, unchanged, ends `tls_check: all 6 cases matched`, on `otp_release 29, erts 17.1.1` and `OpenSSL 3.5.9 29 Sep 2026`, with certificates made by the `openssl` command in the same prefix;
 - the entrypoint bounds the descriptor limit to 65536, and `/opt/build-otp` and the runtime both say OTP 29;
-- the container starts, `/readyz` answers `ok`, `/metrics` has `knarr_startups_total 1`, and memory is 86 to 89 MiB of 256 MiB.
+- the container starts, `/readyz` answers `ok`, `/metrics` has `knarr_startups_total 1`, and memory is 72 MiB of 256 MiB (72 to 100 MiB over the runs).
 
 Outside the image, the same six cases pass on both pairs: the candidate's OTP 29.1.2 with OpenSSL 3.5.9, and nixos-26.05's OTP 29.1.2 with OpenSSL 3.6.5.
 
@@ -282,7 +308,22 @@ Outside the image, the same six cases pass on both pairs: the candidate's OTP 29
 
 ### 10. Scanning
 
-Not yet recorded.
+[grype.txt](grype.txt). grype is the prototype's `audit` group: 0.120.0, one patch behind the pin. The vulnerability database is v6.1.10, built 2026-10-30. It is the one the host's grype had already cached, copied to scratch, and the scans ran with the network off, so nothing was downloaded. What grype catalogues does not depend on the database's age; what it matches does.
+
+| Source | Catalogers that found packages | erlang and openssl | `--only-fixed --fail-on high` |
+| --- | --- | --- | --- |
+| Directory: the runtime closure's store paths under `nix/store` | `nix-cataloger` 18, `erlang-otp-application-cataloger` 34, `binary-classifier-cataloger` 3 | erlang 29.1.2 and openssl 3.5.9, each by `nix-cataloger` (`pkg:nix/…`) and by `binary-classifier-cataloger` (`pkg:generic/…`); the OTP applications too (ssl 11.7.8, crypto 5.10, public_key 1.21.8, erts 17.1.1) | exit 0, no match |
+| Image: `docker save` of the prototype image, as `docker-archive:` | `nix-cataloger` 18, `binary-classifier-cataloger` 6, `dpkg-db-cataloger` 92, `elf-binary-package-cataloger` 3 | erlang 29.1.2 and openssl 3.5.9, by the same two catalogers; no OTP applications | exit 0, no match |
+| Control, directory: the same two packages at the `nixpkgs-gleam` revision, OTP 29.1.1 and OpenSSL 3.5.8 | `nix-cataloger` 14, `erlang-otp-application-cataloger` 34, `binary-classifier-cataloger` 3 | erlang 29.1.1 and openssl 3.5.8 | exit 2: 42 matches, 13 of them high |
+
+What that means for `just runtime-scan` (ticket 11):
+
+- **`conda-meta-cataloger` finds nothing in a Nix closure.** `scripts/checks/runtime_scan.py` reads the line `discovered N packages cataloger=conda-meta-cataloger`, so today's script answers "cannot decide" for any Nix image, as the round README expects.
+- **grype does catalogue the closure**, and the line has the same shape for the catalogers that do: `discovered 18 packages cataloger=nix-cataloger` and `discovered 3 packages cataloger=binary-classifier-cataloger`. `nix-cataloger` works from the store path names; the image has no Nix database.
+- **The image source sees the closure too.** conda records were invisible in an image, which is why `runtime-scan` copies the environment out. Store paths are not: `grype <image>`, which is `just image-scan`, catalogues the Nix Erlang and OpenSSL beside Ubuntu's packages. Ticket 11 can scan either source.
+- **Erlang's advisories match through one cataloger only.** In the control, the three Erlang matches (CVE-2026-94200 high, CVE-2026-105236 and CVE-2026-96596, all fixed in 29.1.2) are on the `binary-classifier-cataloger` package. `nix-cataloger`'s `erlang` and the 34 OTP application packages matched nothing. OpenSSL matched through both the binary and the nix package. So the fail-closed test is not "some cataloger found something": it is that `binary-classifier-cataloger` catalogued `erlang`, and that `openssl` was catalogued.
+
+Not shown: a control on the image source, and anything grype 0.120.1 does differently from 0.120.0.
 
 ## What was evaluated but not run
 
@@ -305,4 +346,4 @@ Everything above ran on aarch64-linux. For the other two systems the flake was e
 
 1. Every package's x86_64-linux output is in the binary cache, the held ones included, and each group's plan is the same shape as on aarch64-linux.
 2. allium's x86_64 asset has the sha256 `tools.txt` pins and is dynamically linked like the aarch64 one, so it needs the same patching. That derivation was evaluated, not built.
-3. The gate, the image for linux/amd64, the six TLS cases in it and grype were not run on x86_64. The released image used for the size comparison is linux/amd64, so that comparison crosses architectures.
+3. The gate, the image for linux/amd64, the six TLS cases in it and grype were not run on x86_64.

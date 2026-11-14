@@ -1,0 +1,73 @@
+date: 2026-11-14T19:53Z
+grype 0.120.0 (pixi.toml pins 0.120.1)
+database: v6.1.10, built 2026-10-30
+closure: 19 store paths, 223M
+control: 15 store paths, 220M
+
+== Directory source: grype -vv dir:/work/grype/closure --only-fixed --fail-on high
+exit 0
+the cataloger lines runtime_scan.py reads (it wants conda-meta-cataloger):
+  discovered 18 packages cataloger=nix-cataloger
+  discovered 34 packages cataloger=erlang-otp-application-cataloger
+  discovered 3 packages cataloger=binary-classifier-cataloger
+  catalogers that discovered nothing: 54
+  named in the log: conda-meta-cataloger
+matches: 0; by severity: 
+matches by package: 
+advisories matched on erlang: 
+catalogued packages: 55
+erlang and openssl among them (name, version, cataloger, package URL):
+  crypto 5.10  erlang-otp-application-cataloger  pkg:otp/crypto@5.10
+  erlang 29.1.2  binary-classifier-cataloger  pkg:generic/erlang@29.1.2
+  erlang 29.1.2  nix-cataloger  pkg:nix/erlang@29.1.2?outputhash=3awv3q0c75gyasilp0rbpjcwa8gvvxm1
+  erts 17.1.1  erlang-otp-application-cataloger  pkg:otp/erts@17.1.1
+  openssl 3.5.9  binary-classifier-cataloger  pkg:generic/openssl@3.5.9
+  openssl 3.5.9  nix-cataloger  pkg:nix/openssl@3.5.9?output=bin&outputhash=k3ka1sknly3p6lix54gjfayqqyfxsgl3
+  openssl 3.5.9  nix-cataloger  pkg:nix/openssl@3.5.9?outputhash=fnf24f2z4n30ixsjv6vyhikylj7czx0m
+  public_key 1.21.8  erlang-otp-application-cataloger  pkg:otp/public_key@1.21.8
+  ssl 11.7.8  erlang-otp-application-cataloger  pkg:otp/ssl@11.7.8
+by package type: binary 3, erlang-otp 34, nix 18
+
+== Directory source, the control with OTP 29.1.1: grype -vv dir:/work/grype/control --only-fixed --fail-on high
+exit 2
+the cataloger lines runtime_scan.py reads (it wants conda-meta-cataloger):
+  discovered 34 packages cataloger=erlang-otp-application-cataloger
+  discovered 14 packages cataloger=nix-cataloger
+  discovered 3 packages cataloger=binary-classifier-cataloger
+  catalogers that discovered nothing: 54
+  named in the log: conda-meta-cataloger
+matches: 42; by severity: High 13, Low 12, Medium 17
+matches by package: erlang 29.1.1 (binary): 3; openssl 3.5.8 (binary): 13; openssl 3.5.8 (nix): 26
+advisories matched on erlang: CVE-2026-105236 Medium, fixed in 27.3.4.19 28.5.0.8 29.1.2; CVE-2026-94200 High, fixed in 27.3.4.19 28.5.0.8 29.1.2; CVE-2026-96596 Medium, fixed in 29.1.2
+catalogued packages: 51
+erlang and openssl among them (name, version, cataloger, package URL):
+  crypto 5.10  erlang-otp-application-cataloger  pkg:otp/crypto@5.10
+  erlang 29.1.1  binary-classifier-cataloger  pkg:generic/erlang@29.1.1
+  erlang 29.1.1  nix-cataloger  pkg:nix/erlang@29.1.1?outputhash=d6mpawj6szqb0kz447flkjr9h4nv48n3
+  erts 17.1  erlang-otp-application-cataloger  pkg:otp/erts@17.1
+  openssl 3.5.8  binary-classifier-cataloger  pkg:generic/openssl@3.5.8
+  openssl 3.5.8  nix-cataloger  pkg:nix/openssl@3.5.8?output=bin&outputhash=m9xpj129716c3dn7mcja91cb84mplpv9
+  openssl 3.5.8  nix-cataloger  pkg:nix/openssl@3.5.8?outputhash=db07pw9avlwysb3v68cfp9cijg2mmfns
+  public_key 1.21.7  erlang-otp-application-cataloger  pkg:otp/public_key@1.21.7
+  ssl 11.7.7  erlang-otp-application-cataloger  pkg:otp/ssl@11.7.7
+by package type: binary 3, erlang-otp 34, nix 14
+
+== Image source: grype -vv docker-archive:/bundle/knarr-nix-proto.tar --only-fixed --fail-on high
+exit 0
+the cataloger lines runtime_scan.py reads (it wants conda-meta-cataloger):
+  discovered 18 packages cataloger=nix-cataloger
+  discovered 92 packages cataloger=dpkg-db-cataloger
+  discovered 3 packages cataloger=elf-binary-package-cataloger
+  discovered 6 packages cataloger=binary-classifier-cataloger
+  catalogers that discovered nothing: 30
+matches: 0; by severity: 
+matches by package: 
+advisories matched on erlang: 
+catalogued packages: 114
+erlang and openssl among them (name, version, cataloger, package URL):
+  erlang 29.1.2  binary-classifier-cataloger  pkg:generic/erlang@29.1.2
+  erlang 29.1.2  nix-cataloger  pkg:nix/erlang@29.1.2?outputhash=3awv3q0c75gyasilp0rbpjcwa8gvvxm1
+  openssl 3.5.9  binary-classifier-cataloger  pkg:generic/openssl@3.5.9
+  openssl 3.5.9  nix-cataloger  pkg:nix/openssl@3.5.9?output=bin&outputhash=k3ka1sknly3p6lix54gjfayqqyfxsgl3
+  openssl 3.5.9  nix-cataloger  pkg:nix/openssl@3.5.9?outputhash=fnf24f2z4n30ixsjv6vyhikylj7czx0m
+by package type: binary 3, deb 92, nix 18, unknown 1

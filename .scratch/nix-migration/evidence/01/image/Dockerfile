@@ -11,19 +11,21 @@ COPY flake.nix flake.lock nix/
 # the same Erlang store path and nothing else the build needs.
 RUN nix build ./nix#default --no-update-lock-file --out-link /opt/knarr/tools \
     && nix build ./nix#runtime --no-update-lock-file --out-link /opt/knarr/runtime-link
+# The runtime closure, laid out as the final stage receives it: every store
+# path it needs under /nix/store, and one fixed prefix that links to the
+# environment. Store paths are not relocatable, so they keep their own path.
+# It depends on the flake alone, so it sits before the sources: an edit under
+# src/ then reuses this layer and the final stage's copy of it.
+RUN mkdir -p /out/nix/store /out/opt/knarr \
+    && nix path-info --recursive /opt/knarr/runtime-link > /out/opt/knarr/runtime-closure.txt \
+    && xargs cp --archive --target-directory=/out/nix/store < /out/opt/knarr/runtime-closure.txt \
+    && ln -s "$(readlink /opt/knarr/runtime-link)" /out/opt/knarr/runtime
 ENV PATH="/opt/knarr/tools/bin:${PATH}"
 COPY gleam.toml manifest.toml ./
 RUN gleam deps download
 COPY src src
 RUN gleam export erlang-shipment \
     && erl -noshell -eval 'io:put_chars(erlang:system_info(otp_release)), halt().' > /opt/build-otp
-# The runtime closure, laid out as the final stage receives it: every store
-# path it needs under /nix/store, and one fixed prefix that links to the
-# environment. Store paths are not relocatable, so they keep their own path.
-RUN mkdir -p /out/nix/store /out/opt/knarr \
-    && nix path-info --recursive /opt/knarr/runtime-link > /out/opt/knarr/runtime-closure.txt \
-    && xargs cp --archive --target-directory=/out/nix/store < /out/opt/knarr/runtime-closure.txt \
-    && ln -s "$(readlink /opt/knarr/runtime-link)" /out/opt/knarr/runtime
 
 FROM ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c AS runtime
 WORKDIR /opt/knarr
