@@ -1,0 +1,24 @@
+date: 2026-11-14T13:27Z
+nix (Nix) 2.35.6 on aarch64-linux, 18 cores
+
+== 1. The 1.19.0 recipe on the candidate's toolchain
+aarch64-linux   /nix/store/6gddns3f6wdrz7ss69myf723p8mmvayl-gleam-1.19.0  cached=no
+x86_64-linux    /nix/store/2bv1hrsl2bmxf51s707mxkh9ipxf59ks-gleam-1.19.0  cached=no
+aarch64-darwin  /nix/store/8d9ngd6dxqx8b54s3akbfivrfdchygyr-gleam-1.19.0  cached=no
+this derivation will be built:
+  /nix/store/qy5h8bvrcf7lnxr3bv40b752lx8mr350-gleam-1.19.0.drv
+the build failed after 7 seconds:
+error: Cannot build '/nix/store/qy5h8bvrcf7lnxr3bv40b752lx8mr350-gleam-1.19.0.drv'.
+       >   thread 'main' (2571) panicked at /nix/var/nix/builds/nix-306-2686498763/gleam-1.19.0-vendor/source-registry-0/aws-lc-sys-0.44.0/builder/main.rs:767:9:
+       >   AWS_LC_SYS_USE_SYSTEM=1 requires a system-installed AWS-LC, but none was found.
+       >   Set AWS_LC_SYS_SYSTEM_DIR to point at an install, provide OPENSSL_DIR, or unset AWS_LC_SYS_USE_SYSTEM to build from source.
+
+== 2. The candidate's recipe with 1.19.0's source and crates
+aarch64-linux   /nix/store/472w4hhqsbgpj6hsmnbskpmy9k0cm9i4-gleam-1.19.0  cached=no
+x86_64-linux    /nix/store/wmlj7y7i2yb21xvww26j7kxidpqnsj4c-gleam-1.19.0  cached=no
+aarch64-darwin  /nix/store/x2z3hggh8rrs8adn91g7l3rqhnl345ma-gleam-1.19.0  cached=no
+this derivation will be built:
+  /nix/store/1gg43lm06daj5kkaafhnrbbb1hh531bd-gleam-1.19.0.drv
+built /nix/store/472w4hhqsbgpj6hsmnbskpmy9k0cm9i4-gleam-1.19.0 in 103 seconds
+gleam 1.19.0
+signatures: ultimate

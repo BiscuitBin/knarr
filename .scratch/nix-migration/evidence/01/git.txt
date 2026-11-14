@@ -1,0 +1,112 @@
+date: 2026-11-14T13:27Z
+nix (Nix) 2.35.6 on aarch64-linux, git 2.54.0
+clone: 753 tracked files, 7.8M
+
+== 1. An untracked flake.nix is invisible
+?? flake.lock
+?? flake.nix
+$ nix eval .#held.gleam
+  exit 1
+  error: Path 'flake.nix' in the repository "/work/git/clone" is not tracked by Git.
+         To make it visible to Nix, run:
+         git -C "/work/git/clone" add -N "flake.nix"
+
+== 2. Staged is enough; it need not be committed
+A  flake.lock
+A  flake.nix
+$ nix eval .#held.gleam
+  exit 0
+  warning: Git tree '/work/git/clone' is dirty
+  "1.19.0"
+
+== 3. A file the flake reads is invisible until it is tracked too
+$ nix eval .#probe
+  exit 0
+  warning: Git tree '/work/git/clone' is dirty
+  false
+$ nix eval .#probe
+  exit 0
+  warning: Git tree '/work/git/clone' is dirty
+  true
+
+== 4. What an evaluation copies to the store
+nix flake metadata names the source /nix/store/cbw7qbagfnaavs0cinl77kbnpk8fls1z-source: no such path in the store
+store paths before: 29449, after metadata and two evaluations: 29449
+after editing one tracked file and evaluating again: 29449
+A flake that uses its own source in a derivation does copy it; this output only asks for it:
+  /nix/store/dc3ry3kv95jxay4hpq2b66f7zybjsvrg-source: 755 files, 8.3M
+  (the clone has 755 tracked files, with the two staged flake files)
+  build/ignored-junk.bin (ignored, 20 MB): absent; untracked-junk.bin (untracked, 5 MB): absent; .git: absent
+  after another edit: /nix/store/y60zgb82h2y51d5j9vprg27kcm9ry6y2-source, a second copy; store paths now 29449
+
+== 5. Evaluation time: a dirty tree against a committed one
+dirty (flake staged, not committed): first 1.19s, again 1.20s, again 1.19s
+$ nix eval --raw .#packages.aarch64-linux.default.outPath
+  exit 0
+  warning: Git tree '/work/git/clone' is dirty
+committed (clean tree): first 1.23s, again 1.21s, again 1.18s
+$ nix eval --raw .#packages.aarch64-linux.default.outPath
+  exit 0
+  /nix/store/g3s8sya77p5ilp9j78pmcmcims5h1cs5-knarr-tools
+the lock check, clean tree: 0.02s
+  Resolved URL:  git+file:///work/git/clone
+  Locked URL:    git+file:///work/git/clone?ref=refs/heads/01-nix-container-spike&rev=3f52032c1caf9d742cadf314a7bd6acea850fcd5
+  Path:          /nix/store/cbw7qbagfnaavs0cinl77kbnpk8fls1z-source
+  Revision:      3f52032c1caf9d742cadf314a7bd6acea850fcd5
+  Revisions:     358
+
+== 6. A linked worktree
+.git is a regular file: gitdir: /work/git/clone/.git/worktrees/linked
+$ nix eval .#held.gleam
+  exit 0
+  "1.19.0"
+  Resolved URL:  git+file:///work/git/linked
+  Locked URL:    git+file:///work/git/linked?ref=refs/heads/probe-linked&rev=3f52032c1caf9d742cadf314a7bd6acea850fcd5
+  Path:          /nix/store/cbw7qbagfnaavs0cinl77kbnpk8fls1z-source
+  Revision:      3f52032c1caf9d742cadf314a7bd6acea850fcd5
+  Revisions:     358
+$ nix build .#runtime --out-link /work/git/linked/.nix-probe/runtime
+  exit 0
+out-link: /nix/store/2435za8knym8jcbgy1as3fgnlmm7xh1f-knarr-runtime
+?? .nix-probe/
+$ nix eval .#held.gleam
+  exit 0
+  warning: Git tree '/work/git/linked' is dirty
+  "1.19.0"
+$ nix flake lock --no-update-lock-file --offline
+  exit 0
+  warning: Git tree '/work/git/linked' is dirty
+
+== 7. A worktree whose .git points at a path that is not there (a bind-mounted linked worktree)
+$ git status --short
+  exit 128
+  fatal: not a git repository: (null)
+$ nix eval .#held.gleam
+  exit 1
+  error:
+         … while fetching the input 'git+file:///work/git/orphan'
+         error: opening Git repository "/work/git/orphan": failed to resolve path '/Users/somebody/repo/.git/worktrees/linked': No such file or directory (libgit2 error code = 2)
+
+== 8. The flake in a subdirectory of the repository (where this prototype is tracked)
+  Resolved URL:  git+file:///work/git/clone?dir=.scratch/nix-migration/evidence/01
+  Locked URL:    git+file:///work/git/clone?dir=.scratch/nix-migration/evidence/01&ref=refs/heads/01-nix-container-spike&rev=3f52032c1caf9d742cadf314a7bd6acea850fcd5
+  Path:          /nix/store/cbw7qbagfnaavs0cinl77kbnpk8fls1z-source
+  Revision:      3f52032c1caf9d742cadf314a7bd6acea850fcd5
+  Revisions:     358
+$ nix eval ./.scratch/nix-migration/evidence/01#held.gleam
+  exit 0
+  "1.19.0"
+
+== 9. No .git at all (a Docker build context)
+$ nix eval .#held.gleam
+  exit 0
+  "1.19.0"
+  Resolved URL:  path:/work/git/plain
+  Locked URL:    path:/work/git/plain?lastModified=1794662843&narHash=sha256-CHg9JtHXd/aqvxHlAxM8XjiAAJCOIRsqbqne70gPpNs%3D
+  Path:          /nix/store/ljdynm5jp04mwhjaq91xzhzqvicx2cw7-source
+  756 files, 28M; junk.bin (20 MB, never tracked): copied
+  after one edit and one evaluation: 1 more store path, 28M
+$ nix eval .#held.gleam
+  exit 0
+  "1.19.0"
+  a context of flake.nix and flake.lock alone: 2 files copied

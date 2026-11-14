@@ -1,0 +1,175 @@
+date: 2026-11-14T13:26Z
+nix (Nix) 2.35.6 on aarch64-linux
+
+== nixpkgs 2074cc672349f14240fb7ea90d509e0b643e9dd4, aarch64-linux
+pin                                        pinned         attribute                                  version      cached floor
+gleam                                      1.19.0         gleam                                      1.19.2       yes    held: exactly 1.19.0
+just                                       1.58.0         just                                       1.59.0       yes    
+prek                                       0.5.5          prek                                       0.5.10       yes    
+typos                                      1.51.1         typos                                      1.52.0       yes    
+lychee                                     0.24.2         lychee                                     0.24.2       yes    
+taplo                                      0.10.0         taplo                                      0.10.0       yes    
+markdownlint-cli2                          0.23.3         markdownlint-cli2                          0.24.0       yes    its bundled markdown-it, under Node
+(nodejs, markdownlint-cli2's dependency)   conda's solve  nodejs                                     24.22.2      yes    runs render_markdown.mjs
+actionlint                                 1.7.12         actionlint                                 1.7.12       yes    
+shellcheck                                 0.11.0         shellcheck                                 0.11.0       yes    
+python                                     3.14.8         python314                                  3.14.10      yes    3.14 or later
+pytest                                     9.1.1          python314Packages.pytest                   9.1.1        yes    major 9
+ruff                                       0.16.10        ruff                                       0.17.4       yes    
+kubernetes-helm                            4.3.0          kubernetes-helm                            4.3.1        yes    major 4
+kustomize                                  5.8.2          kustomize                                  5.8.3        yes    
+erlang                                     29.1.2         beam_minimal.interpreters.erlang_29        29.1.2       yes    held: exactly 29.1.2
+(erlang with wxWidgets and systemd)        29.1.2         beam.interpreters.erlang_29                29.1.2       yes    not used: 1.2 GB closure
+(openssl, erlang's dependency)             3.6.5          openssl                                    3.5.9        yes    held with erlang
+(openssl 3.6 by name)                      3.6.5          openssl_3_6                                unsupported  -      held with erlang
+kubernetes-kind                            0.33.0         kind                                       0.33.0       yes    skew cap: node image 1.35
+kubernetes-client                          1.36.0         kubectl                                    1.37.2       yes    skew cap: 1.34 to 1.36 for the 1.35 cluster
+tilt                                       0.37.8         tilt                                       0.37.7       yes    unused; not carried forward
+grype                                      0.120.1        grype                                      0.120.0      yes    
+rebar3                                     3.28.0         beam_minimal.packages.erlang_29.rebar3     3.28.0       yes    3.28.0 or later
+ripsecrets                                 0.1.11         ripsecrets                                 0.1.11       yes    
+editorconfig-checker                       4.0.2          editorconfig-checker                       4.0.2        yes    
+allium                                     3.6.1          allium                                     absent       -      exactly 3.6.1
+kubeconform                                0.8.0          kubeconform                                0.8.0        yes    
+hadolint                                   2.15.1         hadolint                                   2.14.0       yes    
+kwokctl                                    0.8.0          kwok                                       0.8.0        yes    0.8.0
+
+== nixpkgs 2074cc672349f14240fb7ea90d509e0b643e9dd4, x86_64-linux
+pin                                        pinned         attribute                                  version      cached floor
+gleam                                      1.19.0         gleam                                      1.19.2       yes    held: exactly 1.19.0
+just                                       1.58.0         just                                       1.59.0       yes    
+prek                                       0.5.5          prek                                       0.5.10       yes    
+typos                                      1.51.1         typos                                      1.52.0       yes    
+lychee                                     0.24.2         lychee                                     0.24.2       yes    
+taplo                                      0.10.0         taplo                                      0.10.0       yes    
+markdownlint-cli2                          0.23.3         markdownlint-cli2                          0.24.0       yes    its bundled markdown-it, under Node
+(nodejs, markdownlint-cli2's dependency)   conda's solve  nodejs                                     24.22.2      yes    runs render_markdown.mjs
+actionlint                                 1.7.12         actionlint                                 1.7.12       yes    
+shellcheck                                 0.11.0         shellcheck                                 0.11.0       yes    
+python                                     3.14.8         python314                                  3.14.10      yes    3.14 or later
+pytest                                     9.1.1          python314Packages.pytest                   9.1.1        yes    major 9
+ruff                                       0.16.10        ruff                                       0.17.4       yes    
+kubernetes-helm                            4.3.0          kubernetes-helm                            4.3.1        yes    major 4
+kustomize                                  5.8.2          kustomize                                  5.8.3        yes    
+erlang                                     29.1.2         beam_minimal.interpreters.erlang_29        29.1.2       yes    held: exactly 29.1.2
+(erlang with wxWidgets and systemd)        29.1.2         beam.interpreters.erlang_29                29.1.2       yes    not used: 1.2 GB closure
+(openssl, erlang's dependency)             3.6.5          openssl                                    3.5.9        yes    held with erlang
+(openssl 3.6 by name)                      3.6.5          openssl_3_6                                unsupported  -      held with erlang
+kubernetes-kind                            0.33.0         kind                                       0.33.0       yes    skew cap: node image 1.35
+kubernetes-client                          1.36.0         kubectl                                    1.37.2       yes    skew cap: 1.34 to 1.36 for the 1.35 cluster
+tilt                                       0.37.8         tilt                                       0.37.7       yes    unused; not carried forward
+grype                                      0.120.1        grype                                      0.120.0      yes    
+rebar3                                     3.28.0         beam_minimal.packages.erlang_29.rebar3     3.28.0       yes    3.28.0 or later
+ripsecrets                                 0.1.11         ripsecrets                                 0.1.11       yes    
+editorconfig-checker                       4.0.2          editorconfig-checker                       4.0.2        yes    
+allium                                     3.6.1          allium                                     absent       -      exactly 3.6.1
+kubeconform                                0.8.0          kubeconform                                0.8.0        yes    
+hadolint                                   2.15.1         hadolint                                   2.14.0       yes    
+kwokctl                                    0.8.0          kwok                                       0.8.0        yes    0.8.0
+
+== nixpkgs 2074cc672349f14240fb7ea90d509e0b643e9dd4, aarch64-darwin
+pin                                        pinned         attribute                                  version      cached floor
+gleam                                      1.19.0         gleam                                      1.19.2       yes    held: exactly 1.19.0
+just                                       1.58.0         just                                       1.59.0       yes    
+prek                                       0.5.5          prek                                       0.5.10       yes    
+typos                                      1.51.1         typos                                      1.52.0       yes    
+lychee                                     0.24.2         lychee                                     0.24.2       yes    
+taplo                                      0.10.0         taplo                                      0.10.0       yes    
+markdownlint-cli2                          0.23.3         markdownlint-cli2                          0.24.0       yes    its bundled markdown-it, under Node
+(nodejs, markdownlint-cli2's dependency)   conda's solve  nodejs                                     24.22.2      yes    runs render_markdown.mjs
+actionlint                                 1.7.12         actionlint                                 1.7.12       yes    
+shellcheck                                 0.11.0         shellcheck                                 0.11.0       yes    
+python                                     3.14.8         python314                                  3.14.10      yes    3.14 or later
+pytest                                     9.1.1          python314Packages.pytest                   9.1.1        yes    major 9
+ruff                                       0.16.10        ruff                                       0.17.4       yes    
+kubernetes-helm                            4.3.0          kubernetes-helm                            4.3.1        yes    major 4
+kustomize                                  5.8.2          kustomize                                  5.8.3        yes    
+erlang                                     29.1.2         beam_minimal.interpreters.erlang_29        29.1.2       yes    held: exactly 29.1.2
+(erlang with wxWidgets and systemd)        29.1.2         beam.interpreters.erlang_29                29.1.2       yes    not used: 1.2 GB closure
+(openssl, erlang's dependency)             3.6.5          openssl                                    3.5.9        yes    held with erlang
+(openssl 3.6 by name)                      3.6.5          openssl_3_6                                unsupported  -      held with erlang
+kubernetes-kind                            0.33.0         kind                                       0.33.0       yes    skew cap: node image 1.35
+kubernetes-client                          1.36.0         kubectl                                    1.37.2       yes    skew cap: 1.34 to 1.36 for the 1.35 cluster
+tilt                                       0.37.8         tilt                                       0.37.7       yes    unused; not carried forward
+grype                                      0.120.1        grype                                      0.120.0      yes    
+rebar3                                     3.28.0         beam_minimal.packages.erlang_29.rebar3     3.28.0       yes    3.28.0 or later
+ripsecrets                                 0.1.11         ripsecrets                                 0.1.11       yes    
+editorconfig-checker                       4.0.2          editorconfig-checker                       4.0.2        yes    
+allium                                     3.6.1          allium                                     absent       -      exactly 3.6.1
+kubeconform                                0.8.0          kubeconform                                0.8.0        yes    
+hadolint                                   2.15.1         hadolint                                   2.14.0       yes    
+kwokctl                                    0.8.0          kwok                                       0.8.0        yes    0.8.0
+
+== The prototype flake: each group, what a fresh machine builds and what it fetches
+-- aarch64-linux default
+these 6 derivations will be built:
+  /nix/store/9vp2qsp2ylwwqvbhacwy7r583hrrii5n-allium-aarch64-unknown-linux-gnu.tar.gz.drv
+  /nix/store/94349c39xxjkx04l7y7kksywm6miaihv-allium-3.6.1.drv
+  /nix/store/icm60vy05i40rxzhvrr5f3grvs3nmbhk-builder.pl.drv
+  /nix/store/l19p5v6lqdx0p188xkqayxld6b3iqgdp-nodejs-24.22.2.drv
+  /nix/store/xr5g6r069q0zynsrbflkv6a0lmx86s63-python3-3.14.10-env.drv
+  /nix/store/g8bk1ni0ahdzqv55k9cwp6h39651c9f7-knarr-tools.drv
+these 146 paths will be fetched (413.1 MiB download, 1.3 GiB unpacked):
+-- aarch64-linux cluster
+these 2 derivations will be built:
+  /nix/store/icm60vy05i40rxzhvrr5f3grvs3nmbhk-builder.pl.drv
+  /nix/store/j1h8ia261vbmzlpbz9lkgx7fzj6rnka9-knarr-cluster-tools.drv
+these 44 paths will be fetched (126.1 MiB download, 486.4 MiB unpacked):
+-- aarch64-linux audit
+these 2 derivations will be built:
+  /nix/store/icm60vy05i40rxzhvrr5f3grvs3nmbhk-builder.pl.drv
+  /nix/store/7brcmmrgk6ipp745cpn3afp5n765b74z-knarr-audit-tools.drv
+these 38 paths will be fetched (58.8 MiB download, 231.1 MiB unpacked):
+-- aarch64-linux runtime
+these 2 derivations will be built:
+  /nix/store/icm60vy05i40rxzhvrr5f3grvs3nmbhk-builder.pl.drv
+  /nix/store/0gnzlrnk06fa3wy0njkg49imc6rqm9xz-knarr-runtime.drv
+these 38 paths will be fetched (91.6 MiB download, 285.3 MiB unpacked):
+-- x86_64-linux default
+these 6 derivations will be built:
+  /nix/store/xrwzb9p67w9vcfv9gqpsd500yj23ph5z-allium-x86_64-unknown-linux-gnu.tar.gz.drv
+  /nix/store/62vkxyjc6hz6zlcny2mpp6ipbxvqcq9s-allium-3.6.1.drv
+  /nix/store/wmcdy2ch1f2571zs7mf99hbpi1wimbwb-builder.pl.drv
+  /nix/store/h0yyxmnpzmihqwk9lssq2qxd8il0mwi4-python3-3.14.10-env.drv
+  /nix/store/my4m3k693hpr9cf87fnlidwqc84z1vvj-nodejs-24.22.2.drv
+  /nix/store/f9fcpy2kpjlyfm57gl84lhn6npxppvc1-knarr-tools.drv
+these 155 paths will be fetched (428.2 MiB download, 1.3 GiB unpacked):
+-- x86_64-linux cluster
+these 2 derivations will be built:
+  /nix/store/wmcdy2ch1f2571zs7mf99hbpi1wimbwb-builder.pl.drv
+  /nix/store/3b06pbqlvwgknqgwkx3zkw251hdaq7mz-knarr-cluster-tools.drv
+these 44 paths will be fetched (135.2 MiB download, 489.4 MiB unpacked):
+-- x86_64-linux audit
+these 2 derivations will be built:
+  /nix/store/wmcdy2ch1f2571zs7mf99hbpi1wimbwb-builder.pl.drv
+  /nix/store/4fa0y1nxd3bvs3nqjkzmwpxzc9f12sy0-knarr-audit-tools.drv
+these 38 paths will be fetched (62.4 MiB download, 222.5 MiB unpacked):
+-- x86_64-linux runtime
+these 2 derivations will be built:
+  /nix/store/wmcdy2ch1f2571zs7mf99hbpi1wimbwb-builder.pl.drv
+  /nix/store/22d86qpnlb65lmqnkrm0n2imjywcwvzh-knarr-runtime.drv
+these 38 paths will be fetched (92.3 MiB download, 273.3 MiB unpacked):
+-- aarch64-darwin default
+these 6 derivations will be built:
+  /nix/store/255rbcvs2q5vqyy7pjqsrki6scc39bkl-nodejs-24.22.2.drv
+  /nix/store/2mrs0bn5ydm69jgy9xyldja03kbgbr93-builder.pl.drv
+  /nix/store/946h8cibj74xjmddgr8yhkd4mh9cznb7-python3-3.14.10-env.drv
+  /nix/store/zmqafqc1xiy6w34nn6lxpc63jjl2spyx-allium-aarch64-apple-darwin.tar.gz.drv
+  /nix/store/d30bncqa6xp6d3bg4y61zvnrakvghf9y-allium-3.6.1.drv
+  /nix/store/r8sr106hhp9z0z785i3mvplgwy98sdgr-knarr-tools.drv
+these 141 paths will be fetched (519.1 MiB download, 2.2 GiB unpacked):
+-- aarch64-darwin cluster
+these 2 derivations will be built:
+  /nix/store/2mrs0bn5ydm69jgy9xyldja03kbgbr93-builder.pl.drv
+  /nix/store/3ym4xmn3ic2s44755lbc2hsv0rk226wq-knarr-cluster-tools.drv
+these 47 paths will be fetched (105.0 MiB download, 453.4 MiB unpacked):
+-- aarch64-darwin audit
+these 2 derivations will be built:
+  /nix/store/2mrs0bn5ydm69jgy9xyldja03kbgbr93-builder.pl.drv
+  /nix/store/z6n9x9fkkbc2rjf8x8avdbrqansks5j7-knarr-audit-tools.drv
+these 40 paths will be fetched (51.5 MiB download, 245.2 MiB unpacked):
+-- aarch64-darwin runtime
+these 2 derivations will be built:
+  /nix/store/2mrs0bn5ydm69jgy9xyldja03kbgbr93-builder.pl.drv
+  /nix/store/vnrdkr4kmxz3k0ybmghk830bjz5b3ib9-knarr-runtime.drv
+these 41 paths will be fetched (82.1 MiB download, 293.7 MiB unpacked):

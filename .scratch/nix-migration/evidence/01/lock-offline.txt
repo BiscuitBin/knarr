@@ -1,0 +1,51 @@
+warning: you don't have Internet access; disabling some network-dependent features
+date: 2026-11-14T13:27Z
+nix (Nix) 2.35.6 on aarch64-linux
+network: off
+
+== Drifted: flake.nix names a revision flake.lock does not hold
+15:    nixpkgs-gleam.url = "github:NixOS/nixpkgs/2074cc672349f14240fb7ea90d509e0b643e9dd4";
+nix flake lock                                             exit 0  flake.lock REWRITTEN  0.02s
+nix flake update                                           exit 0  flake.lock REWRITTEN  0.02s
+nix flake metadata                                         exit 0  flake.lock REWRITTEN  0.02s
+nix flake show                                             exit 0  flake.lock REWRITTEN  0.12s
+nix eval .#held.erlang                                     exit 0  flake.lock REWRITTEN  0.02s
+nix build --no-link .#runtime                              exit 0  flake.lock REWRITTEN  0.11s
+nix shell .#runtime --command true                         exit 0  flake.lock REWRITTEN  0.02s
+nix build --no-link .#runtime --no-write-lock-file         exit 0  flake.lock unchanged  0.02s
+nix eval .#held.erlang --no-write-lock-file                exit 0  flake.lock unchanged  0.02s
+nix build --no-link .#runtime --no-update-lock-file        exit 1  flake.lock unchanged  0.02s
+nix eval .#held.erlang --no-update-lock-file               exit 1  flake.lock unchanged  0.02s
+nix flake metadata --no-update-lock-file                   exit 1  flake.lock unchanged  0.02s
+nix flake lock --no-update-lock-file                       exit 1  flake.lock unchanged  0.02s
+nix flake lock --no-update-lock-file --offline             exit 1  flake.lock unchanged  0.02s
+
+What the read-only check prints on drift:
+  error:
+         … while updating the lock file of flake 'path:/work/lock?lastModified=1794662845&narHash=sha256-2Zyx73F4/2y7GViGY8g4L0T%2B6kmC1%2BdFjaKUtj0dUbA%3D'
+  
+         error: flake 'path:/work/lock' requires lock file changes but they're not allowed due to '--no-update-lock-file'
+flake.lock is byte-identical to the committed one after the check: 2fb8733b442340b1a47c81b346d714af439712e002918b356d3b4c7e16be61f1
+
+== Fresh: flake.lock agrees with flake.nix
+nix flake lock --no-update-lock-file --offline             exit 0  flake.lock unchanged  0.02s
+nix flake lock --no-update-lock-file                       exit 0  flake.lock unchanged  0.02s
+nix flake lock                                             exit 0  flake.lock unchanged  0.01s
+nix build --no-link .#runtime --no-update-lock-file        exit 0  flake.lock unchanged  0.09s
+nix build --no-link .#runtime                              exit 0  flake.lock unchanged  0.09s
+
+== A lock with an input removed from flake.nix (stale entry), and one hand-edited
+nix flake lock --no-update-lock-file --offline             exit 1  flake.lock unchanged  0.02s
+nix flake lock --no-update-lock-file --offline             exit 1  flake.lock unchanged  0.02s
+nix build --no-link .#runtime --no-update-lock-file --offline exit 1  flake.lock unchanged  0.02s
+  error:
+         … while updating the lock file of flake 'path:/work/lock?lastModified=1794662845&narHash=sha256-sMQcj2KY27ttghnOCM0iYwMBfx5FyJHDuyfXVq8Yy2s%3D'
+  
+         error: flake 'path:/work/lock' requires lock file changes but they're not allowed due to '--no-update-lock-file'
+
+== What the read-only check writes outside the flake directory
+nix flake lock --no-update-lock-file --offline             exit 0  flake.lock unchanged  0.02s
+nix flake lock --no-update-lock-file --offline             exit 0  flake.lock unchanged  0.02s
+new store paths: 0
+files written under /work/home/.cache/nix: fetcher-cache-v4.sqlite 
+files in the flake directory: flake.lock .out flake.nix 

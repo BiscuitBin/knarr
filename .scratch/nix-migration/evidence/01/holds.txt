@@ -1,0 +1,118 @@
+date: 2026-11-14T13:26Z
+nix (Nix) 2.35.6 on aarch64-linux
+
+== The channel heads on 2026-11-14 (aarch64-linux versions)
+nixpkgs-unstable  2074cc672349f14240fb7ea90d509e0b643e9dd4  erlang_29 29.1.2, openssl 3.5.9, gleam 1.19.2, helm 4.3.1, kwok 0.8.0, kubectl 1.37.2, python314 3.14.10, pytest 9.1.1
+nixos-unstable    d4f25a3e562008648d45bcf2d70bcc7422cad84e  erlang_29 29.1.2, openssl 3.5.9, gleam 1.19.2, helm 4.3.1, kwok 0.8.0, kubectl 1.37.2, python314 3.14.10, pytest 9.1.1
+nixos-26.05       f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0  erlang_29 29.1.2, openssl 3.6.5, gleam 1.19.2, helm 3.20.2, kwok 0.7.0, kubectl 1.36.3, python314 3.14.8, pytest 9.0.3
+
+== nixpkgs history: the unstable channel releases around Gleam 1.19.0
+(releases.nixos.org lists each channel head; the version lines are read from that commit)
+nixpkgs/nixpkgs-26.11pre1085727.8c6b39505383         gleam 1.18.1  erlang_29 29.1.1
+nixos/unstable/nixos-26.11pre1085777.494ce7fd23ff    gleam 1.18.1  erlang_29 29.1.1
+nixpkgs/nixpkgs-26.11pre1085827.aa48d3470809         gleam 1.18.1  erlang_29 29.1.1
+nixos/unstable/nixos-26.11pre1086391.151fa4e8ddfd    gleam 1.19.0  erlang_29 29.1.1
+nixpkgs/nixpkgs-26.11pre1086706.e2ccecbf3086         gleam 1.19.0  erlang_29 29.1.1
+nixpkgs/nixpkgs-26.11pre1086972.7dd199b0e299         gleam 1.19.0  erlang_29 29.1.1
+nixpkgs/nixpkgs-26.11pre1087089.39ad350a0602         gleam 1.19.0  erlang_29 29.1.1
+nixos/unstable/nixos-26.11pre1087755.e7439b6b14ad    gleam 1.19.0  erlang_29 29.1.1
+nixpkgs/nixpkgs-26.11pre1088030.8edc0c72e3a3         gleam 1.19.0  erlang_29 29.1.1
+nixos/unstable/nixos-26.11pre1089111.6510408d147d    gleam 1.19.1  erlang_29 29.1.1
+nixpkgs/nixpkgs-26.11pre1089329.ca1659429c95         gleam 1.19.1  erlang_29 29.1.1
+nixos/unstable/nixos-26.11pre1090327.7fd4004d0511    gleam 1.19.1  erlang_29 29.1.1
+nixos/unstable/nixos-26.11pre1092090.55bfb4d7437b    gleam 1.19.2  erlang_29 29.1.1
+nixpkgs/nixpkgs-26.11pre1092129.319e4cebef10         gleam 1.19.2  erlang_29 29.1.1
+nixpkgs/nixpkgs-26.11pre1092923.95b2dd0e78e6         gleam 1.19.2  erlang_29 29.1.2
+nixpkgs-26.11pre1088030.8edc0c72e3a3 is commit 8edc0c72e3a38faf5434e40d1f19431125fe4b30
+
+== Erlang/OTP and its OpenSSL
+candidate 2074cc672349f14240fb7ea90d509e0b643e9dd4, beam_minimal.interpreters.erlang_29 (the prototype uses this):
+  aarch64-linux   29.1.2 (openssl 3.5.9)  /nix/store/3awv3q0c75gyasilp0rbpjcwa8gvvxm1-erlang-29.1.2  cached=yes
+  x86_64-linux    29.1.2 (openssl 3.5.9)  /nix/store/3crn944dxddrp5wz1yn7p8ac08a5yfph-erlang-29.1.2  cached=yes
+  aarch64-darwin  29.1.2 (openssl 3.5.9)  /nix/store/h35yp7i2h8m1fzx9sljmcjklfrvj2mcp-erlang-29.1.2  cached=yes
+candidate, beam_minimal.packages.erlang_29.rebar3:
+  aarch64-linux   3.28.0  /nix/store/alqcfl04za45f91r3hc9dgp1lx0bcnr9-rebar3-3.28.0  cached=yes
+  x86_64-linux    3.28.0  /nix/store/mh5ll3h0jyv7irs4xbihmyc3fip46x2i-rebar3-3.28.0  cached=yes
+  aarch64-darwin  3.28.0  /nix/store/s81sd3bkgbkmkhr6hqyd9mcv13nzjfzg-rebar3-3.28.0  cached=yes
+candidate, beam.interpreters.erlang_29 (with wxWidgets and systemd):
+  aarch64-linux   29.1.2 (openssl 3.5.9)  /nix/store/27rcm5hff9q3hcqznry22fcbrbjb6633-erlang-29.1.2  cached=yes
+  x86_64-linux    29.1.2 (openssl 3.5.9)  /nix/store/2pkmgskc37kb474spq6i0zqdpr4dh613-erlang-29.1.2  cached=yes
+  aarch64-darwin  29.1.2 (openssl 3.5.9)  /nix/store/6ch51ssd70hyfddj74d5ba157drx8i9s-erlang-29.1.2  cached=yes
+candidate, openssl:
+  aarch64-linux   3.5.9  /nix/store/k3ka1sknly3p6lix54gjfayqqyfxsgl3-openssl-3.5.9-bin  cached=yes
+  x86_64-linux    3.5.9  /nix/store/dhqsy67cw5cid7dhah87gdrjhkd346b0-openssl-3.5.9-bin  cached=yes
+  aarch64-darwin  3.5.9  /nix/store/vmxx2v8z28p1m8fc5mfj2rg23cfmfp9a-openssl-3.5.9-bin  cached=yes
+candidate, openssl_3_6:        error: 'openssl_3_6' has been removed, due to upstream end of life on 2026-11-01
+nixos-26.05 f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0, beam_minimal.interpreters.erlang_29 (OpenSSL 3.6.5, as pixi.lock has):
+  aarch64-linux   29.1.2 (openssl 3.6.5)  /nix/store/lbqf36xzl857ng0fzfccfpj13n1bl37y-erlang-29.1.2  cached=yes
+  x86_64-linux    29.1.2 (openssl 3.6.5)  /nix/store/gkniw30b870j0q374a477faz7767r8pw-erlang-29.1.2  cached=yes
+  aarch64-darwin  29.1.2 (openssl 3.6.5)  /nix/store/8qhx32cbri6qzj57w9ir8284ndv343yw-erlang-29.1.2  cached=yes
+candidate erlang overridden to build against the nixos-26.05 openssl:
+  aarch64-linux   /nix/store/aqyyii3gwyb4zlfxjcclxk7zdfjvxkk4-erlang-29.1.2  cached=no
+  x86_64-linux    /nix/store/f1bxm3spm3n1l2hqji6f5ybb62mnr8i0-erlang-29.1.2  cached=no
+  aarch64-darwin  /nix/store/rvn4i1k036gyam7pl6vwdzqbyic31r58-erlang-29.1.2  cached=no
+
+== Gleam
+candidate 2074cc672349f14240fb7ea90d509e0b643e9dd4, gleam:
+  aarch64-linux   1.19.2  /nix/store/ajsm9khahr0587lbhafhj9ylyni3raqr-gleam-1.19.2  cached=yes
+  x86_64-linux    1.19.2  /nix/store/d2irqakxs60x65dhs58yb5hbqx95wb8a-gleam-1.19.2  cached=yes
+  aarch64-darwin  1.19.2  /nix/store/5c3jc4qmpp3d8kcm8dcmnwpi8kv196mh-gleam-1.19.2  cached=yes
+nixpkgs-gleam input 8edc0c72e3a38faf5434e40d1f19431125fe4b30, gleam (the prototype uses this):
+  aarch64-linux   1.19.0  /nix/store/4pi8cawp3qn6lh8fjc0ahgwivc2yv4ry-gleam-1.19.0  cached=yes
+  x86_64-linux    1.19.0  /nix/store/bfxzwbcxykymjxm4jdrja739m3bh02yj-gleam-1.19.0  cached=yes
+  aarch64-darwin  1.19.0  /nix/store/kiw07jif33zfl88fwg7prwqdvadxb5n2-gleam-1.19.0  cached=yes
+(gleam-override.txt has the override: not cached on any system)
+
+== kubectl
+candidate 2074cc672349f14240fb7ea90d509e0b643e9dd4, kubectl:
+  aarch64-linux   1.37.2  /nix/store/a98laxsk3b50llhr58ba22bmv19asg2j-kubectl-1.37.2  cached=yes
+  x86_64-linux    1.37.2  /nix/store/y76mik4wh5sal2qkh3jilrbdn6vnj9i7-kubectl-1.37.2  cached=yes
+  aarch64-darwin  1.37.2  /nix/store/mgl42b66mz4yy9hc57bpnpiqqxif13x8-kubectl-1.37.2  cached=yes
+nixpkgs-kubectl input f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0, kubectl (the prototype uses this):
+  aarch64-linux   1.36.3  /nix/store/g6ckyy2r7p3a9swsnfz2imdl6a7f11g6-kubectl-1.36.3  cached=yes
+  x86_64-linux    1.36.3  /nix/store/s24cw2y58w6gc0066v56n13pvsn9la3a-kubectl-1.36.3  cached=yes
+  aarch64-darwin  1.36.3  /nix/store/x6fvgfbbxw6gykvpc9932iq0d59zhf6c-kubectl-1.36.3  cached=yes
+
+== The built environments on this system: where each held package came from
+(a cache.nixos.org-1 signature means the path was substituted; a path built here has none)
+default   /nix/store/fnf24f2z4n30ixsjv6vyhikylj7czx0m-openssl-3.5.9          cache.nixos.org-1
+default   /nix/store/9zyabiswyisqky2gd1d3z1ig5rm7dd94-python3-3.14.10        cache.nixos.org-1
+default   /nix/store/j3q6sgkvhf9sr3d9xcn9jy83f0ap8qny-python3.14-iniconfig-2.3.0 cache.nixos.org-1
+default   /nix/store/kpp76nc0c1bjna4al0mak4z83is6prbm-python3.14-pluggy-1.7.0 cache.nixos.org-1
+default   /nix/store/q427q3p2108y8b317lcv7ryb2bpkkyyx-python3.14-pygments-2.21.0 cache.nixos.org-1
+default   /nix/store/zdmc0v6ag4k1vd1559435isjq8kaycjr-python3.14-packaging-26.3 cache.nixos.org-1
+default   /nix/store/0miyskzjic5wv8wwjcfpkl6z7j9q3w41-python3.14-pytest-9.1.1 cache.nixos.org-1
+default   /nix/store/3awv3q0c75gyasilp0rbpjcwa8gvvxm1-erlang-29.1.2          cache.nixos.org-1
+default   /nix/store/3xxxa4asggd6jqbph6fd75a56nhk06cr-python3.14-pyflakes-4.0.3 cache.nixos.org-1
+default   /nix/store/4pi8cawp3qn6lh8fjc0ahgwivc2yv4ry-gleam-1.19.0           cache.nixos.org-1
+default   /nix/store/alqcfl04za45f91r3hc9dgp1lx0bcnr9-rebar3-3.28.0          cache.nixos.org-1
+default   /nix/store/irn3lrxkvashibrrxqhd1g5nizi5qwbp-allium-3.6.1           ultimate
+default   /nix/store/k3ka1sknly3p6lix54gjfayqqyfxsgl3-openssl-3.5.9-bin      cache.nixos.org-1
+default   /nix/store/ycwb9dbr67z9y7wdzm73bgjs4gsq8kb6-nodejs-slim-24.22.2    cache.nixos.org-1
+default   /nix/store/mm4dqphhravgip1i35fwfk9nalh6irii-nodejs-slim-24.22.2-corepack cache.nixos.org-1
+default   /nix/store/mzmsjj454wk6pgc9slwdz9hqxjmavbcq-nodejs-slim-24.22.2-npm cache.nixos.org-1
+default   /nix/store/pl77fywj3l09rzgsssy5drc52lpk9n0d-nodejs-24.22.2         cache.nixos.org-1
+default   /nix/store/ripj02n2fvni4s26p22qgr42h5zn3b06-python3-3.14.10-env    ultimate
+default   /nix/store/g3s8sya77p5ilp9j78pmcmcims5h1cs5-knarr-tools            ultimate
+cluster   /nix/store/36vq1cv9dlbcmxcf1bby2c15xmhk5ljm-kwok-0.8.0             cache.nixos.org-1
+cluster   /nix/store/g6ckyy2r7p3a9swsnfz2imdl6a7f11g6-kubectl-1.36.3         cache.nixos.org-1
+cluster   /nix/store/gsl37l0zg777bgvqpsbql2if18n31acy-kind-0.33.0            cache.nixos.org-1
+cluster   /nix/store/d2bw2nmr9m7s21jqyrqgjxgfh0h28lha-knarr-cluster-tools    ultimate
+
+== One Erlang and one OpenSSL in each closure
+default: 1 erlang, 1 openssl library
+runtime: 1 erlang, 1 openssl library
+gleam 1.19.0
+rebar 3.28.0 on Erlang/OTP 29 Erts 17.1.1
+otp_release 29, erts 17.1.1
+crypto:info_lib() [{<<"OpenSSL">>,810549392,<<"OpenSSL 3.5.9 29 Sep 2026">>}]
+OpenSSL 3.5.9 29 Sep 2026 (Library: OpenSSL 3.5.9 29 Sep 2026)
+erl resolves to /nix/store/3awv3q0c75gyasilp0rbpjcwa8gvvxm1-erlang-29.1.2/lib/erlang/bin/erl
+runtime erl resolves to /nix/store/3awv3q0c75gyasilp0rbpjcwa8gvvxm1-erlang-29.1.2/lib/erlang/bin/erl
+Client Version: v1.36.3
+kind v0.33.0 go1.27.3 linux/arm64
+kwokctl version v0.8.0 go1.27.3 (linux/arm64)
+
+== A lock move that loses a held version fails evaluation
+       error: held gleam: the locked input has 1.19.2, the hold is 1.19.0
+       error: held erlang: the locked input has 29.1.1, the hold is 29.1.2

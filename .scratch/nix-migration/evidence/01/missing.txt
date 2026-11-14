@@ -1,0 +1,51 @@
+date: 2026-11-14T13:27Z
+nix (Nix) 2.35.6 on aarch64-linux
+
+== allium 3.6.1 (juxt/allium-tools; not in nixpkgs)
+The x86_64-linux and aarch64-darwin digests are the tools.txt pins; aarch64-linux is the
+GitHub asset digest, which tools.txt does not carry.
+https://github.com/juxt/allium-tools/releases/download/v3.6.1/allium-x86_64-unknown-linux-gnu.tar.gz
+  sha256 e00c99ae234b10207719257a70e7c2dcad73060864468cd293fb7ad40524e970 matches the pin
+https://github.com/juxt/allium-tools/releases/download/v3.6.1/allium-aarch64-unknown-linux-gnu.tar.gz
+  sha256 e5ce96393db198b4f7d23ccd2494573e753936cc7b03ca1ecbac3cb20f993ff4 matches the pin
+https://github.com/juxt/allium-tools/releases/download/v3.6.1/allium-aarch64-apple-darwin.tar.gz
+  sha256 ecfae02fcf8e60475a014944183158ccde4104f6f0223e1bf91f98519fcb19eb matches the pin
+x86_64-linux    members: allium 
+  ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0
+aarch64-linux   members: allium 
+  ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, for GNU/Linux 3.7.
+aarch64-darwin  members: allium 
+  Mach-O 64-bit arm64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE|HAS_TLV_DESCRIPTORS>
+The unpacked aarch64-linux binary, as fetched (its loader /lib/ld-linux-aarch64.so.1 is not in the Nix image):
+  as fetched: FAILS: /evidence/missing.sh: line 31: /work/missing/aarch64-linux/allium: cannot execute: required file not found
+The prototype flake derivation (fetchurl by the same sha256, then autoPatchelfHook): /nix/store/irn3lrxkvashibrrxqhd1g5nizi5qwbp-allium-3.6.1
+  from the store: allium 3.6.1 (language versions: 1, 2, 3)
+  interpreter: /nix/store/1q857rs68rs3gijls9wdnsjqnwnv5zd8-glibc-2.44-57/lib/ld-linux-aarch64.so.1
+
+== kwokctl 0.8.0 (nixpkgs has kwok 0.8.0, which carries kwokctl)
+nixpkgs kwok: /nix/store/36vq1cv9dlbcmxcf1bby2c15xmhk5ljm-kwok-0.8.0, bin: gen_cmd_docs kwok verify_boilerplate kwokctl 
+  from the store: kwokctl version v0.8.0 go1.27.3 (linux/arm64)
+The upstream asset (tools.txt pins linux-amd64 and darwin-arm64; this is linux-arm64, GitHub asset digest):
+https://github.com/kubernetes-sigs/kwok/releases/download/v0.8.0/kwokctl-linux-arm64
+  sha256 5a642b27d3e975f36040d215640cd90fb4a63cb6fca0ad5865a61bcd9c81051b matches the pin
+  stored executable under the NAR hash sha256-jcrQXnTW5dlfwnw6u9cFLF2XgoR6WxGXVhPc2Lu7GEY=
+  ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked
+  as fetched, from the store: kwokctl version v0.8.0 go1.26.0 (linux/arm64)
+
+== hadolint (tools.txt pins 2.15.1; nixpkgs has 2.14.0)
+  nixpkgs: Haskell Dockerfile Linter 2.14.0
+The upstream asset (tools.txt pins linux-x86_64 and macos-arm64; this is linux-arm64, GitHub asset digest):
+https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-arm64
+  sha256 f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d matches the pin
+  stored executable under the NAR hash sha256-hJgXC08jlYeH1vk6g/268hR1Xu4AODDi1DSnbH3poVA=
+  ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked
+  as fetched, from the store: Haskell Dockerfile Linter 2.15.1
+
+== grype (pixi.toml pins 0.120.1; nixpkgs has 0.120.0)
+  nixpkgs: grype 0.120.0
+
+== The other tools.txt tools, from nixpkgs at the pinned version
+  ripsecrets: ripsecrets 0.1.11
+  editorconfig-checker: 4.0.2
+  kubeconform: v0.8.0
+  rebar3: rebar 3.28.0 on Erlang/OTP 29 Erts 17.1.1

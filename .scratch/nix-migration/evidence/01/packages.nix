@@ -55,17 +55,18 @@ in
   (row "kubernetes-helm" "4.3.0" [ "kubernetes-helm" ] "major 4")
   (row "kustomize" "5.8.2" [ "kustomize" ] "")
   # pixi.toml [feature.otp.dependencies]
-  (row "erlang" "29.1.2" [ "beam" "interpreters" "erlang_29" ] "held: exactly 29.1.2")
+  (row "erlang" "29.1.2" [ "beam_minimal" "interpreters" "erlang_29" ] "held: exactly 29.1.2")
+  (row "(erlang with wxWidgets and systemd)" "29.1.2" [ "beam" "interpreters" "erlang_29" ] "not used: 1.2 GB closure")
   (row "(openssl, erlang's dependency)" "3.6.5" [ "openssl" ] "held with erlang")
   (row "(openssl 3.6 by name)" "3.6.5" [ "openssl_3_6" ] "held with erlang")
   # pixi.toml [feature.cluster.dependencies]
   (row "kubernetes-kind" "0.33.0" [ "kind" ] "skew cap: node image 1.35")
-  (row "kubernetes-client" "1.36.0" [ "kubectl" ] "skew cap: 1.35 to 1.37 servers")
+  (row "kubernetes-client" "1.36.0" [ "kubectl" ] "skew cap: 1.34 to 1.36 for the 1.35 cluster")
   (row "tilt" "0.37.8" [ "tilt" ] "unused; not carried forward")
   # pixi.toml [feature.audit.dependencies]
   (row "grype" "0.120.1" [ "grype" ] "")
   # tools.txt
-  (row "rebar3" "3.28.0" [ "beam" "packages" "erlang_29" "rebar3" ] "3.28.0 or later")
+  (row "rebar3" "3.28.0" [ "beam_minimal" "packages" "erlang_29" "rebar3" ] "3.28.0 or later")
   (row "ripsecrets" "0.1.11" [ "ripsecrets" ] "")
   (row "editorconfig-checker" "4.0.2" [ "editorconfig-checker" ] "")
   (row "allium" "3.6.1" [ "allium" ] "exactly 3.6.1")
