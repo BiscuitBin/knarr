@@ -124,11 +124,17 @@
               installPhase = "install -D -m 0755 allium $out/bin/allium";
             };
 
+          # lib/node_modules is linked beside bin because nixpkgs'
+          # bin/markdownlint-cli2 is a wrapper script: the docs checker finds
+          # the bundled markdown-it from the module directory, not from bin.
           environment =
             name: paths:
             pkgs.buildEnv {
               inherit name paths;
-              pathsToLink = [ "/bin" ];
+              pathsToLink = [
+                "/bin"
+                "/lib/node_modules"
+              ];
             };
         in
         assert lib.assertMsg (
@@ -148,7 +154,8 @@
             pkgs.lychee
             pkgs.taplo
             pkgs.markdownlint-cli2
-            pkgs.nodejs
+            # Node without npm: the node markdownlint-cli2's wrapper runs.
+            pkgs.nodejs-slim
             pkgs.actionlint
             pkgs.shellcheck
             pkgs.ruff

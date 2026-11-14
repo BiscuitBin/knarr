@@ -46,7 +46,7 @@ in
   (row "lychee" "0.24.2" [ "lychee" ] "")
   (row "taplo" "0.10.0" [ "taplo" ] "")
   (row "markdownlint-cli2" "0.23.3" [ "markdownlint-cli2" ] "its bundled markdown-it, under Node")
-  (row "(nodejs, markdownlint-cli2's dependency)" "conda's solve" [ "nodejs" ] "runs render_markdown.mjs")
+  (row "(nodejs, markdownlint-cli2's dependency)" "26.10.0" [ "nodejs-slim" ] "runs render_markdown.mjs")
   (row "actionlint" "1.7.12" [ "actionlint" ] "")
   (row "shellcheck" "0.11.0" [ "shellcheck" ] "")
   (row "python" "3.14.8" [ "python314" ] "3.14 or later")
