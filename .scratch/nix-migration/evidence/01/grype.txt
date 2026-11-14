@@ -1,4 +1,4 @@
-date: 2026-11-14T19:53Z
+date: 2026-11-14T21:05Z
 grype 0.120.0 (pixi.toml pins 0.120.1)
 database: v6.1.10, built 2026-10-30
 closure: 19 store paths, 223M
@@ -7,8 +7,8 @@ control: 15 store paths, 220M
 == Directory source: grype -vv dir:/work/grype/closure --only-fixed --fail-on high
 exit 0
 the cataloger lines runtime_scan.py reads (it wants conda-meta-cataloger):
-  discovered 18 packages cataloger=nix-cataloger
   discovered 34 packages cataloger=erlang-otp-application-cataloger
+  discovered 18 packages cataloger=nix-cataloger
   discovered 3 packages cataloger=binary-classifier-cataloger
   catalogers that discovered nothing: 54
   named in the log: conda-meta-cataloger
@@ -56,8 +56,8 @@ by package type: binary 3, erlang-otp 34, nix 14
 exit 0
 the cataloger lines runtime_scan.py reads (it wants conda-meta-cataloger):
   discovered 18 packages cataloger=nix-cataloger
-  discovered 92 packages cataloger=dpkg-db-cataloger
   discovered 3 packages cataloger=elf-binary-package-cataloger
+  discovered 92 packages cataloger=dpkg-db-cataloger
   discovered 6 packages cataloger=binary-classifier-cataloger
   catalogers that discovered nothing: 30
 matches: 0; by severity: 

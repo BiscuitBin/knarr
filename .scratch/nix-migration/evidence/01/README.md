@@ -15,9 +15,9 @@ Everything here ran on **aarch64-linux**. x86_64-linux and aarch64-darwin were e
 - this directory read-only at `/evidence`, the worktree's `ai_tmp/` read-only at `/bundle`, and `ai_tmp/out/` writable at `/out`;
 - `NIX_CONFIG='experimental-features = nix-command flakes'`, which is the whole of the Nix configuration: nothing in `/etc/nix` or the user's configuration was changed.
 
-`sh nix.sh --offline …` adds `--network none`. The worktree is never mounted writable, and no gate recipe ran on a mount of it. The repository reached the container as a git bundle (`git bundle create ai_tmp/knarr.bundle HEAD 01-nix-container-spike`), cloned into the work volume.
+`sh nix.sh --offline …` adds `--network none`. With the network on, the scripts read cache.nixos.org and GitHub's nixpkgs tarballs, and also the GitHub API and raw.githubusercontent.com (release assets and nixpkgs history), the releases.nixos.org bucket listing (channel history), and the allium, kwok and hadolint release assets. Nothing was sent anywhere. The worktree is never mounted writable, and no gate recipe ran on a mount of it. The repository reached the container as a git bundle (`git bundle create ai_tmp/knarr.bundle HEAD 01-nix-container-spike`), cloned into the work volume.
 
-Each `.txt` file is the transcript of the script with the same name, and each script exits non-zero on an unexpected result. [lib.sh](lib.sh) is shared by the container scripts: the image has no `sed`, `awk`, `jq` or `file`, so they take them from the candidate revision.
+Each `.txt` file is the transcript of the script with the same name. The scripts stop on an unexpected error; `gate.sh`, `differences.sh` and `grype.sh` record failures and matches as results rather than stopping on them. [lib.sh](lib.sh) is shared by the container scripts: the image has no `sed`, `awk`, `jq` or `file`, so they take them from the candidate revision.
 
 | Script | Where it runs | What it shows |
 | --- | --- | --- |
@@ -49,8 +49,8 @@ The candidate is **nixpkgs-unstable at `2074cc672349f14240fb7ea90d509e0b643e9dd4
 
 | Channel | Head | Why it is or is not the candidate |
 | --- | --- | --- |
-| nixpkgs-unstable | `2074cc6` | The candidate. OTP 29.1.2, Helm 4.3.1, kwok 0.8.0, pytest 9.1.1, Python 3.14.10. This channel advances only when its Linux and darwin jobs have built. |
-| nixos-unstable | `d4f25a3` | The same versions one day earlier. It is gated on NixOS tests, which are Linux only. |
+| nixpkgs-unstable | `2074cc6` | The candidate. OTP 29.1.2, Helm 4.3.1, kwok 0.8.0, pytest 9.1.1, Python 3.14.10. Every package the table below takes from it is cached on all three systems. |
+| nixos-unstable | `d4f25a3` | The same versions one day earlier. It would serve as well; how each channel is gated was not checked here. |
 | nixos-26.05 | `f1e5c35` | Fails two floors: Helm is 3.20.2 and kwok is 0.7.0. It is the source of two holds below. |
 
 Cross-system evaluation works from aarch64-linux, and that is how the other two columns of every table here were filled ([systems.txt](systems.txt)): `nix eval` gives the output path for any system, `nix path-info --store https://cache.nixos.org` says whether the cache has it, and `nix build --dry-run .#packages.<system>.<group>` lists what would be built and what fetched. Building for another system is refused with `Reason: platform mismatch`.
@@ -68,7 +68,7 @@ One row for every line of `pixi.toml` and `tools.txt`, at the candidate. [packag
 | `lychee` (pixi) | 0.24.2 | `lychee` | 0.24.2 | yes, yes, yes | |
 | `taplo` (pixi) | 0.10.0 | `taplo` | 0.10.0 | yes, yes, yes | |
 | `markdownlint-cli2` (pixi) | 0.23.3 | `markdownlint-cli2` | 0.24.0 | yes, yes, yes | **Floor: its bundled markdown-it, under Node.** Met, but not at the path the docs checker looks in; see [the PATH prefix](#7-the-gate-from-a-path-prefix). |
-| Node (conda dependency of markdownlint-cli2) | 26.10.0 | `nodejs-slim` | 24.22.2 | yes, yes, yes | Node without npm, which is what markdownlint-cli2's wrapper runs. `nodejs` is a link farm over it that Nix never substitutes and builds locally. |
+| Node (conda dependency of markdownlint-cli2) | 26.10.0 | `nodejs-slim` | 24.22.2 | yes, yes, yes | Node without npm. markdownlint-cli2's wrapper runs `nodejs`, a link farm over it that arrives with markdownlint-cli2. |
 | `actionlint` (pixi) | 1.7.12 | `actionlint` | 1.7.12 | yes, yes, yes | |
 | `shellcheck` (pixi) | 0.11.0 | `shellcheck` | 0.11.0 | yes, yes, yes | |
 | `python` (pixi) | 3.14.8 | `python314` | 3.14.10 | yes, yes, yes | **Floor: 3.14 or later.** Met. |
@@ -80,7 +80,7 @@ One row for every line of `pixi.toml` and `tools.txt`, at the candidate. [packag
 | OpenSSL (conda dependency of erlang) | 3.6.5 | `openssl` | 3.5.9 | yes, yes, yes | **Held with Erlang.** The candidate differs, and `openssl_3_6` was removed from it; see [Held versions](#3-held-versions). |
 | `kubernetes-kind` (pixi) | 0.33.0 | `kind` | 0.33.0 | yes, yes, yes | **Skew cap.** Met. |
 | `kubernetes-client` (pixi) | 1.36.0 | `kubectl` | 1.37.2 | yes, yes, yes | **Skew cap: 1.34 to 1.36 for the 1.35 cluster.** The candidate breaks it; see [Held versions](#3-held-versions). |
-| `tilt` (pixi) | 0.37.8 | `tilt` | 0.37.7 | yes, yes, yes | **Unused; not carried forward.** No recipe, script or workflow runs tilt. |
+| `tilt` (pixi) | 0.37.8 | `tilt` | 0.37.7 | yes, yes, yes | **Unused; not carried forward.** Outside `pixi.toml`, `pixi.lock` and Decision 0003's record of the pin, no tracked file names tilt. |
 | `grype` (pixi) | 0.120.1 | `grype` | 0.120.0 | yes, yes, yes | One patch older than the pin. |
 | `rebar3` (tools.txt) | 3.28.0 | `beam_minimal.packages.erlang_29.rebar3` | 3.28.0 | yes, yes, yes | **Floor: 3.28.0 or later.** Met. The top-level `rebar3` is built with OTP 28. |
 | `ripsecrets` (tools.txt) | 0.1.11 | `ripsecrets` | 0.1.11 | yes, yes, yes | |
@@ -114,7 +114,7 @@ Nothing compiles. The derivations built locally are the environments themselves 
 | Option | OTP | OpenSSL | Cached (three systems) | Cost |
 | --- | --- | --- | --- | --- |
 | The candidate's Erlang (**the prototype**) | 29.1.2 | 3.5.9 | yes, yes, yes | OpenSSL differs from pixi.lock's. The six TLS cases were rerun on it and pass; see [the image](#9-the-image-and-tls). |
-| Erlang from a second input at nixos-26.05 `f1e5c35` | 29.1.2 | 3.6.5 | yes, yes, yes | The exact pair pixi.lock has, and cached. It ships an OpenSSL line nixpkgs unstable has already dropped as end of life, and brings a second glibc into every closure. |
+| Erlang from a second input at nixos-26.05 `f1e5c35` | 29.1.2 | 3.6.5 | yes, yes, yes | The exact pair pixi.lock has, and cached. Its runtime closure is the same size as the candidate's (202 MiB against 205, one glibc each) and the six TLS cases pass on it ([tls-pairs.txt](tls-pairs.txt)). It ships an OpenSSL line nixpkgs unstable has already dropped as end of life, and the gate's tools would then come from three nixpkgs revisions; the tools closure with it was not measured. |
 | The candidate's Erlang with `.override { openssl = … }` | 29.1.2 | any | no, no, no | Forfeits the cache on all three systems: Erlang compiles from source wherever it is installed. |
 
 **Gleam 1.19.0 needs a second pinned input.** The candidate has 1.19.2. No nixpkgs revision has both Gleam 1.19.0 and OTP 29.1.2: Gleam was 1.19.0 in the unstable channels only between releases `1086391` and `1088030` (about 2026-10-05 to 2026-10-08), when Erlang was still 29.1.1, and Erlang reached 29.1.2 at release `1092923`, when Gleam was already 1.19.2. The options:
@@ -320,10 +320,10 @@ What that means for `just runtime-scan` (ticket 11):
 
 - **`conda-meta-cataloger` finds nothing in a Nix closure.** `scripts/checks/runtime_scan.py` reads the line `discovered N packages cataloger=conda-meta-cataloger`, so today's script answers "cannot decide" for any Nix image, as the round README expects.
 - **grype does catalogue the closure**, and the line has the same shape for the catalogers that do: `discovered 18 packages cataloger=nix-cataloger` and `discovered 3 packages cataloger=binary-classifier-cataloger`. `nix-cataloger` works from the store path names; the image has no Nix database.
-- **The image source sees the closure too.** conda records were invisible in an image, which is why `runtime-scan` copies the environment out. Store paths are not: `grype <image>`, which is `just image-scan`, catalogues the Nix Erlang and OpenSSL beside Ubuntu's packages. Ticket 11 can scan either source.
+- **The image source sees the closure too.** conda records were invisible in an image, which is why `runtime-scan` copies the environment out. Store paths are not: `grype <image>`, which is `just image-scan`, catalogues the Nix Erlang and OpenSSL beside Ubuntu's packages. Ticket 11 can try the image source, after a control on it.
 - **Erlang's advisories match through one cataloger only.** In the control, the three Erlang matches (CVE-2026-94200 high, CVE-2026-105236 and CVE-2026-96596, all fixed in 29.1.2) are on the `binary-classifier-cataloger` package. `nix-cataloger`'s `erlang` and the 34 OTP application packages matched nothing. OpenSSL matched through both the binary and the nix package. So the fail-closed test is not "some cataloger found something": it is that `binary-classifier-cataloger` catalogued `erlang`, and that `openssl` was catalogued.
 
-Not shown: a control on the image source, and anything grype 0.120.1 does differently from 0.120.0.
+Not shown: a control on the image source, so that the image scan matches as the directory scan does is an inference from its cataloguing the same two packages the same way; and anything grype 0.120.1 does differently from 0.120.0.
 
 ## What was evaluated but not run
 

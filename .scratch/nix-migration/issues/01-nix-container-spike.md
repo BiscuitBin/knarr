@@ -41,7 +41,7 @@
 - [x] The evidence lists the darwin facts it evaluated but could not run, for 04 and Decision 0017.
 - [x] The grype transcript is recorded.
 - [x] This round's `evidence/` directory is added to the evidence excludes the other rounds have in the hook and linter configs.
-- [ ] `just check` ends with "All checks passed and the worktree is unchanged."
+- [x] `just check` ends with "All checks passed and the worktree is unchanged."
 
 ## Hand-back notes
 
@@ -51,7 +51,9 @@
 - `.pre-commit-config.yaml`: `nix-migration` joins `bootstrap`, `helm-chart` and `org-transfer` in the editorconfig-checker hook's evidence exclude. That is the only exclude the other rounds have. `.pre-commit-fix.yaml`, `taplo.toml`, `ruff.toml` and the gleam-format hook name the bootstrap round alone and were left as they are.
 - This ticket.
 
-Left on the Mac's Docker, on purpose: the volumes `knarr-nix-store` (the Nix store) and `knarr-nix-01-work` (the clones and Nix's caches), and the images `knarr-nix-proto:01` (the prototype) and `knarr-nix-proto:pixi-baseline` (today's Dockerfile for linux/arm64). Nothing was installed on the host.
+Left on the Mac's Docker, on purpose: the volumes `knarr-nix-store` (the Nix store) and `knarr-nix-01-work` (the clones and Nix's caches), and the images `knarr-nix-proto:01` (the prototype) and `knarr-nix-proto:pixi-baseline` (today's Dockerfile for linux/arm64). Also left: the pulled `ghcr.io/biscuitbin/knarr:0.3.1`, an earlier size baseline, and under the gitignored `ai_tmp/` a 3.1 GB copy of the grype database with a second copy in the work volume. Nothing was installed on the host.
+
+Network use went beyond the image pulls and Nix cache fetches the first box names, all of it read-only: the GitHub API and raw.githubusercontent.com for release assets and nixpkgs history, the releases.nixos.org bucket listing, the kwok and hadolint release assets, the hex packages in the container clone, the pull of the released image, and the conda, hex and rebar3 fetches inside the one baseline build. The grype database was not downloaded: it was copied from the host's `~/Library/Caches/grype`, outside the worktree.
 
 ### What was verified, and what was not
 
@@ -90,5 +92,5 @@ Not verified:
 - **08:** kubectl 1.36.3 comes from the nixos-26.05 input; kind 0.33.0 and kwok 0.8.0 are the candidate's, and `kwokctl` is inside the `kwok` package. None was exercised against a cluster.
 - **09:** `image/Dockerfile` is the shape, with the closure laid out before the sources so a source edit reuses it. The context allowlists must admit `flake.nix`, `flake.lock` and the held-versions file. The perl prune script, its test and `image-check`'s conda and perl checks have nothing left to do. The `runtime` group carries the `openssl` command for the TLS rerun.
 - **10:** nothing on the version-difference list needs a fix in the tree. The prerequisite line needs the machine's utilities named.
-- **11:** `conda-meta-cataloger` finds nothing, so today's script cannot decide. grype catalogues the closure through `nix-cataloger` and `binary-classifier-cataloger`, from the image as well as from a directory, so the copy out of the image is no longer needed. Erlang's advisories match only through `binary-classifier-cataloger`'s `erlang` package, so that is what the fail-closed test must require.
+- **11:** `conda-meta-cataloger` finds nothing, so today's script cannot decide. grype catalogues the closure through `nix-cataloger` and `binary-classifier-cataloger`, from the image as well as from a directory. The control that proves matching ran on the directory source only, so scanning the image without copying the closure out needs a control first. Erlang's advisories match only through `binary-classifier-cataloger`'s `erlang` package, so that is what the fail-closed test must require.
 - **12:** a held version is moved by moving an input's revision, and the README shows how one was found (the channel releases on releases.nixos.org). Nothing proposes that automatically; the held attribute set only refuses a wrong version.

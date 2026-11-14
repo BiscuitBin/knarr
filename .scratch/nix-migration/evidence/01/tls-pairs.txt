@@ -1,6 +1,7 @@
 
 == nixpkgs 2074cc672349f14240fb7ea90d509e0b643e9dd4
-date: 2026-11-14T14:30Z
+closure: 19 store paths, 204.6MiB; glibc in it: 1
+date: 2026-11-14T21:05Z
 host: Linux aarch64
 env: /nix/store/5xi14lz9vjgmzmy75hrhns8srr04v3pj-tls-pair
 openssl: OpenSSL 3.5.9 29 Sep 2026 (Library: OpenSSL 3.5.9 29 Sep 2026) (/nix/store/5xi14lz9vjgmzmy75hrhns8srr04v3pj-tls-pair/bin/openssl)
@@ -21,7 +22,8 @@ ok   right CA, IP tuple, cert has no IP SAN       want hostname   got {error,{tl
 tls_check: all 6 cases matched
 
 == nixpkgs f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0
-date: 2026-11-14T14:30Z
+closure: 15 store paths, 201.6MiB; glibc in it: 1
+date: 2026-11-14T21:05Z
 host: Linux aarch64
 env: /nix/store/hnndi6rxib6yk4ng0ikhiblxa8paci50-tls-pair
 openssl: OpenSSL 3.6.5 29 Sep 2026 (Library: OpenSSL 3.6.5 29 Sep 2026) (/nix/store/hnndi6rxib6yk4ng0ikhiblxa8paci50-tls-pair/bin/openssl)
