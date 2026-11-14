@@ -1,0 +1,130 @@
+date: 2026-11-14T21:57Z
+revision: 005ef45 (05-nix-ci-renovate-spike)
+image: ghcr.io/renovatebot/renovate:44.239.1@sha256:7dba1a3b916a2cf302ba0df458ddcc8fcbac3c92d0fe9882ac13ba0363de656b
+-- 1. the scratch tree, with "nix" in enabledManagers and nothing else
+  nix is disabled
+  Manager explicitly enabled in "enabledManagers" config, but found no results. Possible config error?
+-- 2. the same tree with "nix": {"enabled": true} as well
+  INFO: Validating .github/renovate.json
+  INFO: Config validated successfully against 1 file(s)
+-- 3. the stale copy
+[scratch tree] renovate 44.239.1: 84 dependencies in 16 files
+  dockerfile        4 in 2 files
+  github-actions   29 in 6 files
+  gleam            19 in 2 files
+  nix               3 in 1 files
+  pixi             19 in 1 files
+  regex            10 in 4 files
+  dockerfile:Dockerfile nixos/nix packageName=nixos/nix datasource=docker versioning=docker currentDigest=sha256:b49cb33f3a7e5cf3933ad8774529de0e3807ec5cf54987aa7ccdfb49f2fc55ed
+    proposes nothing
+  dockerfile:Dockerfile ubuntu packageName=ubuntu datasource=docker versioning=ubuntu currentValue=24.04 currentDigest=sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c
+    proposes major -> 26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96 in renovate/ubuntu-26.x
+    proposes digest -> 24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5 in renovate/ubuntu-24.04
+  dockerfile:fixtures/fake_worker/Dockerfile ghcr.io/prefix-dev/pixi packageName=ghcr.io/prefix-dev/pixi datasource=docker versioning=docker currentValue=0.81.0 currentDigest=sha256:788ae451641666e2d1f79d3dbe35392dfc7e9b394b16a3acb75c347f3badb2ab
+    proposes minor -> 0.84.2@sha256:8201f134655a8261f382ee565ddf1498e5f215887bb14e812e1f47c09f4f7196 in renovate/pixi
+  dockerfile:fixtures/fake_worker/Dockerfile ubuntu packageName=ubuntu datasource=docker versioning=ubuntu currentValue=24.04 currentDigest=sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c
+    proposes major -> 26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96 in renovate/ubuntu-26.x
+    proposes digest -> 24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5 in renovate/ubuntu-24.04
+  nix:flake.nix nixpkgs packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixpkgs-unstable lockedVersion=2074cc672349f14240fb7ea90d509e0b643e9dd4
+    proposes nothing
+  nix:flake.nix nixpkgs-gleam packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentDigest=8edc0c72e3a38faf5434e40d1f19431125fe4b30
+    proposes digest -> @19cb7128c50d099ae56dbc3e8b6a821b1c382249 in renovate/nixpkgs-gleam-digest
+  nix:flake.nix nixpkgs-kubectl packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixos-26.05 lockedVersion=f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0
+    proposes nothing
+  dependencies skipped or warned about, by manager and datasource:
+      1 github-actions github-releases github-token-required
+     15 github-actions github-tags github-token-required
+      1 regex docker disabled
+  warnings in the log:
+      1 GitHub token is required for some dependencies
+  lock-file branches in the branch summary: none
+[stale copy] renovate 44.239.1: 84 dependencies in 16 files
+  dockerfile        4 in 2 files
+  github-actions   29 in 6 files
+  gleam            19 in 2 files
+  nix               3 in 1 files
+  pixi             19 in 1 files
+  regex            10 in 4 files
+  dockerfile:Dockerfile nixos/nix packageName=nixos/nix datasource=docker versioning=docker currentValue=2.35.5 currentDigest=sha256:9305de534abed691d0f569502a4962a3a072ea8e888502c453ecfe35ae182867
+    proposes patch -> 2.35.6@sha256:b49cb33f3a7e5cf3933ad8774529de0e3807ec5cf54987aa7ccdfb49f2fc55ed in renovate/nixos-nix-2.x
+  dockerfile:Dockerfile ubuntu packageName=ubuntu datasource=docker versioning=ubuntu currentValue=24.04 currentDigest=sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c
+    proposes major -> 26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96 in renovate/ubuntu-26.x
+    proposes digest -> 24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5 in renovate/ubuntu-24.04
+  dockerfile:fixtures/fake_worker/Dockerfile ghcr.io/prefix-dev/pixi packageName=ghcr.io/prefix-dev/pixi datasource=docker versioning=docker currentValue=0.81.0 currentDigest=sha256:788ae451641666e2d1f79d3dbe35392dfc7e9b394b16a3acb75c347f3badb2ab
+    proposes minor -> 0.84.2@sha256:8201f134655a8261f382ee565ddf1498e5f215887bb14e812e1f47c09f4f7196 in renovate/pixi
+  dockerfile:fixtures/fake_worker/Dockerfile ubuntu packageName=ubuntu datasource=docker versioning=ubuntu currentValue=24.04 currentDigest=sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c
+    proposes major -> 26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96 in renovate/ubuntu-26.x
+    proposes digest -> 24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5 in renovate/ubuntu-24.04
+  nix:flake.nix nixpkgs packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixpkgs-unstable lockedVersion=9ac0edc06bfb33e6c0000be79d98ef8d89e26503
+    proposes nothing
+  nix:flake.nix nixpkgs-gleam packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentDigest=8edc0c72e3a38faf5434e40d1f19431125fe4b30
+    proposes digest -> @19cb7128c50d099ae56dbc3e8b6a821b1c382249 in renovate/nixpkgs-gleam-digest
+  nix:flake.nix nixpkgs-kubectl packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixos-26.05 lockedVersion=f7e804372523bedd74d273b173de45c8e02c6d9a
+    proposes nothing
+  dependencies skipped or warned about, by manager and datasource:
+      1 github-actions github-releases github-token-required
+     15 github-actions github-tags github-token-required
+      1 regex docker disabled
+  warnings in the log:
+      1 GitHub token is required for some dependencies
+  lock-file branches in the branch summary: none
+[release-channel copy] nixpkgs-kubectl follows nixos-25.11 in flake.nix and flake.lock
+  nix:flake.nix nixpkgs packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixpkgs-unstable lockedVersion=2074cc672349f14240fb7ea90d509e0b643e9dd4
+    proposes nothing
+  nix:flake.nix nixpkgs-gleam packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentDigest=8edc0c72e3a38faf5434e40d1f19431125fe4b30
+    proposes digest -> @19cb7128c50d099ae56dbc3e8b6a821b1c382249 in renovate/nixpkgs-gleam-digest
+  nix:flake.nix nixpkgs-kubectl packageName=https://github.com/NixOS/nixpkgs datasource=git-refs versioning=nixpkgs currentValue=nixos-25.11 lockedVersion=f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0
+    proposes major -> nixos-26.05 in renovate/nixpkgs-kubectl-26.x
+-- 6. every pin in flake.nix, and whether an extracted nix dependency carries it
+  NOT extracted  held.erlang                  29.1.2
+  NOT extracted  held.openssl                 3.5.9
+  NOT extracted  held.gleam                   1.19.0
+  NOT extracted  held.rebar3                  3.28.0
+  NOT extracted  held.allium                  3.6.1
+  NOT extracted  held.kwok                    0.8.0
+  NOT extracted  held.kind                    0.33.0
+  NOT extracted  held.kubectlMinor            1.36
+  NOT extracted  allium asset URL             https://github.com/juxt/allium-tools/releases/download/v${held.allium}/allium-${asset.triple}.tar.gz
+  NOT extracted  allium sha256 (x86_64-linux) e00c99ae234b10207719257a70e7c2dcad73060864468cd293fb7ad40524e970
+  NOT extracted  allium sha256 (aarch64-linux) e5ce96393db198b4f7d23ccd2494573e753936cc7b03ca1ecbac3cb20f993ff4
+  NOT extracted  allium sha256 (aarch64-darwin) ecfae02fcf8e60475a014944183158ccde4104f6f0223e1bf91f98519fcb19eb
+  extracted      input nixpkgs                github:NixOS/nixpkgs/nixpkgs-unstable
+  extracted      input nixpkgs-gleam          github:NixOS/nixpkgs/8edc0c72e3a38faf5434e40d1f19431125fe4b30
+  extracted      input nixpkgs-kubectl        github:NixOS/nixpkgs/nixos-26.05
+-- what git-refs reads for nixpkgs now: the default branch and the two channels
+  19cb7128c50d099ae56dbc3e8b6a821b1c382249	HEAD
+  f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0	refs/heads/nixos-26.05
+  2074cc672349f14240fb7ea90d509e0b643e9dd4	refs/heads/nixpkgs-unstable
+-- 4. nix in the Renovate images
+ghcr.io/renovatebot/renovate:44.239.1: no nix on PATH
+ghcr.io/renovatebot/renovate:44.239.1-full: /usr/local/bin/nix
+install-tool nix 2.35.6 in ghcr.io/renovatebot/renovate:44.239.1, no token:
+  [21:59:19.909] INFO (7): Installing tool nix@2.35.6...
+  nix (Nix) 2.35.6
+  [21:59:21.324] INFO (7): Install tool nix succeeded in 1.4s.
+  exit 0
+  nix (Nix) 2.35.6
+-- 5. the lock file update Renovate runs, on the stale copy, in the pinned Nix image
+lockFileMaintenance: nix --extra-experimental-features 'nix-command flakes' flake update
+warning: updating lock file "/flake/flake.lock":
+• Updated input 'nixpkgs':
+    'github:NixOS/nixpkgs/9ac0edc06bfb33e6c0000be79d98ef8d89e26503?narHash=sha256-E0hYoioqUtM2XmPPvYYpJgdADF5AW9oOoPSEiM9dTHQ%3D' (2026-11-1
+  → 'github:NixOS/nixpkgs/2074cc672349f14240fb7ea90d509e0b643e9dd4?narHash=sha256-E0hYoioqUtM2XmPPvYYpJgdADF5AW9oOoPSEiM9dTHQ%3D' (2026-11
+• Updated input 'nixpkgs-kubectl':
+    'github:NixOS/nixpkgs/f7e804372523bedd74d273b173de45c8e02c6d9a?narHash=sha256-qXFIqA6FCcx7XeDzw0ZNlkDT9UiCzrNDwK8RuU8RcHM%3D' (2026-11-1
+  → 'github:NixOS/nixpkgs/f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0?narHash=sha256-qXFIqA6FCcx7XeDzw0ZNlkDT9UiCzrNDwK8RuU8RcHM%3D' (2026-11
+an input update for nixpkgs-kubectl: nix --extra-experimental-features 'nix-command flakes' flake update nixpkgs-kubectl
+warning: updating lock file "/flake/flake.lock":
+• Updated input 'nixpkgs-kubectl':
+    'github:NixOS/nixpkgs/f7e804372523bedd74d273b173de45c8e02c6d9a?narHash=sha256-qXFIqA6FCcx7XeDzw0ZNlkDT9UiCzrNDwK8RuU8RcHM%3D' (2026-11-1
+  → 'github:NixOS/nixpkgs/f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0?narHash=sha256-qXFIqA6FCcx7XeDzw0ZNlkDT9UiCzrNDwK8RuU8RcHM%3D' (2026-11
+the held versions after lock maintenance, by evaluating every group for x86_64-linux:
+  evaluates: the held versions survive the move
+lockFileMaintenance: flake.lock moved
+  nixpkgs          9ac0edc06bfb33e6c0000be79d98ef8d89e26503 -> 2074cc672349f14240fb7ea90d509e0b643e9dd4
+  nixpkgs-gleam    8edc0c72e3a38faf5434e40d1f19431125fe4b30 unchanged
+  nixpkgs-kubectl  f7e804372523bedd74d273b173de45c8e02c6d9a -> f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0
+input update: flake.lock moved
+  nixpkgs          9ac0edc06bfb33e6c0000be79d98ef8d89e26503 unchanged
+  nixpkgs-gleam    8edc0c72e3a38faf5434e40d1f19431125fe4b30 unchanged
+  nixpkgs-kubectl  f7e804372523bedd74d273b173de45c8e02c6d9a -> f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0

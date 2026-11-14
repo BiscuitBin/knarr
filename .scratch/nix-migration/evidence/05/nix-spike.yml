@@ -1,0 +1,167 @@
+# Nix migration ticket 05: a throwaway workflow, run only from the branch
+# spike/nix-ci-05 and deleted with it. Kept in the ticket's evidence as it ran.
+# It measures one installer, cachix/install-nix-action, with two cache arms:
+# "cold" has no store cache and substitutes everything from cache.nixos.org on
+# every run; "cached" restores /nix with nix-community/cache-nix-action. Each
+# run gives a cold number; a cached job is cold on the first run, when it
+# writes its key, and warm on the next. Writing the cache from this branch is a
+# measurement shortcut: the real setup action writes from main only (save:
+# github.ref == 'refs/heads/main', as setup-pixi's cache-write is today).
+name: Nix spike (ticket 05)
+
+on:
+  push:
+    branches: [spike/nix-ci-05]
+
+permissions: {}
+
+concurrency:
+  group: nix-spike-05-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  # Every job runs on ubuntu-24.04 (x86_64-linux); the runner context is not
+  # available at workflow level.
+  KEY_PREFIX: knarr-nix-spike05-x86_64-linux
+  KNARR_CLUSTER: kind
+
+jobs:
+  gate-cold:
+    name: Gate, no store cache
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+        with:
+          # The action writes the job's token into nix.conf by default; the
+          # last access-tokens line wins, so this one leaves Nix tokenless.
+          extra_nix_config: access-tokens =
+          enable_kvm: false
+      - run: sh .scratch/nix-migration/evidence/05/setup.sh default
+      - run: sh .scratch/nix-migration/evidence/05/gate.sh check
+
+  gate-cached:
+    name: Gate, store cache
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+        with:
+          extra_nix_config: access-tokens =
+          enable_kvm: false
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: ${{ env.KEY_PREFIX }}-default-${{ hashFiles('.scratch/nix-migration/evidence/01/flake.nix', '.scratch/nix-migration/evidence/01/flake.lock') }}
+          restore-prefixes-first-match: ${{ env.KEY_PREFIX }}-default-
+          # Measurement shortcut: the real action passes
+          # ${{ github.ref == 'refs/heads/main' }} here.
+          save: true
+      - run: sh .scratch/nix-migration/evidence/05/setup.sh default
+      - run: sh .scratch/nix-migration/evidence/05/gate.sh check
+
+  checkers-cold:
+    name: Checker tests, no store cache
+    runs-on: ubuntu-24.04
+    # The checker-regressions job has 10 minutes for test-checkers-selected;
+    # this runs every group, so it has the gate's 20.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+        with:
+          extra_nix_config: access-tokens =
+          enable_kvm: false
+      - run: sh .scratch/nix-migration/evidence/05/setup.sh default
+      - run: sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+
+  checkers-restore-only:
+    name: Checker tests, store cache restored, never written
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+        with:
+          extra_nix_config: access-tokens =
+          enable_kvm: false
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: ${{ env.KEY_PREFIX }}-default-${{ hashFiles('.scratch/nix-migration/evidence/01/flake.nix', '.scratch/nix-migration/evidence/01/flake.lock') }}
+          restore-prefixes-first-match: ${{ env.KEY_PREFIX }}-default-
+          # How every job off main behaves under the main-only rule.
+          save: false
+      - run: sh .scratch/nix-migration/evidence/05/setup.sh default
+      - run: sh .scratch/nix-migration/evidence/05/gate.sh test-checkers-all
+
+  cluster-cold:
+    name: Cluster shape and amd64 image, no store cache
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+        with:
+          extra_nix_config: access-tokens =
+          enable_kvm: false
+      - run: sh .scratch/nix-migration/evidence/05/setup.sh default cluster
+      - run: sh .scratch/nix-migration/evidence/05/image.sh
+      # Beyond the ticket: kind and kubectl from the cluster group against a
+      # real cluster, which ticket 01 could not run. Never blocks the job.
+      - name: Kind cluster from the cluster group (non-blocking)
+        id: kind
+        continue-on-error: true
+        run: |
+          export PATH="$PWD/.pixi/envs/default/bin:$PATH"
+          start=$(date +%s)
+          just cluster-up
+          just cluster-ready
+          echo "cluster-up and cluster-ready: $(($(date +%s) - start)) seconds"
+          kubectl version
+      - if: always()
+        continue-on-error: true
+        run: PATH="$PWD/.pixi/envs/default/bin:$PATH" just cluster-down
+
+  cluster-cached:
+    name: Cluster shape setup, store cache
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+        with:
+          extra_nix_config: access-tokens =
+          enable_kvm: false
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: ${{ env.KEY_PREFIX }}-cluster-${{ hashFiles('.scratch/nix-migration/evidence/01/flake.nix', '.scratch/nix-migration/evidence/01/flake.lock') }}
+          restore-prefixes-first-match: ${{ env.KEY_PREFIX }}-cluster-
+          save: true
+      - run: sh .scratch/nix-migration/evidence/05/setup.sh default cluster
