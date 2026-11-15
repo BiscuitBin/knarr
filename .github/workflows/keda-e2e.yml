@@ -47,8 +47,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          cluster: "true"
       - run: just cluster-up
       - run: just image-build
       - run: just image-check

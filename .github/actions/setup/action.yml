@@ -1,31 +1,21 @@
 name: Set up repository tools
-description: Install the locked pixi environment and initialize repository dependencies
-inputs:
-  cluster:
-    description: Install the optional cluster environment
-    default: "false"
-    required: false
-  audit:
-    description: Install the optional audit environment (grype)
-    default: "false"
-    required: false
+description: Install Nix and the tool environment flake.lock pins, then initialize repository dependencies
 runs:
   using: composite
   steps:
-    - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+    - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+    # The Nix store, keyed on what decides it. Every run may restore it; only
+    # main saves, so a pull request cannot put a store path in main's cache.
+    # Without a hit, the tools come from cache.nixos.org instead.
+    - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
       with:
-        pixi-version: v0.81.0
-        locked: true
-        # setup-pixi appends the platform and SHA-256 of pixi.lock to this key.
-        cache-key: knarr-pixi-v0.81.0-
-        cache: true
-        cache-write: ${{ github.ref == 'refs/heads/main' }}
-        activate-environment: true
-    - run: just initialize
+        primary-key: knarr-nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'nix/**') }}
+        restore-prefixes-first-match: knarr-nix-${{ runner.os }}-${{ runner.arch }}-
+        save: ${{ github.ref == 'refs/heads/main' }}
+    # The script, not the recipe: no `just` is on PATH until it has run.
+    - run: sh scripts/initialize.sh
       shell: bash
-    - if: inputs.cluster == 'true'
-      run: just cluster-install
+    - run: echo "$GITHUB_WORKSPACE/.nix/tools/bin" >> "$GITHUB_PATH"
       shell: bash
-    - if: inputs.audit == 'true'
-      run: just audit-install
+    - run: just tool-versions
       shell: bash

@@ -7,6 +7,7 @@ Knarr is a Kubernetes controller, written in Gleam on the BEAM, that biases Depl
 - `src/`, `test/`: the Gleam controller and its tests.
 - `docs/`: the handbook, governed by [the documentation contract](docs/reference/documentation-contract.md). `docs/decisions/` records choices already made; `docs/OVERVIEW.md` is direction, not specification.
 - `docs/specs/`: the Allium specifications. They decide behaviour.
+- `flake.nix`, `flake.lock`, `nix/`: the Nix flake that pins every tool and decides what both images hold ([Decision 0017](docs/decisions/0017-nix-tool-manager.md)). Nix reads only files Git tracks, so stage a new file under `nix/` before building.
 - `scripts/checks/`: the gate checkers, configured by `checks.toml`; their tests sit beside them.
 - `fixtures/`: test fixtures built outside knarr's shipment. `fixtures/fake_worker/` is the worker image tests on kind run against (ticket 29), its own Gleam project with its own `just fake-worker-*` recipes.
 - `.scratch/bootstrap/`: the bootstrap tickets and the evidence the decision records cite. Tracked on purpose.
@@ -23,7 +24,7 @@ These hold everywhere. Breaking one is a defect, not a trade-off.
 
 - **Gleam and OTP.** Effects sit behind sans-IO boundaries: decision logic takes values and returns decisions, and HTTP, Kubernetes, clocks and scheduling live in adapters around it ([Decision 0002](docs/decisions/0002-sans-io-boundaries.md)). FFI is confined to named `*_ffi.erl` modules. Every process is supervised. Warnings are errors.
 - **Controller.** knarr writes only the annotations it owns, on live Pod objects. It never changes replica counts, never touches a Deployment's pod template, and stops patching a pod once `deletionTimestamp` is set.
-- **Authorization.** Anything that leaves the worktree needs explicit authorization for each action: pushing, `gh`, registries, any non-local cluster, and the network, which `just initialize`, `just links-audit`, `just hex-audit`, `just image-scan`, `just runtime-scan`, `just audit-install`, `just observability-up` and `gleam deps download` reach. Approval for one action is not approval for the next.
+- **Authorization.** Anything that leaves the worktree needs explicit authorization for each action: pushing, `gh`, registries, any non-local cluster, and the network, which `just initialize`, `just links-audit`, `just hex-audit`, `just image-build`, `just image-scan`, `just runtime-scan`, `just observability-up`, `gleam deps download` and any `nix` command that builds or updates reach. Approval for one action is not approval for the next.
 - **Scratch.** Temporary work goes in `ai_tmp/`, never in a commit.
 - **Worktrees.** One ticket per worktree, on the branch named after the ticket file without `.md` (`09-agent-contract`). Never install hooks from a worktree: linked worktrees share `.git/hooks`, and `just initialize` skips that step there on its own.
 

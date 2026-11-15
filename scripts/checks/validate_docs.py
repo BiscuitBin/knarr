@@ -101,13 +101,15 @@ def _documents(texts: dict[Path, str], errors: list[str]) -> dict[Path, _Documen
     rendered = {}
     if markdown:
         checker = Path(__file__).resolve()
-        tools = checker.parents[2] / ".pixi/envs/default/bin"
+        tools = checker.parents[2] / ".nix/tools"
         try:
             result = subprocess.run(
                 [
-                    str(tools / "node"),
+                    str(tools / "bin/node"),
                     str(checker.with_name("render_markdown.mjs")),
-                    str(tools / "markdownlint-cli2"),
+                    # Node resolves markdown-it from the real location of this
+                    # package, which is where markdownlint-cli2 keeps its own.
+                    str(tools / "lib/node_modules/markdownlint-cli2/package.json"),
                 ],
                 input=json.dumps(markdown),
                 capture_output=True,

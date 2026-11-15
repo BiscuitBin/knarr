@@ -1,12 +1,15 @@
 set positional-arguments := true
 set shell := ["sh", "-eu", "-c"]
 
-# Recipes reach every tool through PATH, never `pixi run` (Decision 0003): on a
-# stale lock `pixi run` re-solves and rewrites pixi.lock. The default
-# environment comes first, so gleam and the shared tools always resolve from
-# it; the cluster and audit environments' tools resolve only once each is
-# installed; then the checksum-pinned downloads from tools.txt.
-export PATH := justfile_directory() / ".pixi" / "envs" / "default" / "bin" + ":" + justfile_directory() / ".pixi" / "envs" / "cluster" / "bin" + ":" + justfile_directory() / ".pixi" / "envs" / "audit" / "bin" + ":" + justfile_directory() / ".tools" / "bin" + ":" + env("PATH")
+# Recipes reach every tool through PATH, from the .nix/tools out-link `just
+# initialize` builds, never through `nix develop` or `nix run` (Decision 0017):
+# on a stale lock those rewrite flake.lock. The environment comes first, so
+# gleam and every other tool resolve from it and not from the host.
+export PATH := justfile_directory() / ".nix" / "tools" / "bin" + ":" + env("PATH")
+
+# Every nix call a recipe makes: flakes enabled whatever the host's nix.conf
+# says. Each adds --no-update-lock-file, so none can rewrite flake.lock.
+nix := "nix --extra-experimental-features 'nix-command flakes'"
 
 # Python would otherwise write __pycache__/ beside the checkers it runs.
 export PYTHONDONTWRITEBYTECODE := "1"
@@ -28,13 +31,24 @@ default:
 
 # ------------------------------------------------------------------ setup ---
 
-# The one first-run command; it needs network, as does links-audit: the pixi
-# environment, the tools.txt downloads, and Gleam's hex packages. Hooks install
-# from the primary checkout only. Never stages, commits or pushes.
+# The one first-run command; it needs network, as does links-audit: the tool
+# environment flake.lock pins, and Gleam's hex packages. Hooks install from the
+# primary checkout only. Never stages, commits or pushes.
 [group('setup')]
-[doc('First run (needs network): pixi environment, tools.txt downloads, hex packages, hooks')]
+[doc('First run (needs network): the Nix tool environment, hex packages, hooks')]
 initialize:
     sh scripts/initialize.sh
+
+# A flake.lock diff names a nixpkgs revision and no tool, so this is how a pin
+# move is read: run it before and after `just initialize`.
+[group('setup')]
+[doc('Print the version of every pinned tool in the installed environment')]
+tool-versions: tools-present
+    python3 -m json.tool .nix/tools/share/knarr/pins.json
+
+[private]
+tools-present:
+    test -x .nix/tools/bin/python3 || { printf '%s\n' 'the Nix tool environment is missing; run just initialize' >&2; exit 2; }
 
 # ---------------------------------------------------------------- develop ---
 
@@ -160,18 +174,21 @@ fix:
 
 # ------------------------------------------------------------------ check ---
 
-# --dry-run, because plain `pixi lock --check` rewrites a stale lock even as it
-# fails; --offline, because the gate never fetches (Decision 0003).
+# --no-update-lock-file, because every other nix command rewrites a stale lock
+# as it runs; --offline, because the gate never fetches (Decision 0017). The
+# second command evaluates every output for every system without building
+# any, so a Linux run still proves the macOS tools and both images evaluate.
 [group('check')]
-[doc('Fail if pixi.lock disagrees with pixi.toml, without rewriting it')]
+[doc('Fail if flake.lock disagrees with flake.nix or an output does not evaluate, without rewriting it')]
 lock-check:
-    pixi lock --check --offline --dry-run
+    {{ nix }} flake metadata --no-update-lock-file --offline . > /dev/null
+    {{ nix }} flake check --no-build --all-systems --no-update-lock-file --offline
 
-# lock-check reads pixi.lock and pixi.toml only. After a pull that moves a pin
-# the old binaries stay on PATH until `just initialize` reruns, so this fails
-# while the installed default environment or .tools/bin differs from the pins.
+# lock-check reads flake.nix and flake.lock only. After a pull that moves a pin
+# the old tools stay on PATH until `just initialize` reruns, so this fails
+# while .nix/tools is not the environment the flake now evaluates to.
 [group('check')]
-[doc('Fail if the installed tools differ from pixi.lock or tools.txt')]
+[doc('Fail if the installed tools differ from what flake.lock pins')]
 env-check:
     python3 scripts/checks/env_check.py
 
@@ -200,7 +217,7 @@ agents-check:
 [group('audit')]
 [doc('Check Markdown and HTML links online (separate from the offline gate)')]
 links-audit:
-    lychee --no-progress --include-fragments --hidden --extensions md,html,htm --exclude-path '(^|/)(\.git|\.pixi|\.tools|build|ai_tmp)/' .
+    lychee --no-progress --include-fragments --hidden --extensions md,html,htm --exclude-path '(^|/)(\.git|\.nix|build|ai_tmp)/' .
 
 # OSV.dev's answer changes without a commit, so this runs in the audit
 # workflow, never in the gate (Decision 0014).
@@ -210,26 +227,23 @@ hex-audit:
     python3 scripts/checks/hex_audit.py
 
 # Fails on a high or critical vulnerability that has a fix. grype downloads its
-# vulnerability database on first use. It reads the image's OS packages only,
-# not the conda records of the runtime environment the image ships; just
-# runtime-scan reads those (Decision 0014, ticket 45).
+# vulnerability database on first use. An image has no OS package database
+# (Decision 0017), so this is grype's reading of the image as a whole; just
+# runtime-scan reads the Nix store the image ships and refuses a scan that
+# catalogued nothing (Decision 0014, ticket 45).
 [group('audit')]
-[doc('Scan the OS packages of an image for fixable high and critical vulnerabilities with grype (needs network)')]
-image-scan image=cluster_image: audit-tools
+[doc('Scan an image for fixable high and critical vulnerabilities with grype (needs network)')]
+image-scan image=cluster_image: tools-present
     grype "$1" --only-fixed --fail-on high
 
-# grype catalogues conda records in a directory, never in an image, so this
-# copies the runtime environment out of the image into build/runtime-scan and
-# scans the copy with image-scan's thresholds. Exit 2 is a finding; exit 1,
-# including a scan that catalogued no conda package, cannot decide (ticket 45).
+# This copies the Nix store out of the image into build/runtime-scan and scans
+# the copy as a directory with image-scan's thresholds. Exit 2 is a finding;
+# exit 1, including a scan that catalogued no store package, cannot decide
+# (ticket 45).
 [group('audit')]
-[doc('Scan the conda runtime environment an image ships for fixable high and critical vulnerabilities with grype (needs network)')]
-runtime-scan image=cluster_image: audit-tools
+[doc('Scan the Nix store an image ships for fixable high and critical vulnerabilities with grype (needs network)')]
+runtime-scan image=cluster_image: tools-present
     python3 scripts/checks/runtime_scan.py "$1"
-
-[private]
-audit-tools:
-    test -x .pixi/envs/audit/bin/grype || { echo 'run just audit-install' >&2; exit 2; }
 
 [group('check')]
 [doc('Fail on unformatted Gleam')]
@@ -301,7 +315,7 @@ check-clean baseline="":
 [group('check')]
 [doc('The complete read-only gate')]
 check:
-    test -x .pixi/envs/default/bin/python3 || { printf '%s\n' 'the pixi environment is missing; run just initialize' >&2; exit 2; }
+    test -x .nix/tools/bin/python3 || { printf '%s\n' 'the Nix tool environment is missing; run just initialize' >&2; exit 2; }
     python3 scripts/checks/run_project_check.py run lock-check env-check manifest-check docs-check agents-check check-specs analyse-specs format-check lint-gleam test snapshots-check fake-worker-lint fake-worker-test test-checkers packaging-check chart-check toml-check lint
 
 # --------------------------------------------------------------- cluster ---
@@ -313,23 +327,19 @@ cluster_image := "knarr:" + `sh scripts/cluster-name.sh . name`
 # release workflow sets its own platform.
 image_platform := if arch() == "aarch64" { "linux/arm64" } else { "linux/amd64" }
 
-[private]
-cluster-tools:
-    test -x .pixi/envs/cluster/bin/kind || { echo 'run pixi install --locked -e cluster' >&2; exit 2; }
-
 [group('cluster')]
 [doc('Create or reuse this worktree cluster (may download images)')]
-cluster-up: cluster-tools
+cluster-up: tools-present
     python3 scripts/checks/cluster.py up "{{ justfile_directory() }}"
 
 [group('cluster')]
 [doc('Delete this worktree cluster and its local state')]
-cluster-down: cluster-tools
+cluster-down: tools-present
     python3 scripts/checks/cluster.py down "{{ justfile_directory() }}"
 
 [group('cluster')]
 [doc('Wait for this worktree cluster node and default ServiceAccount')]
-cluster-ready: cluster-tools
+cluster-ready: tools-present
     python3 scripts/checks/cluster.py ready "{{ justfile_directory() }}"
 
 [group('cluster')]
@@ -339,7 +349,7 @@ image-build image=cluster_image platform=image_platform:
 
 [group('cluster')]
 [doc('Load a local image into this worktree kind cluster')]
-image-load image=cluster_image: cluster-tools
+image-load image=cluster_image: tools-present
     python3 scripts/checks/cluster.py image-load "{{ justfile_directory() }}" "$1"
 
 # Installs charts/knarr as release knarr with `helm upgrade --install --wait`.
@@ -348,28 +358,18 @@ image-load image=cluster_image: cluster-tools
 # the chart's render and applies it without waiting (helm-chart ticket 03).
 [group('cluster')]
 [doc('Load the knarr image and install the chart, or a variant, on this worktree kind cluster')]
-deploy image=cluster_image variant="base": cluster-tools
+deploy image=cluster_image variant="base": tools-present
     python3 scripts/checks/cluster.py deploy "{{ justfile_directory() }}" "$1" "$2"
 
 [group('cluster')]
 [doc('Check all three endpoints through a temporary loopback port forward')]
-smoke: cluster-tools
+smoke: tools-present
     python3 scripts/checks/cluster.py smoke "{{ justfile_directory() }}"
 
 [group('cluster')]
 [doc('Print this worktree cluster pods, events and application logs')]
-cluster-diagnostics: cluster-tools
+cluster-diagnostics: tools-present
     python3 scripts/checks/cluster.py diagnostics "{{ justfile_directory() }}"
-
-[group('setup')]
-[doc('Install the locked optional cluster environment (needs network)')]
-cluster-install:
-    pixi install --locked -e cluster
-
-[group('setup')]
-[doc('Install the locked optional audit environment, grype (needs network)')]
-audit-install:
-    pixi install --locked -e audit
 
 [group('cluster')]
 [doc('Verify image OTP ownership and restricted runtime startup')]
@@ -405,12 +405,12 @@ fake-worker-image-check image=fake_worker_image:
 
 [group('cluster')]
 [doc('Load and deploy four fake workers and their collector to this worktree kind cluster')]
-fake-worker-deploy image=fake_worker_image: cluster-tools
+fake-worker-deploy image=fake_worker_image: tools-present
     python3 scripts/checks/cluster.py fake-worker-deploy "{{ justfile_directory() }}" "$1"
 
 [group('cluster')]
 [doc('Set mixed states through control, read them back from status, and find kill records')]
-fake-worker-smoke: cluster-tools
+fake-worker-smoke: tools-present
     python3 scripts/checks/cluster.py fake-worker-smoke "{{ justfile_directory() }}"
 
 # Ticket 33's KEDA end-to-end harness: the three §3 success criteria in one run
@@ -420,7 +420,7 @@ fake-worker-smoke: cluster-tools
 # (docs/reference/keda-e2e.md). Its records land under build/keda-e2e/.
 [group('cluster')]
 [doc('Count busy kills under KEDA scale-in with and without knarr, then judge the restart and patch-rate thresholds (needs network)')]
-keda-e2e rounds="3" seed="33": cluster-tools
+keda-e2e rounds="3" seed="33": tools-present
     python3 scripts/checks/keda_e2e.py "{{ justfile_directory() }}" "$1" "$2"
 
 # Ticket 51's opt-in local Prometheus and Grafana, in the observability
@@ -430,23 +430,23 @@ keda-e2e rounds="3" seed="33": cluster-tools
 # (docs/how-to/local-observability.md).
 [group('cluster')]
 [doc('Install the local Prometheus and Grafana, with their images pinned by digest (needs network)')]
-observability-up: cluster-tools
+observability-up: tools-present
     python3 scripts/checks/observability.py observability-up "{{ justfile_directory() }}"
 
 [group('cluster')]
 [doc('Delete the local Prometheus and Grafana and the scrape RBAC they put in default')]
-observability-down: cluster-tools
+observability-down: tools-present
     python3 scripts/checks/observability.py observability-down "{{ justfile_directory() }}"
 
 [group('cluster')]
 [doc('Check that Prometheus scrapes knarr and kube-state-metrics and that Grafana serves the dashboard')]
-observability-smoke: cluster-tools
+observability-smoke: tools-present
     python3 scripts/checks/observability.py observability-smoke "{{ justfile_directory() }}"
 
 # Port 0 lets the OS choose, since worktree clusters run side by side.
 [group('cluster')]
 [doc('Forward Grafana to a loopback port and print its URL, until Ctrl-C')]
-grafana port="0": cluster-tools
+grafana port="0": tools-present
     python3 scripts/checks/observability.py grafana "{{ justfile_directory() }}" "$1"
 
 # ---------------------------------------------------------------- release ---

@@ -8,6 +8,7 @@ audit fails closed, so anything it cannot read is exit 2, never a pass.
 from __future__ import annotations
 
 import http.client
+import json
 import urllib.error
 from pathlib import Path
 
@@ -30,13 +31,13 @@ mist = { version = ">= 6.0.3 and < 7.0.0" }
 """
 # editorconfig-checker-enable
 
-PIXI_TOML = """\
-[dependencies]
-gleam = "==1.19.0"
 
-[feature.otp.dependencies]
-erlang = "==29.1.1"
-"""
+def write_pins(project: Path, otp: str | None) -> None:
+    """The version record the Nix tool environment carries, with this OTP."""
+    record = project / ".nix/tools/share/knarr/pins.json"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps({"gleam": "1.19.2"} | ({} if otp is None else {"otp": otp})))
+
 
 SUBJECTS = [
     hex_audit.Subject("Hex", "hpack_erl", "0.3.0"),
@@ -65,7 +66,7 @@ CONTROL_ANSWER = {
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
     (tmp_path / "manifest.toml").write_text(MANIFEST)
-    (tmp_path / "pixi.toml").write_text(PIXI_TOML)
+    write_pins(tmp_path, "29.1.1")
     return tmp_path
 
 
@@ -88,14 +89,23 @@ def test_a_manifest_it_cannot_read_cannot_be_audited(manifest: str) -> None:
         hex_audit.hex_packages(manifest)
 
 
-def test_the_otp_release_is_the_exact_erlang_pin() -> None:
-    assert hex_audit.otp_release(PIXI_TOML) == "29.1.1"
+def test_the_otp_release_is_the_one_the_tool_environment_was_built_with(project: Path) -> None:
+    assert hex_audit.otp_release(project) == "29.1.1"
 
 
-@pytest.mark.parametrize("pin", ['">=29.1.1"', '"29.1.*"', '"==29.1.1,<30"'])
-def test_an_erlang_pin_that_is_not_exact_cannot_be_audited(pin: str) -> None:
-    with pytest.raises(hex_audit.CannotDecideError, match="erlang"):
-        hex_audit.otp_release(PIXI_TOML.replace('"==29.1.1"', pin))
+@pytest.mark.parametrize("otp", ["29.1.1-rc1", "unknown", "", None])
+def test_an_otp_version_that_is_not_a_release_cannot_be_audited(
+    project: Path, otp: str | None
+) -> None:
+    write_pins(project, otp)
+    with pytest.raises(hex_audit.CannotDecideError, match=r"(?i)otp"):
+        hex_audit.otp_release(project)
+
+
+def test_a_checkout_without_the_tool_environment_cannot_be_audited(tmp_path: Path) -> None:
+    (tmp_path / "manifest.toml").write_text(MANIFEST)
+    with pytest.raises(hex_audit.CannotDecideError, match="run just initialize"):
+        hex_audit.subjects(tmp_path)
 
 
 def test_the_query_asks_for_each_hex_release_and_the_otp_tag() -> None:
@@ -142,7 +152,9 @@ def test_an_answer_it_cannot_read_is_never_a_pass(answer: object) -> None:
 
 
 def _tree(directory: Path) -> dict[str, bytes]:
-    return {str(p.relative_to(directory)): p.read_bytes() for p in directory.rglob("*")}
+    return {
+        str(p.relative_to(directory)): p.read_bytes() for p in directory.rglob("*") if p.is_file()
+    }
 
 
 def run(project: Path, post: object, capsys: pytest.CaptureFixture[str]) -> tuple[int, str, str]:

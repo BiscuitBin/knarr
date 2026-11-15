@@ -23,7 +23,7 @@ worktree=${1:?usage: cleanup-kind.sh <worktree> <work-dir>}
 work=${2:?usage: cleanup-kind.sh <worktree> <work-dir>}
 mkdir -p "$work/scrapes"
 cd "$worktree"
-PATH="$worktree/.pixi/envs/default/bin:$worktree/.pixi/envs/cluster/bin:$worktree/.tools/bin:$PATH"
+PATH="$worktree/.nix/tools/bin:$PATH"
 export PATH
 KUBECONFIG=$worktree/.cluster/kubeconfig; export KUBECONFIG
 printf 'date: %s\nhost: %s\ncommit: %s\n' "$(date -u +%Y-%m-%dT%H:%MZ)" "$(uname -sm)" "$(git rev-parse --short HEAD)"

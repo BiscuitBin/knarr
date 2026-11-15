@@ -31,7 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
   # OSV.dev's advisories for the hex packages manifest.toml locks and for the
-  # OTP release pixi.toml pins (Decision 0014).
+  # OTP release flake.lock pins (Decisions 0014 and 0017).
   hex-advisories:
     name: Hex advisories
     runs-on: ubuntu-24.04
@@ -46,10 +46,10 @@ jobs:
       - run: just hex-audit
 
   # grype over the image the Dockerfile builds, the same linux/amd64 build the
-  # kind smoke job runs. It never pushes the image. The image scan reads the
-  # image's OS packages only, so a second scan copies the runtime environment
-  # out of the image and reads its conda packages as a directory: erlang, its
-  # openssl and zlib (Decision 0014, ticket 45).
+  # kind smoke job runs. It never pushes the image. The image has no OS
+  # package database, so a second scan copies the Nix store out of the image
+  # and reads its packages as a directory, refusing a scan that catalogued
+  # none: erlang, its openssl and zlib (Decisions 0014 and 0017, ticket 45).
   image-scan:
     name: Image scan
     runs-on: ubuntu-24.04
@@ -61,11 +61,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          audit: "true"
       - id: build
         run: just image-build
       - run: just image-scan
-      # Runs after a red OS-package scan too, but not without an image.
+      # Runs after a red image scan too, but not without an image.
       - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: just runtime-scan

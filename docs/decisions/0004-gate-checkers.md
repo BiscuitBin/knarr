@@ -8,6 +8,8 @@ requires: []
 
 # Decision 0004: Gate checkers
 
+Amended by [Decision 0017](0017-nix-tool-manager.md): the checkers' Python, pytest and ruff, and the Node and markdown-it the docs validator borrows from markdownlint-cli2, now come from the Nix tool environment behind `.nix/tools`, where this record says pixi. Allium, ripsecrets and editorconfig-checker come from it too, where this record says `.tools/bin` and `tools.txt`. `run_allium.py` checks the binary against the version `nix/allium.nix` pins, read from the environment's version record. The choice of checkers and the snapshot contract are unchanged.
+
 Adapted on 2026-10-07 from libpawdoku's [Decision 0004: Hook runner and checkers](https://github.com/steven-cutting/libpawdoku/blob/51d8b55ac4f769a6a4d66abacb9642a7d4062127/docs/decisions/0004-hook-runner-and-checkers.md) at commit `51d8b55`. There the checkers came from the `biscuit-games-tooling` package, pinned as a git dependency. Here that pin is reversed: knarr copies what it keeps, and depends on no package.
 
 ## Context

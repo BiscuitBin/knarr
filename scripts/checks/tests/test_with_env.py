@@ -1,7 +1,7 @@
 """scripts/with-env.sh, which every prek hook entry runs through.
 
-Git runs hooks without the Justfile's PATH. Without the pixi environment every
-tool would resolve to an unpinned system copy, so the wrapper refuses instead.
+Git runs hooks without the Justfile's PATH. Without the Nix tool environment
+every tool would resolve to an unpinned system copy, so the wrapper refuses instead.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ def checkout(tmp_path: Path, *, initialized: bool) -> Path:
     (root / "scripts").mkdir(parents=True)
     shutil.copy(WRAPPER, root / "scripts" / "with-env.sh")
     if initialized:
-        bin_dir = root / ".pixi" / "envs" / "default" / "bin"
+        bin_dir = root / ".nix" / "tools" / "bin"
         bin_dir.mkdir(parents=True)
         (bin_dir / "python3").write_text("#!/bin/sh\n")
         (bin_dir / "python3").chmod(0o755)

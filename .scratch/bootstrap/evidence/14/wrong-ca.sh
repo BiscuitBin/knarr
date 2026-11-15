@@ -15,7 +15,7 @@ worktree=${1:?usage: wrong-ca.sh <worktree> <work-dir>}
 work=${2:?usage: wrong-ca.sh <worktree> <work-dir>}
 mkdir -p "$work"
 cd "$worktree"
-PATH="$worktree/.pixi/envs/default/bin:$worktree/.pixi/envs/cluster/bin:$worktree/.tools/bin:$PATH"
+PATH="$worktree/.nix/tools/bin:$PATH"
 export PATH
 KNARR_CLUSTER=kind; export KNARR_CLUSTER
 KUBECONFIG=$worktree/.cluster/kubeconfig; export KUBECONFIG

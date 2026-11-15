@@ -8,6 +8,8 @@ requires: []
 
 # Decision 0012: Release and packaging
 
+Amended by [Decision 0017](0017-nix-tool-manager.md): the image the release builds is no longer Ubuntu with a conda environment. The Dockerfile's build stage runs `nix build` on a root filesystem the flake defines, and the image is that filesystem copied into `FROM scratch`. The release workflow's `docker buildx build`, its tags, labels, digest and attestations are unchanged. Where this record says an arm64 image waits on `linux-aarch64` entries in `pixi.lock`, the flake already evaluates for `aarch64-linux`, so what remains of that work is the second runner job and the merged index.
+
 ## Context
 
 The MVP bar is a real production workload on GKE Standard (OVERVIEW §1), so the image has to be published somewhere GKE can pull from, and §9.15 left deployment packaging open: kustomize, Helm or both, plus a namespaced Role. The walking skeleton ([ticket 13](../../.scratch/bootstrap/issues/13-walking-skeleton.md)) left a kustomize base under `deploy/base/` that runs `knarr:local` with `imagePullPolicy: Never` on kind, a CI that builds the image and never pushes it, no tag, no changelog, and `version = "0.1.0"` in `gleam.toml`.

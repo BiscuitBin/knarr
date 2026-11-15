@@ -17,7 +17,7 @@ import pytest
 from conftest import REPOSITORY
 
 RENOVATE = REPOSITORY / ".github" / "renovate.json"
-DOCKERFILE = REPOSITORY / "Dockerfile"
+DOCKERFILES = ("Dockerfile", "fixtures/fake_worker/Dockerfile")
 FROM = re.compile(r"^FROM (?P<image>\S+?):(?P<tag>[^\s@]+)@sha256:[0-9a-f]{64}(?: AS \w+)?$")
 WORKFLOWS = sorted(
     [
@@ -30,10 +30,16 @@ WORKFLOWS = sorted(
 PINNED_ACTION = re.compile(r"[\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d+(?:\.\d+)*")
 
 
-def test_every_base_image_is_pinned_by_digest() -> None:
-    lines = [line for line in DOCKERFILE.read_text().splitlines() if line.startswith("FROM ")]
-    assert len(lines) == 2
-    assert [line for line in lines if not FROM.match(line)] == []
+@pytest.mark.parametrize("dockerfile", DOCKERFILES)
+def test_the_only_image_a_build_pulls_is_pinned_by_digest(dockerfile: str) -> None:
+    # The build stage is the pinned Nix; the image itself starts from nothing
+    # and holds only what the flake builds (Decision 0017).
+    lines = (REPOSITORY / dockerfile).read_text().splitlines()
+    build, runtime = [line for line in lines if line.startswith("FROM ")]
+    pinned = FROM.match(build)
+    assert pinned is not None, build
+    assert pinned["image"] == "nixos/nix"
+    assert runtime == "FROM scratch AS runtime"
 
 
 def unpinned_actions(text: str) -> list[str]:
@@ -66,8 +72,8 @@ def unpinned_actions(text: str) -> list[str]:
             ["actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"],
         ),
         (
-            "    - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # main\n",
-            ["prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # main"],
+            "    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # main\n",
+            ["actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # main"],
         ),
     ],
 )
@@ -153,61 +159,52 @@ def test_every_image_in_the_cluster_adapter_is_matched() -> None:
     } == pinned
 
 
-# Where the pixi version is written, and the one value each place holds.
-PIXI_SITES = {
-    "pixi.toml": r'^requires-pixi = ">=(\S+)"$',
-    ".github/actions/setup/action.yml": r"^\s+pixi-version: v(\S+)$",
-    ".github/actions/setup/action.yml cache": r"^\s+cache-key: knarr-pixi-v(\S+?)-$",
-    "Dockerfile": r"^FROM ghcr\.io/prefix-dev/pixi:([^\s@]+)@",
-    "CONTRIBUTING.md": r"\[pixi\]\(https://pixi\.sh\) (\S+) or later",
-}
-
-
-def pixi_versions() -> dict[str, str]:
-    versions = {}
-    for site, pattern in PIXI_SITES.items():
-        found = re.findall(pattern, (REPOSITORY / site.split()[0]).read_text(), re.MULTILINE)
-        assert len(found) == 1, (site, found)
-        versions[site] = found[0]
-    return versions
-
-
-def test_the_pixi_version_agrees_everywhere_it_is_written() -> None:
-    versions = pixi_versions()
-    floor = tomllib.loads((REPOSITORY / "pixi.toml").read_text())["workspace"]["requires-pixi"]
-    assert floor == f">={versions['pixi.toml']}"
-    assert len(set(versions.values())) == 1, versions
-
-
-@pytest.mark.parametrize(
-    ("path", "sites"),
-    [("pixi.toml", 1), (".github/actions/setup/action.yml", 2), ("CONTRIBUTING.md", 1)],
-)
-def test_every_pixi_version_but_the_build_stage_is_read_against_the_image_tags(
-    path: str, sites: int
-) -> None:
-    # The Dockerfile's FROM has the dockerfile manager. The floor, the cache key
-    # and the contributing guide have no manager of their own, and setup-pixi's input is
-    # read here too, because its native reading proposes nothing (renovate.txt).
-    version = next(iter(set(pixi_versions().values())))
-    assert (
-        dependencies(path)
-        == [
-            {"depName": "ghcr.io/prefix-dev/pixi", "datasource": "docker", "currentValue": version}
-        ]
-        * sites
+def test_the_flake_has_one_input_and_the_lock_pins_it_by_hash() -> None:
+    # One nixpkgs revision owns every tool's version (Decision 0017). A second
+    # input would be a second owner, and an unhashed one no pin at all.
+    lock = json.loads((REPOSITORY / "flake.lock").read_text())
+    assert set(lock["nodes"]) == {"root", "nixpkgs"}
+    assert lock["nodes"]["root"]["inputs"] == {"nixpkgs": "nixpkgs"}
+    locked = lock["nodes"]["nixpkgs"]["locked"]
+    assert re.fullmatch(r"sha256-[A-Za-z0-9+/]{43}=", locked["narHash"]), locked
+    assert re.fullmatch(r"[0-9a-f]{40}", locked["rev"]), locked
+    assert lock["nodes"]["nixpkgs"]["original"]["url"] == (
+        "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"
     )
 
 
-def test_setup_pixis_native_reading_of_the_pixi_version_is_off() -> None:
-    native = {
-        "manager": "github-actions",
-        "packageName": "prefix-dev/pixi",
-        "packageFile": ".github/actions/setup/action.yml",
-        "depType": "uses-with",
-        "datasource": "github-releases",
-    }
-    assert effective(native).get("enabled") is False
+def test_renovate_reads_the_flake() -> None:
+    assert "nix" in config()["enabledManagers"]
+    assert config()["lockFileMaintenance"] == {"enabled": True}
+
+
+def versions(path: str, pattern: str) -> list[tuple[int, ...]]:
+    found = re.findall(pattern, (REPOSITORY / path).read_text(), re.MULTILINE)
+    return [tuple(int(part) for part in version.split(".")) for version in found]
+
+
+def test_kubectl_stays_within_one_minor_of_the_clusters_it_talks_to() -> None:
+    # kubectl supports an API server one minor either side of its own, and
+    # nothing but this holds nix/kubectl.nix to the node images in cluster.py.
+    ((major, minor, _),) = versions("nix/kubectl.nix", r'^  version = "(\d+\.\d+\.\d+)";$')
+    servers = versions(
+        "scripts/checks/cluster.py",
+        r'"(?:kindest/node|registry\.k8s\.io/kube-apiserver):v([\d.]+)@',
+    )
+    assert len(servers) == 2
+    for server in servers:
+        assert server[0] == major
+        assert abs(server[1] - minor) <= 1, (server, (major, minor))
+
+
+def test_kwokctl_is_the_release_its_controller_image_comes_from() -> None:
+    # kwokctl comes with the nixpkgs pin and the controller image is pinned in
+    # cluster.py; a nixpkgs update that moves one must move the other by hand.
+    ((image,),) = [
+        versions("scripts/checks/cluster.py", r'"registry\.k8s\.io/kwok/kwok:v([\d.]+)@')
+    ]
+    pins = json.loads((REPOSITORY / ".nix/tools/share/knarr/pins.json").read_text())
+    assert tuple(int(part) for part in pins["kwokctl"].split(".")) == image
 
 
 def test_the_dev_dependencies_use_the_spelling_renovate_reads() -> None:
@@ -255,9 +252,6 @@ def test_every_rule_and_custom_manager_says_why() -> None:
 
 
 LOCAL_CLUSTER = [
-    {"manager": "pixi", "packageName": name, "packageFile": "pixi.toml", "datasource": "conda"}
-    for name in ("kubernetes-kind", "kubernetes-client", "kustomize", "kubernetes-helm")
-] + [
     {
         "manager": "custom.regex",
         "packageName": d["depName"],
@@ -266,43 +260,28 @@ LOCAL_CLUSTER = [
     }
     for d in dependencies("scripts/checks/cluster.py")
 ]
-PIXI = [
+NIX = [
     {
-        "manager": "dockerfile",
-        "packageName": "ghcr.io/prefix-dev/pixi",
-        "packageFile": "Dockerfile",
-        "depType": "stage",
-        "datasource": "docker",
+        "manager": "nix",
+        "packageName": "nixpkgs",
+        "packageFile": "flake.nix",
+        "datasource": "git-refs",
     },
-] + [
-    {
-        "manager": "custom.regex",
-        "packageName": "ghcr.io/prefix-dev/pixi",
-        "packageFile": path,
-        "datasource": "docker",
-    }
-    for path in ("pixi.toml", ".github/actions/setup/action.yml", "CONTRIBUTING.md")
 ]
-CONDA = {
-    "manager": "pixi",
-    "packageName": "erlang",
-    "packageFile": "pixi.toml",
-    "depType": "feature-otp",
-    "datasource": "conda",
-}
 
 
 @pytest.mark.parametrize(
     ("dependencies_", "group"),
-    [(LOCAL_CLUSTER, "local cluster"), (PIXI, "pixi"), ([CONDA], None)],
-    ids=["local cluster", "pixi", "conda"],
+    [(LOCAL_CLUSTER, "local cluster"), (NIX, "nix")],
+    ids=["local cluster", "nix"],
 )
 def test_what_the_hosted_app_has_not_proved_stays_held_after_activation(
     dependencies_: list[dict[str, str]], group: str | None
 ) -> None:
     # Ticket 44 drops the landing hold, :dependencyDashboardApproval, from
-    # extends; these rules keep their own. pixi.lock needs a relock the
-    # hosted app may not run, and the cluster pins move together or not at all.
+    # extends; these rules keep their own. flake.lock needs a relock the
+    # hosted app may not run, and moves every tool at once; the cluster pins
+    # move together or not at all.
     for dependency in dependencies_:
         settings = effective(dependency)
         assert settings.get("dependencyDashboardApproval") is True, dependency
@@ -330,8 +309,8 @@ def test_etcd_stays_on_the_minor_kwok_and_kubernetes_pair_with() -> None:
 
 
 def test_the_kwok_image_moves_only_by_hand() -> None:
-    # kwokctl's tools.txt line names the release the controller image comes
-    # from, and no bot can rehash that line, so no bot moves the image either.
+    # kwokctl comes with the nixpkgs pin and names the release the controller
+    # image comes from, so no bot moves the image on its own.
     kwok = "registry.k8s.io/kwok/kwok"
     assert [d["packageName"] for d in LOCAL_CLUSTER].count(kwok) == 1
     for dependency in LOCAL_CLUSTER:
@@ -352,14 +331,6 @@ def test_observability_moves_only_by_hand() -> None:
     assert dependencies(path) == []
     managers = set(config()["enabledManagers"])
     assert not managers & {"helm-values", "helmv3", "kustomize"}, managers
-
-
-def test_a_pixi_version_without_a_digest_is_never_given_one() -> None:
-    # docker:pinDigests would otherwise propose a digest for a version string
-    # that has nowhere to put it.
-    for dependency in PIXI:
-        if dependency["manager"] == "custom.regex":
-            assert effective(dependency).get("pinDigests") is False, dependency
 
 
 @pytest.mark.parametrize(
@@ -408,21 +379,21 @@ def test_a_pixi_version_without_a_digest_is_never_given_one() -> None:
         (
             {
                 "manager": "dockerfile",
-                "packageName": "ubuntu",
+                "packageName": "nixos/nix",
                 "packageFile": "Dockerfile",
-                "depType": "final",
+                "depType": "stage",
                 "datasource": "docker",
             },
             None,
         ),
     ],
-    ids=["hex", "hex dev", "actions", "runner label", "runtime base"],
+    ids=["hex", "hex dev", "actions", "runner label", "build stage"],
 )
 def test_the_routine_updates_are_grouped_and_wait_only_for_the_landing_hold(
     dependency: dict[str, str], group: str | None
 ) -> None:
-    # The runner label and the runtime base are both named ubuntu, and would
-    # otherwise share one pull request.
+    # The build stage's Nix is not the nixpkgs pin: it only runs the build, so
+    # it moves as a routine image update, in both Dockerfiles at once.
     settings = effective(dependency)
     assert settings.get("groupName") == group
     assert "dependencyDashboardApproval" not in settings

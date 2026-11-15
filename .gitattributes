@@ -1,9 +1,9 @@
 * text=auto eol=lf
 
-# Generated lockfiles: pixi.lock is solved by pixi, manifest.toml by gleam.
+# Generated lockfiles: flake.lock is written by nix, manifest.toml by gleam.
 # Neither is merged by hand; regenerate and commit instead. Both stay
 # diffable, because a pin move is reviewed by reading the lock diff.
-pixi.lock merge=binary linguist-language=YAML linguist-generated=true
+flake.lock merge=binary linguist-language=JSON linguist-generated=true
 manifest.toml linguist-generated=true
 
 # Upstream Allium skills, vendored byte for byte at the tag skills-lock.json

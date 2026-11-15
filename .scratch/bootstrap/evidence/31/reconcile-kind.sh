@@ -15,7 +15,7 @@ worktree=${1:?usage: reconcile-kind.sh <worktree> <work-dir>}
 work=${2:?usage: reconcile-kind.sh <worktree> <work-dir>}
 mkdir -p "$work"
 cd "$worktree"
-PATH="$worktree/.pixi/envs/default/bin:$worktree/.pixi/envs/cluster/bin:$worktree/.tools/bin:$PATH"
+PATH="$worktree/.nix/tools/bin:$PATH"
 export PATH
 KNARR_CLUSTER=kind; export KNARR_CLUSTER
 printf 'date: %s\nhost: %s\ncommit: %s\n' "$(date -u +%Y-%m-%dT%H:%MZ)" "$(uname -sm)" "$(git rev-parse --short HEAD)"

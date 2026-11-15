@@ -21,10 +21,10 @@ GROUPS = {
     ),
     "agents": ("validate_agents", ("scripts/checks/validate_agents.py",)),
     "environment": (
-        "env_check install_tools install_hooks with_env",
+        "env_check install_hooks with_env",
         (
             "scripts/initialize.sh",
-            "scripts/install-*.sh",
+            "scripts/install-hooks.sh",
             "scripts/with-env.sh",
             "scripts/checks/env_check.py",
         ),
@@ -49,7 +49,7 @@ GROUPS = {
         ),
     ),
     "packaging": (
-        "image prune_runtime container_entrypoint",
+        "image container_entrypoint",
         (
             "Dockerfile",
             "fixtures/fake_worker/Dockerfile",
@@ -59,7 +59,6 @@ GROUPS = {
             ".scratch/bootstrap/evidence/01/tls/**",
             ".dockerignore",
             "scripts/checks/image.py",
-            "scripts/prune_runtime.py",
             "scripts/container-entrypoint.sh",
         ),
     ),
@@ -127,8 +126,10 @@ RUNTIME = {"controller-process", "worker-process"}
 SHARED = (
     "justfile",
     "Justfile",
-    "pixi.*",
-    "tools*.txt",
+    # The flake decides every tool's version and both images' contents.
+    "flake.nix",
+    "flake.lock",
+    "nix/**",
     "gleam.toml",
     "manifest.toml",
     "fixtures/fake_worker/gleam.toml",
@@ -139,7 +140,6 @@ SHARED = (
     "scripts/checks/tests/conftest.py",
     "scripts/checks/_project.py",
     "scripts/initialize.sh",
-    "scripts/install-tools.sh",
     ".github/actions/**",
     ".github/workflows/ci.yml",
 )
@@ -155,6 +155,7 @@ PASSIVE = (
     ".github/renovate.json",
     ".gitignore",
     ".gitattributes",
+    ".envrc",
     ".editorconfig",
     ".pre-commit*.yaml",
     "*ruff.toml",
@@ -175,7 +176,6 @@ CLUSTERS = {
         "charts/**",
         "scripts/checks/chart.py",
         "scripts/checks/image.py",
-        "scripts/prune_runtime.py",
         "scripts/container-entrypoint.sh",
         "scripts/checks/deployment.py",
         "scripts/schemas/**",
@@ -183,7 +183,6 @@ CLUSTERS = {
     "worker": (
         "fixtures/fake_worker/**",
         "scripts/checks/image.py",
-        "scripts/prune_runtime.py",
         "scripts/container-entrypoint.sh",
         "scripts/checks/deployment.py",
         "scripts/schemas/**",

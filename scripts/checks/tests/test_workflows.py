@@ -742,8 +742,8 @@ def test_release_builds_only_the_commit_verify_checked() -> None:
 def test_audit_scans_the_runtime_environment_after_a_red_image_scan_but_not_without_an_image() -> (
     None
 ):
-    # The OS-package scan is red until Ubuntu republishes libssl3t64 (Decision
-    # 0014), and a step after a failed one is skipped unless its `if:` says so.
+    # The image scan can be red on a finding of its own (Decision 0014), and a
+    # step after a failed one is skipped unless its `if:` says so.
     steps = [line.strip() for line in jobs(AUDIT.read_text())["image-scan"]]
     build = steps.index("- id: build")
     assert steps[build + 1] == "run: just image-build"

@@ -23,8 +23,7 @@
   // and never reformatted here.
   "ignores": [
     "CLAUDE.md",
-    ".pixi",
-    ".tools",
+    ".nix",
     "build",
     "ai_tmp",
     ".agents/skills/allium",

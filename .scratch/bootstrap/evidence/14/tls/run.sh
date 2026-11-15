@@ -9,7 +9,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 worktree=${1:?usage: run.sh <worktree> <work-dir>}
 work=${2:?usage: run.sh <worktree> <work-dir>}
-env=$worktree/.pixi/envs/default
+env=$worktree/.nix/tools
 PATH="$env/bin:$PATH"; export PATH
 printf 'date: %s\nhost: %s\nopenssl: %s\nescript: %s\n' \
   "$(date -u +%Y-%m-%dT%H:%MZ)" "$(uname -sm)" "$(openssl version)" "$(command -v escript)"
